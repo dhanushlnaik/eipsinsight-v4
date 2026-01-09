@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Libre_Baskerville as LibreBaskervilleFont, Space_Grotesk as SpaceGroteskFont } from "next/font/google";
 import "./globals.css";
-import Navbar from "./(public)/_components/navbar";
+import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import Navbar from "@/components/navbar";
 
 const Libre_Baskerville = LibreBaskervilleFont({
   variable: "--font-libre-baskerville",
@@ -12,6 +14,7 @@ const Libre_Baskerville = LibreBaskervilleFont({
 const Space_Grotesk = SpaceGroteskFont({
   variable: "--font-space-grotesk",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 
@@ -99,8 +102,17 @@ export default function RootLayout({
       <body
         className={`${Libre_Baskerville.variable} ${Space_Grotesk.variable} antialiased`}
       >
-        <Navbar/>
-        {children}
+        <SidebarProvider>
+          <div className="flex min-h-screen w-full">
+            <AppSidebar />
+            <SidebarInset className="flex flex-1 flex-col">
+              <header className="sticky top-0 z-40">
+                <Navbar />
+              </header>
+              <main className="flex-1">{children}</main>
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
       </body>
     </html>
   );

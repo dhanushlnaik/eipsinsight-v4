@@ -3,20 +3,43 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, Menu, X } from "lucide-react";
+import { Search, Menu, X, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useSidebarStore } from "@/stores/sidebarStore";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isOpen } = useSidebarStore();
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-cyan-300/20 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between gap-4">
+          
+          {/* Collapse Button - Show only when sidebar is open */}
+          {isOpen && (
+            <button
+              onClick={() => {
+                const event = new CustomEvent('toggle-sidebar');
+                window.dispatchEvent(event);
+              }}
+              className={cn(
+                "mr-2 group rounded-lg p-2 transition-all duration-300",
+                "hover:bg-gradient-to-r hover:from-emerald-500/15 hover:via-cyan-500/15 hover:to-blue-500/15",
+                "hover:shadow-[0_0_12px_rgba(34,211,238,0.15)] border border-transparent hover:border-cyan-400/30"
+              )}
+            >
+              <PanelLeft className="h-5 w-5 text-cyan-300 transition-colors group-hover:text-emerald-300" />
+            </button>
+          )}
 
-          {/* LEFT: Logo */}
-          <Link href="/" className="group shrink-0">
+          {/* LEFT: Logo - Show when sidebar is closed on desktop */}
+          <Link href="/" className={cn(
+            "group shrink-0 transition-all duration-300",
+            isOpen && "md:opacity-0 md:pointer-events-none md:w-0"
+          )}>
             <div className="relative flex items-center gap-2 overflow-hidden rounded-xl p-1.5">
                 {/* Glow effect on hover */}
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/20 via-cyan-400/20 to-emerald-400/20 opacity-0 group-hover:opacity-100 transition-all duration-300 blur-md scale-110" />
