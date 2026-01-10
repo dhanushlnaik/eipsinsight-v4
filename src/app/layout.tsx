@@ -101,12 +101,12 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth dark">
       <body
-        className={`${Libre_Baskerville.variable} ${Space_Grotesk.variable} antialiased`}
+        className={`${Libre_Baskerville.variable} ${Space_Grotesk.variable} antialiased overflow-x-hidden`}
       >
         <SidebarProvider>
-          <div className="flex min-h-screen w-full">
+          <div className="flex min-h-screen w-full overflow-x-hidden">
             <AppSidebar />
-            <SidebarInset className="flex flex-1 flex-col">
+            <SidebarInset className="flex flex-1 flex-col max-w-full overflow-x-hidden">
               <header className="sticky top-0 z-40">
                 <Navbar />
               </header>

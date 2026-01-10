@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import EthStandard from './_components/ethstandard';
+import ProtocolBento from './_components/protocol-bento';
+import ProposalStructure from './_components/proposal-structure';
+import OurTools from './_components/our-tools';
+import LogoCloud from '@/components/logo-cloud';
 
 export default function EIPsInsightHero() {
   return (
@@ -134,6 +138,10 @@ export default function EIPsInsightHero() {
           
         </div>
       </div>
+      <ProtocolBento />
+      <ProposalStructure />
+      <OurTools />
+      <LogoCloud />
       <EthStandard />
     </div>
   );

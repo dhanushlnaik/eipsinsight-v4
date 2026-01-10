@@ -122,6 +122,9 @@
   body {
     @apply bg-background text-foreground;
   }
+  html, body {
+    @apply overflow-x-hidden;
+  }
 }
 
 html, body, #__next {
