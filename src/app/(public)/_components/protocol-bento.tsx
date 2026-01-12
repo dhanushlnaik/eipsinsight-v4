@@ -3,14 +3,13 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { TrendingUp, ArrowRight, Clock, Activity, Info, Download } from "lucide-react";
-import { toast } from "sonner";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PieChart, Pie, Cell, Label, AreaChart, Area, CartesianGrid, XAxis, YAxis } from "recharts";
+import { PieChart, Pie,  Label, AreaChart, Area, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
@@ -19,6 +18,7 @@ import {
 } from "@/components/ui/chart";
 import { client } from "@/lib/orpc";
 import { toast as sonnerToast } from "sonner";
+import { PageHeader, SectionSeparator } from "@/components/header";
 
 // Types for API responses
 interface ActiveProposals {
@@ -121,6 +121,7 @@ const standardsChartConfig = {
 
 export default function ProtocolBento() {
   const { toast } = useToast();
+  const [isMobile, setIsMobile] = useState(false);
   const [activeProposals, setActiveProposals] = useState<ActiveProposals>(defaultActiveProposals);
   const [lifecycleData, setLifecycleData] = useState<LifecycleStage[]>([]);
   const [standardsMix, setStandardsMix] = useState<StandardsMix[]>([]);
@@ -131,6 +132,14 @@ export default function ProtocolBento() {
   const [lastCallWatchlist, setLastCallWatchlist] = useState<LastCallItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStandards, setSelectedStandards] = useState<Set<string>>(new Set(['Core', 'ERC', 'Networking', 'Interface', 'Meta', 'Informational', 'RIP']));
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -201,20 +210,15 @@ export default function ProtocolBento() {
 
   return (
     <TooltipProvider>
-      <section className="relative overflow-hidden bg-background py-16">
-        <div className="container relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.5 }}
-          className="mb-10 text-center"
-        >
-          <h2 className="dec-title mb-2 bg-gradient-to-br from-emerald-300 via-slate-100 to-cyan-200 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl">
-            Ethereum Proposal Snapshot
-          </h2>
-          <p className="text-slate-400">Live protocol heartbeat and governance insights</p>
-        </motion.div>
+      <PageHeader
+        indicator={{ icon: "activity", label: "Live", pulse: true }}
+        title="Ethereum Proposal Snapshot"
+        description="Live protocol heartbeat and governance insights"
+        sectionId="protocol-bento"
+        className="bg-background"
+      />
+      <section className="relative pt-5 overflow-hidden bg-background pb-8 sm:pb-12 lg:pb-16">
+        <div className="container relative mx-auto max-w-7xl px-4 sm:px-4 md:px-6 lg:px-8">
 
         {/* Bento Grid - 4-Column Symmetric Layout
             4 columns × 4 rows on desktop
@@ -227,7 +231,7 @@ export default function ProtocolBento() {
             Row 3: [Lifecycle]  [Standards Comp.] [Momentum]
             Row 4: [Lifecycle]  [PRs] [Decision Velocity]
         */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[260px]">
+        <div className="grid grid-cols-1 gap-4 auto-rows-auto md:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[260px]">
           
           {/* ==================== TOP BAND (Row 1) ==================== */}
           
@@ -237,7 +241,7 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="group relative col-span-1 order-2 overflow-hidden rounded-2xl border border-cyan-400/30 bg-gradient-to-b from-cyan-500/10 via-cyan-500/5 to-transparent p-6 shadow-xl backdrop-blur transition hover:border-cyan-400/50 hover:shadow-cyan-500/20 md:col-span-2 lg:col-span-2 lg:col-start-2 lg:row-start-1"
+            className="group relative col-span-1 order-2 overflow-hidden rounded-2xl border border-cyan-400/30 bg-gradient-to-b from-cyan-500/10 via-cyan-500/5 to-transparent p-4 sm:p-6 shadow-xl backdrop-blur transition-all hover:border-cyan-400/50 hover:shadow-2xl hover:shadow-cyan-500/30 md:col-span-2 lg:col-span-2 lg:col-start-2 lg:row-start-1 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
           >
             {/* Subtle inner glow */}
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/5 via-transparent to-blue-500/5" />
@@ -330,12 +334,12 @@ export default function ProtocolBento() {
               </div>
 
               {/* Content - LEFT: Recharts Donut, RIGHT: Number Breakdown */}
-              <div className="flex flex-1 items-center gap-8">
+              <div className="flex flex-col lg:flex-row flex-1 items-center gap-6 lg:gap-8">
                 {/* Left: Recharts Donut Chart */}
                 <div className="flex flex-shrink-0 items-center justify-center">
                   <ChartContainer
                     config={activeProposalsChartConfig}
-                    className="h-36 w-36 lg:h-40 lg:w-40"
+                    className="h-32 w-32 sm:h-36 sm:w-36 lg:h-40 lg:w-40"
                   >
                     <PieChart>
                       <ChartTooltip
@@ -393,14 +397,14 @@ export default function ProtocolBento() {
                 </div>
 
                 {/* Right: Numbers breakdown */}
-                <div className="flex flex-1 flex-col justify-center space-y-6">
+                <div className="flex flex-1 flex-col justify-center space-y-4 lg:space-y-6 w-full">
                   {/* Row 1: Draft and Review side by side */}
-                  <div className="flex items-center justify-center gap-8">
-                    <div className="flex items-baseline gap-3">
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8">
+                    <div className="flex items-baseline gap-2 sm:gap-3">
                       <div className="h-2 w-2 shrink-0 rounded-full bg-cyan-400" />
                       <div>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-3xl font-bold text-cyan-300">{activeProposals.draft}</span>
+                        <div className="flex items-baseline gap-1 sm:gap-2">
+                          <span className="text-2xl sm:text-3xl font-bold text-cyan-300">{activeProposals.draft}</span>
                           <span className="text-sm text-slate-400">Draft</span>
                         </div>
                         <div className="text-xs text-slate-500">{Math.round((activeProposals.draft / activeProposals.total) * 100)}%</div>
@@ -443,7 +447,7 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.4, delay: 0.25 }}
-            className="group relative col-span-1 order-5 overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-6 shadow-lg backdrop-blur transition hover:border-emerald-400/30 lg:col-start-1 lg:row-start-3 lg:row-span-2"
+            className="group relative col-span-1 order-5 overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-4 sm:p-6 shadow-lg backdrop-blur transition-all hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/20 lg:col-start-1 lg:row-start-3 lg:row-span-2 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
           >
             <div className="relative z-10 flex h-full flex-col">
               {/* Header */}
@@ -578,7 +582,7 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.4, delay: 0.3 }}
-            className="group relative col-span-2 order-6 overflow-hidden rounded-2xl border border-blue-400/20 bg-gradient-to-br from-blue-500/5 to-transparent p-6 shadow-lg backdrop-blur transition hover:border-blue-400/30 lg:col-span-2 lg:col-start-2 lg:row-start-2 lg:row-span-2"
+            className="group relative col-span-1 md:col-span-2 order-6 overflow-hidden rounded-2xl border border-blue-400/20 bg-gradient-to-br from-blue-500/5 to-transparent p-4 sm:p-6 shadow-lg backdrop-blur transition-all hover:border-blue-400/40 hover:shadow-xl hover:shadow-blue-500/20 lg:col-span-2 lg:col-start-2 lg:row-start-2 lg:row-span-2 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
           >
             <div className="relative z-10 flex h-full flex-col">
               {/* Header */}
@@ -695,7 +699,7 @@ export default function ProtocolBento() {
               </div>
               
               {/* Content - Donut Chart & Legend */}
-              <div className="relative flex flex-1 flex-col lg:flex-row items-center justify-center gap-6">
+              <div className="relative flex flex-1 flex-col lg:flex-row items-center justify-center gap-6 lg:gap-8">
                 {/* Donut Chart */}
                 <div className="relative flex items-center justify-center">
                   {/* EIPsInsight Watermark */}
@@ -705,7 +709,7 @@ export default function ProtocolBento() {
                   
                   <ChartContainer
                     config={standardsChartConfig}
-                    className="h-64 w-64 lg:h-80 lg:w-80"
+                    className="h-56 w-56 sm:h-64 sm:w-64 lg:h-80 lg:w-80"
                   >
                     <PieChart>
                       <ChartTooltip
@@ -904,7 +908,7 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.4, delay: 0.2 }}
-            className="group relative col-span-1 order-4 overflow-hidden rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/5 to-transparent p-5 shadow-lg backdrop-blur transition hover:border-violet-400/30 lg:col-start-4 lg:row-start-3"
+            className="group relative col-span-1 order-4 overflow-hidden rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/5 to-transparent p-4 sm:p-5 shadow-lg backdrop-blur transition-all hover:border-violet-400/40 hover:shadow-xl hover:shadow-violet-500/20 lg:col-start-4 lg:row-start-3 bg-dot-white/[0.02] lg:hover:scale-[1.02]"
           >
             <div className="relative z-10 flex h-full flex-col">
               {/* Header */}
@@ -998,12 +1002,12 @@ export default function ProtocolBento() {
               </div>
               
               {/* Footer */}
-              <div className="mt-4 flex items-center justify-between border-t border-violet-400/10 pt-3">
+              {/* <div className="mt-4 flex items-center justify-between border-t border-violet-400/10 pt-3">
                 <span className="text-xs text-slate-400">
                   {momentumData.length > 0 ? `${momentumData[momentumData.length - 1]} this month` : 'No data'}
                 </span>
                 <span className="text-xs text-slate-500">Last {momentumData.length}mo</span>
-              </div>
+              </div> */}
             </div>
           </motion.div>
 
@@ -1013,7 +1017,7 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.4, delay: 0.05 }}
-            className="group relative col-span-1 order-1 overflow-hidden rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/5 to-transparent p-5 shadow-lg backdrop-blur transition hover:border-cyan-400/30 lg:col-start-1 lg:row-start-1 lg:row-span-2"
+            className="group relative col-span-1 order-1 overflow-hidden rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/5 to-transparent p-4 sm:p-5 shadow-lg backdrop-blur transition-all hover:border-cyan-400/40 hover:shadow-xl hover:shadow-cyan-500/20 lg:col-start-1 lg:row-start-1 lg:row-span-2 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
           >
             <div className="relative z-10 flex h-full flex-col">
               {/* Header */}
@@ -1092,22 +1096,28 @@ export default function ProtocolBento() {
               </div>
               
               {/* Content - Scrollable */}
-              <div className="flex-1 space-y-2 overflow-y-auto pr-2 scrollbar-thin scrollbar-track-slate-900/50 scrollbar-thumb-cyan-500/30 hover:scrollbar-thumb-cyan-500/50">
-                {recentChanges.slice(0, 10).map((change, index) => {
+              <div className="flex-1 space-y-2 overflow-y-auto pr-2 max-h-[260px] lg:max-h-none scrollbar-thin scrollbar-track-slate-900/50 scrollbar-thumb-cyan-500/30 hover:scrollbar-thumb-cyan-500/50">
+                {recentChanges.slice(0, isMobile ? 5 : 10).map((change, index) => {
                   const statusColors = {
                     emerald: "bg-emerald-500/20 text-emerald-300 border-emerald-400/30",
                     blue: "bg-blue-500/20 text-blue-300 border-blue-400/30",
                     amber: "bg-amber-500/20 text-amber-300 border-amber-400/30",
                     slate: "bg-slate-500/20 text-slate-300 border-slate-400/30",
                   };
+                  const eipLink = change.repository === 'ethereum/RIPs' 
+                    ? `https://github.com/ethereum/RIPs/blob/master/RIPS/rip-${change.eip}.md`
+                    : `https://eips.ethereum.org/EIPS/eip-${change.eip}`;
                   return (
-                    <motion.div
+                    <motion.a
                       key={`${change.eip}-${index}`}
+                      href={eipLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       initial={{ opacity: 0, x: -20 }}
                       whileInView={{ opacity: 1, x: 0 }}
                       viewport={{ once: true }}
                       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5) }}
-                      className="group/item cursor-pointer rounded-lg border border-slate-700/50 bg-slate-900/30 p-2.5 transition-all hover:border-cyan-400/40 hover:bg-slate-900/50"
+                      className="group/item block cursor-pointer rounded-lg border border-slate-700/50 bg-slate-900/30 p-2.5 transition-all hover:border-cyan-400/40 hover:bg-slate-900/50"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -1123,7 +1133,7 @@ export default function ProtocolBento() {
                         </div>
                         <span className="text-[10px] text-slate-500 shrink-0">{change.days}d</span>
                       </div>
-                    </motion.div>
+                    </motion.a>
                   );
                 })}
               </div>
@@ -1139,14 +1149,14 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.4, delay: 0.4 }}
-            className="group relative col-span-1 order-8 overflow-hidden rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-8 shadow-2xl backdrop-blur transition hover:border-emerald-400/40 md:col-span-2 lg:col-span-2 lg:col-start-3 lg:row-start-4"
+            className="group relative col-span-1 md:col-span-2 order-8 overflow-hidden rounded-2xl sm:rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-5 sm:p-6 lg:p-8 shadow-2xl backdrop-blur transition-all hover:border-emerald-400/50 hover:shadow-[0_20px_70px_rgba(16,185,129,0.3)] lg:col-span-2 lg:col-start-3 lg:row-start-4 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
           >
             {/* Subtle inner glow */}
             <div className="absolute inset-0 bg-gradient-to-tr from-emerald-400/5 via-transparent to-cyan-500/5" />
             
             <div className="relative z-10 flex h-full flex-col">
               {/* Header */}
-              <div className="mb-8">
+              <div className="mb-4 sm:mb-6 lg:mb-8">
                 <div className="flex items-center gap-1.5">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-300">
                     Decision Velocity
@@ -1164,7 +1174,7 @@ export default function ProtocolBento() {
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Lower is better ↓ · Reflects governance efficiency</p>
+                <p className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-slate-500">Lower is better ↓ · Reflects governance efficiency</p>
               </div>
 
               {/* Content - centered */}
@@ -1177,21 +1187,21 @@ export default function ProtocolBento() {
                   className="text-center"
                 >
                   <div className="flex items-baseline justify-center gap-2">
-                    <span className="text-7xl font-bold text-emerald-300 drop-shadow-[0_0_20px_rgba(52,211,153,0.3)]">
+                    <span className="text-5xl sm:text-6xl lg:text-7xl font-bold text-emerald-300 drop-shadow-[0_0_20px_rgba(52,211,153,0.3)]">
                       {decisionVelocity.current}
                     </span>
-                    <span className="text-2xl text-slate-400">days</span>
+                    <span className="text-xl sm:text-2xl text-slate-400">days</span>
                   </div>
                   <p className="mt-3 text-sm text-slate-400">median to finalization</p>
                 </motion.div>
                 
                 {/* Comparison */}
-                <div className="mt-12 w-full max-w-xs">
+                <div className="mt-6 sm:mt-8 lg:mt-12 w-full max-w-xs">
                   <div className="mb-3 flex items-center justify-between text-xs font-medium text-slate-400">
                     <span>This year</span>
                     <span>Last year</span>
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-3">
                     <div className="relative flex-1">
                       <div className="h-3 overflow-hidden rounded-full bg-slate-800/50 shadow-inner">
                         <motion.div
@@ -1252,7 +1262,7 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.4, delay: 0.15 }}
-            className="group relative col-span-1 order-3 overflow-hidden rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 to-transparent p-5 shadow-lg backdrop-blur transition hover:border-amber-400/40 lg:col-start-4 lg:row-start-1 lg:row-span-2"
+            className="group relative col-span-1 order-3 overflow-hidden rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 to-transparent p-4 sm:p-5 shadow-lg backdrop-blur transition-all hover:border-amber-400/50 hover:shadow-xl hover:shadow-amber-500/20 lg:col-start-4 lg:row-start-1 lg:row-span-2 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
           >
             <div className="relative z-10 flex h-full flex-col">
               {/* Header */}
@@ -1319,39 +1329,45 @@ export default function ProtocolBento() {
                 </Tooltip>
               </div>
               
-              {/* Content - Scrollable */}
-              <div className="flex-1 space-y-2.5 overflow-y-auto pr-2 scrollbar-thin scrollbar-track-slate-900/50 scrollbar-thumb-amber-500/30 hover:scrollbar-thumb-amber-500/50">
+              {/* Content */}
+              <div className="flex-1 space-y-2.5">
                 {lastCallWatchlist.map((item, index) => {
                   const urgency = item.daysRemaining <= 7 ? "urgent" : "normal";
+                  const eipLink = item.repository === 'ethereum/RIPs'
+                    ? `https://github.com/ethereum/RIPs/blob/master/RIPS/rip-${item.eip}.md`
+                    : `https://eips.ethereum.org/EIPS/eip-${item.eip}`;
                   return (
-                    <motion.div
+                    <motion.a
                       key={item.eip}
-                      initial={{ opacity: 0, x: -20 }}
-                      whileInView={{ opacity: 1, x: 0 }}
+                      href={eipLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      initial={{ opacity: 0, y: 10 }}
+                      whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
-                      transition={{ duration: 0.4, delay: index * 0.1 }}
-                      className={`group/item rounded-lg border p-3 transition-all ${
+                      transition={{ duration: 0.3 }}
+                      className={`group/item block rounded-lg border p-3 transition-all ${
                         urgency === "urgent"
                           ? "border-red-400/30 bg-red-500/10 hover:border-red-400/50 hover:bg-red-500/15"
                           : "border-amber-400/20 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-6">
+                        <div className="flex-1 min-w-0 w-full sm:w-auto">
+                          <div className="flex items-center gap-2 mb-1">
                             <span className="font-mono text-sm font-bold text-amber-300">{item.eip_type || 'EIP'}-{item.eip}</span>
                             <span className={`text-[10px] font-bold ${urgency === "urgent" ? "text-red-400" : "text-amber-400"}`}>
                               {Math.abs(item.daysRemaining)}d {item.daysRemaining < 0 ? 'overdue' : 'left'}
                             </span>
                           </div>
-                          <p className="mt-1 text-xs text-slate-400 line-clamp-1">{item.title}</p>
+                          <p className="text-xs text-slate-400 line-clamp-2">{item.title}</p>
                         </div>
-                        <div className="shrink-0 text-right">
-                          <p className="text-[10px] text-slate-500">Deadline</p>
-                          <p className="text-[11px] font-medium text-slate-400">{new Date(item.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
+                        <div className="shrink-0 text-left sm:text-right">
+                          <span className="text-[10px] text-slate-500 block">Deadline</span>
+                          <span className="text-xs text-amber-300 font-medium">{new Date(item.deadline).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                         </div>
                       </div>
-                    </motion.div>
+                    </motion.a>
                   );
                 })}
               </div>
@@ -1417,7 +1433,7 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
             transition={{ duration: 0.4, delay: 0.4 }}
-            className="group relative col-span-1 order-9 overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-5 shadow-lg backdrop-blur transition hover:border-emerald-400/30 lg:col-start-2 lg:row-start-4"
+            className="group relative col-span-1 order-9 overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-4 sm:p-5 shadow-lg backdrop-blur transition-all hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/20 lg:col-start-2 lg:row-start-4 bg-dot-white/[0.02] lg:hover:scale-[1.02]"
           >
             <div className="relative z-10 flex h-full flex-col">
               {/* Header */}
@@ -1439,35 +1455,40 @@ export default function ProtocolBento() {
                 </Tooltip>
               </div>
               
-              {/* Content */}
-              <div className="flex-1 space-y-2">
-                {prsData.map((pr, index) => {
+              {/* Content - Scrollable */}
+              <div className="flex-1 space-y-2 overflow-y-auto pr-2 scrollbar-thin scrollbar-track-slate-900/50 scrollbar-thumb-emerald-500/30 hover:scrollbar-thumb-emerald-500/50">
+                {prsData.slice(0, isMobile ? 2 : prsData.length).map((pr, index) => {
                   const statusColors = {
                     merged: "bg-violet-500/20 text-violet-300 border-violet-400/30",
                     open: "bg-emerald-500/20 text-emerald-300 border-emerald-400/30",
                   };
+                  const prUrl = `https://github.com/ethereum/EIPs/pull/${pr.number}`;
                   return (
-                    <motion.div
+                    <motion.a
                       key={pr.number}
+                      href={prUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       initial={{ opacity: 0, x: -20 }}
                       whileInView={{ opacity: 1, x: 0 }}
                       viewport={{ once: true }}
                       transition={{ duration: 0.4, delay: index * 0.1 }}
-                      className="rounded-lg border border-slate-700/50 bg-slate-900/30 p-2.5 transition-all hover:border-emerald-400/40 hover:bg-slate-900/50"
+                      className="group/item block rounded-lg border border-slate-700/50 bg-slate-900/30 p-3 transition-all hover:border-emerald-400/40 hover:bg-slate-900/50 hover:shadow-lg hover:shadow-emerald-500/10"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-bold text-emerald-300">#{pr.number}</span>
-                            <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-semibold ${statusColors[pr.status as keyof typeof statusColors]}`}>
-                              {pr.status}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-[11px] text-slate-400 line-clamp-1">{pr.title}</p>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-emerald-300">#{pr.number}</span>
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusColors[pr.status as keyof typeof statusColors]}`}>
+                            {pr.status}
+                          </span>
                         </div>
-                        <span className="text-[10px] text-slate-500">{pr.days}d</span>
+                        <span className="text-[10px] text-slate-500 shrink-0">{pr.days}d ago</span>
                       </div>
-                    </motion.div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed mb-1 group-hover/item:text-white transition-colors">{pr.title}</p>
+                        <span className="text-[10px] text-slate-500">by <span className="text-emerald-400">{pr.author}</span></span>
+                      </div>
+                    </motion.a>
                   );
                 })}
               </div>
@@ -1477,6 +1498,7 @@ export default function ProtocolBento() {
             </div>
           </motion.div>
         </div>
+        
 
         {/* How to Contribute Callout */}
         <motion.div

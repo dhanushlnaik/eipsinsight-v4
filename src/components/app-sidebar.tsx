@@ -78,12 +78,36 @@ const sidebarItems = [
   },
 ];
 
+const pageSections = [
+  {
+    title: "Protocol Bento",
+    href: "/#protocol-bento",
+    sectionId: "protocol-bento",
+  },
+  {
+    title: "Governance Over Time",
+    href: "/#governance-over-time",
+    sectionId: "governance-over-time",
+  },
+  {
+    title: "Proposal Structure",
+    href: "/#proposal-structure",
+    sectionId: "proposal-structure",
+  },
+  {
+    title: "Governance Bottlenecks",
+    href: "/#governance-bottlenecks",
+    sectionId: "governance-bottlenecks",
+  },
+];
+
 export function AppSidebar() {
   const pathname = usePathname();
   const { state, toggleSidebar: toggleSidebarUI } = useSidebar();
   const { isOpen, toggleSidebar } = useSidebarStore();
   const [openItems, setOpenItems] = React.useState<string[]>(["Standards"]);
   const rememberedOpen = React.useRef<string[]>(openItems);
+  const [currentHash, setCurrentHash] = React.useState<string>('');
 
   const toggleItem = (title: string) => {
     setOpenItems((prev) =>
@@ -124,6 +148,20 @@ export function AppSidebar() {
     };
     window.addEventListener('toggle-sidebar', handleExternalToggle);
     return () => window.removeEventListener('toggle-sidebar', handleExternalToggle);
+  }, []);
+
+  // Track hash changes for section navigation
+  React.useEffect(() => {
+    const updateHash = () => {
+      setCurrentHash(window.location.hash);
+    };
+    updateHash();
+    window.addEventListener('hashchange', updateHash);
+    window.addEventListener('scroll', updateHash);
+    return () => {
+      window.removeEventListener('hashchange', updateHash);
+      window.removeEventListener('scroll', updateHash);
+    };
   }, []);
 
   return (
@@ -310,6 +348,81 @@ export function AppSidebar() {
                         )}
                       </Link>
                     </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Page Sections */}
+        <SidebarGroup>
+          {state === "expanded" && (
+            <>
+              {/* Decorative line separator */}
+              <div className="mx-4 my-2 border-t border-cyan-400/20" />
+              <SidebarGroupLabel className="px-4 pb-2 pt-2 text-xs font-bold uppercase tracking-widest text-cyan-300/70">
+                Page Sections
+              </SidebarGroupLabel>
+            </>
+          )}
+          <SidebarGroupContent className={cn("px-3", state === "collapsed" && "px-0 w-full flex justify-center")}>
+            <SidebarMenu className={cn("gap-1.5", state === "collapsed" && "items-center")}>
+              {pageSections.map((section, index) => {
+                const isActive = currentHash === `#${section.sectionId}`;
+                
+                return (
+                  <SidebarMenuItem key={section.sectionId}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={state === "collapsed" ? section.title : undefined}
+                      className={cn(
+                        "group relative overflow-hidden rounded-lg transition-all duration-300",
+                        "hover:bg-gradient-to-r hover:from-emerald-500/15 hover:via-cyan-500/15 hover:to-blue-500/15",
+                        "hover:shadow-[0_0_15px_rgba(34,211,238,0.1)] hover:border-cyan-400/30 hover:translate-x-0.5",
+                        "border border-transparent",
+                        isActive &&
+                          "bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 shadow-[0_0_20px_rgba(34,211,238,0.2)] border-cyan-400/40",
+                        state === "collapsed" && "w-12 h-12 p-0 flex items-center justify-center mx-auto"
+                      )}
+                    >
+                      <Link
+                        href={section.href}
+                        className={cn(
+                          state === "collapsed" && "flex h-full w-full items-center justify-center"
+                        )}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const element = document.getElementById(section.sectionId);
+                          if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            // Update URL without scrolling
+                            window.history.pushState(null, '', section.href);
+                          }
+                        }}
+                      >
+                        {state === "expanded" && (
+                          <span
+                            className={cn(
+                              "text-sm transition-colors",
+                              isActive
+                                ? "text-white font-semibold"
+                                : "text-slate-100 font-medium group-hover:text-white"
+                            )}
+                          >
+                            {section.title}
+                          </span>
+                        )}
+                        {state === "collapsed" && (
+                          <div className="h-2 w-2 rounded-full bg-cyan-400/50 group-hover:bg-emerald-400 transition-colors" />
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                    {/* Decorative line after each section (except last) */}
+                    {state === "expanded" && index < pageSections.length - 1 && (
+                      <div className="mx-4 my-1 border-t border-cyan-400/10" />
+                    )}
                   </SidebarMenuItem>
                 );
               })}

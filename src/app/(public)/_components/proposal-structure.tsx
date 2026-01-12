@@ -9,6 +9,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Cell, Pie, PieChart } from "recharts";
+import { PageHeader } from "@/components/header";
 
 const typeData = [
   { name: "Core", value: 245, color: "#52f6d6" },
@@ -41,25 +42,18 @@ const lifecycleConfig = {
 
 export default function ProposalStructure() {
   return (
-    <section className="relative overflow-hidden bg-background py-16">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_70%_50%,rgba(34,211,238,0.12),transparent_45%)]" />
+    <>
+      <PageHeader
+        indicator={{ icon: "sparkles", label: "Structure" }}
+        title="How Ethereum Proposals Evolve"
+        description="Ethereum proposals move through defined stages and categories. This structure helps the ecosystem coordinate upgrades and standards."
+        sectionId="proposal-structure"
+        className="bg-background"
+      />
+      <section className="relative overflow-hidden bg-background pb-16">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_70%_50%,rgba(34,211,238,0.12),transparent_45%)]" />
 
-      <div className="container relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: 0.5 }}
-          className="mb-12 text-center"
-        >
-          <h2 className="dec-title mb-3 bg-gradient-to-br from-emerald-300 via-slate-100 to-cyan-200 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl">
-            How Ethereum Proposals Evolve
-          </h2>
-          <p className="mx-auto max-w-2xl text-lg text-slate-300">
-            Ethereum proposals move through defined stages and categories.
-            This structure helps the ecosystem coordinate upgrades and standards.
-          </p>
-        </motion.div>
+        <div className="container relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
         <div className="grid gap-8 md:grid-cols-2">
           <motion.div
@@ -199,6 +193,7 @@ export default function ProposalStructure() {
           </motion.div>
         </div>
       </div>
-    </section>
+      </section>
+    </>
   );
 }
