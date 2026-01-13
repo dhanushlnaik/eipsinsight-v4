@@ -13,6 +13,8 @@ import GovernanceOverTime from './_components/governance-over-time';
 import OurTools from './_components/our-tools';
 import LogoCloud from '@/components/logo-cloud';
 import TrendingProposals from './_components/trending-proposals';
+import LatestUpdates from './_components/latest-updates';
+import FAQs from './_components/faqs';
 
 export default function EIPsInsightHero() {
   return (
@@ -178,10 +180,62 @@ export default function EIPsInsightHero() {
       </div>
       
       <TrendingProposals />
+
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8">
+        <div className="relative flex items-center justify-center">
+          {/* Decorative line with gradient */}
+          <div className="absolute inset-x-0 flex items-center -translate-y-1">
+            <div className="w-full border-t border-cyan-400/20" />
+          </div>
+        </div>
+      </div>
       
       <OurTools />
+
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8">
+        <div className="relative flex items-center justify-center">
+          {/* Decorative line with gradient */}
+          <div className="absolute inset-x-0 flex items-center -translate-y-1">
+            <div className="w-full border-t border-cyan-400/20" />
+          </div>
+        </div>
+      </div>
+
+
       <LogoCloud />
+
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8">
+        <div className="relative flex items-center justify-center">
+          {/* Decorative line with gradient */}
+          <div className="absolute inset-x-0 flex items-center -translate-y-1">
+            <div className="w-full border-t border-cyan-400/20" />
+          </div>
+        </div>
+      </div>
+      
       <EthStandard />
+
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8">
+        <div className="relative flex items-center justify-center">
+          {/* Decorative line with gradient */}
+          <div className="absolute inset-x-0 flex items-center -translate-y-1">
+            <div className="w-full border-t border-cyan-400/20" />
+          </div>
+        </div>
+      </div>
+      
+      <LatestUpdates />
+
+      <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8">
+        <div className="relative flex items-center justify-center">
+          {/* Decorative line with gradient */}
+          <div className="absolute inset-x-0 flex items-center -translate-y-1">
+            <div className="w-full border-t border-cyan-400/20" />
+          </div>
+        </div>
+      </div>
+      
+      <FAQs />
     </div>
   );
 }

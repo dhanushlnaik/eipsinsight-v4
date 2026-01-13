@@ -51,9 +51,9 @@ export default function ProposalStructure() {
         className="bg-background"
       />
       <section className="relative overflow-hidden bg-background pb-16">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_70%_50%,rgba(34,211,238,0.12),transparent_45%)]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_70%_50%,rgba(34,211,238,0.12),transparent_45%)]" />
 
-        <div className="container relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="container relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
         <div className="grid gap-8 md:grid-cols-2">
           <motion.div
@@ -193,7 +193,7 @@ export default function ProposalStructure() {
           </motion.div>
         </div>
       </div>
-      </section>
+    </section>
     </>
   );
 }

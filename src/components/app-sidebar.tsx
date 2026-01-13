@@ -15,6 +15,7 @@ import {
   Sparkles,
   PanelLeftOpen,
   Crown,
+  Hash,
 } from "lucide-react";
 import { useSidebarStore } from "@/stores/sidebarStore";
 import { cn } from "@/lib/utils";
@@ -40,11 +41,54 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
+const pageSections = [
+  {
+    title: "Protocol Bento",
+    href: "/#protocol-bento",
+    sectionId: "protocol-bento",
+  },
+  {
+    title: "Governance Over Time",
+    href: "/#governance-over-time",
+    sectionId: "governance-over-time",
+  },
+  {
+    title: "Trending Proposals",
+    href: "/#trending-proposals",
+    sectionId: "trending-proposals",
+  },
+  {
+    title: "Our Tools",
+    href: "/#our-tools",
+    sectionId: "our-tools",
+  },
+  {
+    title: "What We Track",
+    href: "/#what-we-track",
+    sectionId: "what-we-track",
+  },
+  {
+    title: "Latest Updates",
+    href: "/#latest-updates",
+    sectionId: "latest-updates",
+  },
+  {
+    title: "FAQs",
+    href: "/#faqs",
+    sectionId: "faqs",
+  },
+];
+
 const sidebarItems = [
   {
     title: "Home",
     icon: Home,
     href: "/",
+    items: pageSections.map(section => ({
+      title: section.title,
+      href: section.href,
+      sectionId: section.sectionId,
+    })),
   },
   {
     title: "Standards",
@@ -78,34 +122,11 @@ const sidebarItems = [
   },
 ];
 
-const pageSections = [
-  {
-    title: "Protocol Bento",
-    href: "/#protocol-bento",
-    sectionId: "protocol-bento",
-  },
-  {
-    title: "Governance Over Time",
-    href: "/#governance-over-time",
-    sectionId: "governance-over-time",
-  },
-  {
-    title: "Proposal Structure",
-    href: "/#proposal-structure",
-    sectionId: "proposal-structure",
-  },
-  {
-    title: "Governance Bottlenecks",
-    href: "/#governance-bottlenecks",
-    sectionId: "governance-bottlenecks",
-  },
-];
-
 export function AppSidebar() {
   const pathname = usePathname();
   const { state, toggleSidebar: toggleSidebarUI } = useSidebar();
   const { isOpen, toggleSidebar } = useSidebarStore();
-  const [openItems, setOpenItems] = React.useState<string[]>(["Standards"]);
+  const [openItems, setOpenItems] = React.useState<string[]>(["Home", "Standards"]);
   const rememberedOpen = React.useRef<string[]>(openItems);
   const [currentHash, setCurrentHash] = React.useState<string>('');
 
@@ -173,7 +194,7 @@ export function AppSidebar() {
       )}
     >
       {/* Header with Logo */}
-      <SidebarHeader className="border-b border-cyan-300/20 bg-background/80">
+      <SidebarHeader className="h-16 border-b border-cyan-300/20 bg-background/80">
         {state === "expanded" ? (
           <div className="flex h-16 items-center gap-3 px-4">
             <div className="relative">
@@ -191,7 +212,7 @@ export function AppSidebar() {
             </span>
           </div>
         ) : (
-          <div className="flex h-12 items-center justify-center">
+          <div className="flex h-16 items-center justify-center">
             <button
               onClick={handleToggle}
               className={cn(
@@ -271,7 +292,10 @@ export function AppSidebar() {
                         <CollapsibleContent>
                           <SidebarMenuSub className="ml-0 border-l-2 border-cyan-400/10 pl-6 pt-2">
                             {item.items?.map((subItem) => {
-                              const isSubActive = pathname === subItem.href;
+                              const subItemWithSection = subItem as typeof subItem & { sectionId?: string };
+                              const isSubActive = subItemWithSection.sectionId 
+                                ? currentHash === `#${subItemWithSection.sectionId}`
+                                : pathname === subItem.href;
                               return (
                                 <SidebarMenuSubItem key={subItem.title}>
                                   <SidebarMenuSubButton
@@ -285,7 +309,19 @@ export function AppSidebar() {
                                         "bg-gradient-to-r from-emerald-400/15 via-cyan-400/15 to-blue-400/15 text-white font-medium shadow-[0_0_12px_rgba(34,211,238,0.15)] border-cyan-400/30"
                                     )}
                                   >
-                                    <Link href={subItem.href}>
+                                    <Link
+                                      href={subItem.href}
+                                      onClick={(e) => {
+                                        if (subItemWithSection.sectionId) {
+                                          e.preventDefault();
+                                          const element = document.getElementById(subItemWithSection.sectionId);
+                                          if (element) {
+                                            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                            window.history.pushState(null, '', subItem.href);
+                                          }
+                                        }
+                                      }}
+                                    >
                                       <span className="text-xs">
                                         {subItem.title}
                                       </span>
@@ -348,81 +384,6 @@ export function AppSidebar() {
                         )}
                       </Link>
                     </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Page Sections */}
-        <SidebarGroup>
-          {state === "expanded" && (
-            <>
-              {/* Decorative line separator */}
-              <div className="mx-4 my-2 border-t border-cyan-400/20" />
-              <SidebarGroupLabel className="px-4 pb-2 pt-2 text-xs font-bold uppercase tracking-widest text-cyan-300/70">
-                Page Sections
-              </SidebarGroupLabel>
-            </>
-          )}
-          <SidebarGroupContent className={cn("px-3", state === "collapsed" && "px-0 w-full flex justify-center")}>
-            <SidebarMenu className={cn("gap-1.5", state === "collapsed" && "items-center")}>
-              {pageSections.map((section, index) => {
-                const isActive = currentHash === `#${section.sectionId}`;
-                
-                return (
-                  <SidebarMenuItem key={section.sectionId}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      tooltip={state === "collapsed" ? section.title : undefined}
-                      className={cn(
-                        "group relative overflow-hidden rounded-lg transition-all duration-300",
-                        "hover:bg-gradient-to-r hover:from-emerald-500/15 hover:via-cyan-500/15 hover:to-blue-500/15",
-                        "hover:shadow-[0_0_15px_rgba(34,211,238,0.1)] hover:border-cyan-400/30 hover:translate-x-0.5",
-                        "border border-transparent",
-                        isActive &&
-                          "bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 shadow-[0_0_20px_rgba(34,211,238,0.2)] border-cyan-400/40",
-                        state === "collapsed" && "w-12 h-12 p-0 flex items-center justify-center mx-auto"
-                      )}
-                    >
-                      <Link
-                        href={section.href}
-                        className={cn(
-                          state === "collapsed" && "flex h-full w-full items-center justify-center"
-                        )}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          const element = document.getElementById(section.sectionId);
-                          if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            // Update URL without scrolling
-                            window.history.pushState(null, '', section.href);
-                          }
-                        }}
-                      >
-                        {state === "expanded" && (
-                          <span
-                            className={cn(
-                              "text-sm transition-colors",
-                              isActive
-                                ? "text-white font-semibold"
-                                : "text-slate-100 font-medium group-hover:text-white"
-                            )}
-                          >
-                            {section.title}
-                          </span>
-                        )}
-                        {state === "collapsed" && (
-                          <div className="h-2 w-2 rounded-full bg-cyan-400/50 group-hover:bg-emerald-400 transition-colors" />
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                    {/* Decorative line after each section (except last) */}
-                    {state === "expanded" && index < pageSections.length - 1 && (
-                      <div className="mx-4 my-1 border-t border-cyan-400/10" />
-                    )}
                   </SidebarMenuItem>
                 );
               })}

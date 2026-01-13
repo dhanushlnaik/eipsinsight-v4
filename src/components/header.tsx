@@ -100,11 +100,11 @@ export function PageHeader({
                 )}
                 {eyebrow && !indicator && (
                   <span className="inline-flex items-center rounded-full border border-cyan-300/20 bg-slate-900/50 px-2.5 py-1 text-xs font-medium tracking-wide text-cyan-200/90 backdrop-blur-sm">
-                    {eyebrow}
-                  </span>
+              {eyebrow}
+            </span>
                 )}
               </motion.div>
-            )}
+        )}
 
             {/* Title with dec-title class */}
             <motion.h1
@@ -113,21 +113,21 @@ export function PageHeader({
               transition={{ duration: 0.4, delay: 0.05 }}
               className="dec-title text-balance bg-gradient-to-br from-emerald-300 via-slate-100 to-cyan-200 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl md:text-5xl"
             >
-              {title}
+            {title}
             </motion.h1>
 
-            {/* Description */}
-            {description && (
+        {/* Description */}
+        {description && (
               <motion.p
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
                 className="max-w-3xl text-sm leading-relaxed text-slate-400 sm:text-base"
               >
-                {description}
+            {description}
               </motion.p>
-            )}
-          </div>
+        )}
+      </div>
 
           {/* Copy Link Icon */}
           {showCopyLink && sectionId && (

@@ -244,7 +244,13 @@ export const governanceTimelineProcedures = {
           title: string;
           status?: string;
           category?: string;
+          author?: string;
+          authorAvatar?: string;
+          authorUsername?: string;
           replies: number;
+          views?: number;
+          likes?: number;
+          tags?: string[];
           lastActivityAt: string;
           destination: 'internal' | 'magicians';
           url: string;
@@ -267,8 +273,47 @@ export const governanceTimelineProcedures = {
 
           // Get discussion metadata
           const replies = topic.reply_count || 0;
+          const views = topic.views || 0;
+          const likes = topic.like_count || 0;
+          const tags = topic.tags || [];
           const lastActivityAt = topic.last_posted_at || topic.created_at || new Date().toISOString();
           const magiciansUrl = `https://ethereum-magicians.org/t/${topic.slug}/${topic.id}`;
+          
+          // Get author information from posters
+          let authorInfo: {
+            name?: string;
+            username?: string;
+            avatar?: string;
+          } = {};
+          
+          if (data.users && topic.posters && topic.posters.length > 0) {
+            // Get the original poster (first one with "Original Poster" description, or first one if none)
+            const originalPoster = topic.posters.find((p: any) => 
+              p.description === 'Original Poster' || 
+              p.description === 'Original Poster, Most Recent Poster' ||
+              (p.extras === 'latest single' && p.description?.includes('Original Poster'))
+            ) || topic.posters[0];
+            
+            const posterUserId = originalPoster?.user_id;
+            
+            if (posterUserId && posterUserId !== -1) { // Exclude system user
+              const user = data.users.find((u: any) => u.id === posterUserId);
+              if (user) {
+                const avatarSize = '45';
+                const avatarUrl = user.avatar_template 
+                  ? user.avatar_template.includes('letter_avatar_proxy')
+                    ? `https://ethereum-magicians.org${user.avatar_template.replace('{size}', avatarSize)}`
+                    : `https://ethereum-magicians.org${user.avatar_template.replace('{size}', avatarSize)}`
+                  : undefined;
+                
+                authorInfo = {
+                  name: user.name || user.username || 'Unknown',
+                  username: user.username,
+                  avatar: avatarUrl,
+                };
+              }
+            }
+          }
 
           // Check if proposal exists in internal database
           let internalProposal: {
@@ -276,6 +321,7 @@ export const governanceTimelineProcedures = {
             category?: string;
             url?: string;
             title?: string;
+            author?: string;
           } | null = null;
 
           if (proposalType === 'RIP') {
@@ -288,6 +334,7 @@ export const governanceTimelineProcedures = {
                 category: 'RIP',
                 url: `https://github.com/ethereum/RIPs/blob/master/RIPS/rip-${proposalNumber}.md`,
                 title: rip.title || undefined,
+                author: rip.author || undefined,
               };
             }
           } else {
@@ -307,6 +354,7 @@ export const governanceTimelineProcedures = {
                   ? `https://github.com/ethereum/ERCs/blob/master/ERCS/erc-${proposalNumber}.md`
                   : `https://eips.ethereum.org/EIPS/eip-${proposalNumber}`,
                 title: eip.title || undefined,
+                author: eip.author || undefined,
               };
             }
           }
@@ -317,7 +365,13 @@ export const governanceTimelineProcedures = {
             title: cleanTitle || internalProposal?.title || 'Untitled',
             status: internalProposal?.status,
             category: internalProposal?.category,
+            author: authorInfo.name || internalProposal?.author,
+            authorAvatar: authorInfo.avatar,
+            authorUsername: authorInfo.username,
             replies,
+            views,
+            likes,
+            tags: tags.slice(0, 3), // Limit to 3 tags
             lastActivityAt,
             destination: internalProposal ? 'internal' : 'magicians',
             url: internalProposal?.url || magiciansUrl,

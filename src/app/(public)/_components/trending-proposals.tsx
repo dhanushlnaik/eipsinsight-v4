@@ -2,9 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, ExternalLink, MessageSquare } from 'lucide-react';
+import { ArrowRight, ExternalLink, MessageSquare, Clock, Eye, Heart, Tag } from 'lucide-react';
 import { client } from '@/lib/orpc';
 import { PageHeader } from '@/components/header';
+import { InfiniteSlider } from '@/components/ui/infinite-slider';
+import { ProgressiveBlur } from '@/components/ui/progressive-blur';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type TrendingProposal = {
   proposalNumber: number;
@@ -12,7 +15,13 @@ type TrendingProposal = {
   title: string;
   status?: string;
   category?: string;
+  author?: string;
+  authorAvatar?: string;
+  authorUsername?: string;
   replies: number;
+  views?: number;
+  likes?: number;
+  tags?: string[];
   lastActivityAt: string;
   destination: 'internal' | 'magicians';
   url: string;
@@ -76,99 +85,179 @@ export default function TrendingProposals() {
         sectionId="trending-proposals"
         className="bg-slate-950/30"
       />
-      <section className="relative w-full bg-slate-950/30 py-8 sm:py-12 lg:py-16">
-        <div className="container mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
-          {loading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[...Array(6)].map((_, i) => (
-                <div
-                  key={i}
-                  className="animate-pulse rounded-xl border border-slate-700/30 bg-slate-900/40 p-6 backdrop-blur-sm"
-                >
-                  <div className="mb-4 h-5 w-20 rounded bg-slate-800/50" />
-                  <div className="mb-2 h-6 w-full rounded bg-slate-800/50" />
-                  <div className="mb-4 h-4 w-3/4 rounded bg-slate-800/50" />
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-16 rounded bg-slate-800/50" />
-                    <div className="h-4 w-20 rounded bg-slate-800/50" />
+      <section className="relative w-full bg-slate-950/30">
+        {loading ? (
+          <div className="flex gap-3 py-8">
+            {[...Array(6)].map((_, i) => (
+              <div
+                key={i}
+                className="h-[170px] w-[300px] shrink-0 animate-pulse rounded-lg border border-slate-700/30 bg-slate-900/40 backdrop-blur-sm"
+              >
+                <div className="p-3.5">
+                  <div className="mb-2 h-4 w-20 rounded bg-slate-800/50" />
+                  <div className="mb-2 h-4 w-full rounded bg-slate-800/50" />
+                  <div className="mb-2 flex gap-1.5">
+                    <div className="h-3 w-14 rounded bg-slate-800/50" />
+                    <div className="h-3 w-16 rounded bg-slate-800/50" />
+                  </div>
+                  <div className="mb-2.5 flex gap-2">
+                    <div className="h-2.5 w-10 rounded bg-slate-800/50" />
+                    <div className="h-2.5 w-8 rounded bg-slate-800/50" />
+                  </div>
+                  <div className="mt-auto flex items-center gap-2 border-t border-slate-700/30 pt-2.5">
+                    <div className="h-7 w-7 rounded-full bg-slate-800/50" />
+                    <div className="h-2.5 w-20 rounded bg-slate-800/50" />
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : proposals.length === 0 ? (
-            <div className="rounded-xl border border-slate-700/30 bg-slate-900/40 p-12 text-center backdrop-blur-sm">
-              <p className="text-slate-400">No active proposal discussions at the moment.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {proposals.map((proposal) => (
-                <motion.a
-                  key={`${proposal.proposalType}-${proposal.proposalNumber}`}
-                  href={proposal.url}
-                  target={proposal.destination === 'magicians' ? '_blank' : '_self'}
-                  rel={proposal.destination === 'magicians' ? 'noopener noreferrer' : undefined}
-                  initial={{ opacity: 0, y: 10 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.3 }}
-                  className="group relative flex flex-col rounded-xl border border-slate-700/30 bg-slate-900/40 p-6 backdrop-blur-sm transition-all hover:border-cyan-400/30 hover:bg-slate-900/60 hover:shadow-lg hover:shadow-cyan-500/10"
-                >
-                  {/* Proposal Badge */}
-                  <div className="mb-4 flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide backdrop-blur-sm ${typeColors[proposal.proposalType]}`}
-                    >
-                      {proposal.proposalType}-{proposal.proposalNumber}
-                    </span>
-                    {proposal.status && (
+              </div>
+            ))}
+          </div>
+        ) : proposals.length === 0 ? (
+          <div className="py-24 text-center">
+            <p className="text-slate-400">No active proposal discussions at the moment.</p>
+          </div>
+        ) : (
+          <div className="relative py-8">
+            <div className="overflow-visible">
+              <InfiniteSlider
+                speed={40}
+                speedOnHover={15}
+                gap={12}
+                className="w-full"
+              >
+              {proposals.map((proposal) => {
+                const authorInitials = proposal.author 
+                  ? proposal.author.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                  : proposal.authorUsername
+                  ? proposal.authorUsername.slice(0, 2).toUpperCase()
+                  : '??';
+                const authorName = proposal.author || proposal.authorUsername || 'Unknown Author';
+
+                return (
+                  <motion.a
+                    key={`${proposal.proposalType}-${proposal.proposalNumber}`}
+                    href={proposal.url}
+                    target={proposal.destination === 'magicians' ? '_blank' : '_self'}
+                    rel={proposal.destination === 'magicians' ? 'noopener noreferrer' : undefined}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
+                    className="group relative flex h-[170px] w-[300px] shrink-0 flex-col rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-slate-900/90 p-3.5 backdrop-blur-md transition-all duration-300 hover:border-cyan-400/60 hover:shadow-xl hover:shadow-cyan-500/15"
+                  >
+                    {/* Header: Badge + Status */}
+                    <div className="mb-1.5 flex items-center gap-1.5">
                       <span
-                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium backdrop-blur-sm ${
-                          statusColors[proposal.status] || statusColors['Draft']
-                        }`}
+                        className={`inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${typeColors[proposal.proposalType]}`}
                       >
-                        {proposal.status}
+                        {proposal.proposalType}-{proposal.proposalNumber}
                       </span>
-                    )}
-                  </div>
-
-                  {/* Title */}
-                  <h3 className="mb-4 line-clamp-2 text-sm font-semibold leading-snug text-slate-200 transition-colors group-hover:text-white">
-                    {proposal.title}
-                  </h3>
-
-                  {/* Meta Info */}
-                  <div className="mt-auto flex items-center justify-between text-xs text-slate-400">
-                    <div className="flex items-center gap-3">
-                      {proposal.category && (
-                        <span className="text-slate-500">{proposal.category}</span>
+                      {proposal.status && (
+                        <span
+                          className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold ${
+                            statusColors[proposal.status] || statusColors['Draft']
+                          }`}
+                        >
+                          {proposal.status}
+                        </span>
                       )}
-                      <div className="flex items-center gap-1.5">
-                        <MessageSquare className="h-3.5 w-3.5" />
-                        <span>{proposal.replies} replies</span>
+                    </div>
+
+                    {/* Title */}
+                    <h3 className="mb-1.5 line-clamp-2 text-sm font-bold leading-tight text-slate-100 transition-colors group-hover:text-white">
+                      {proposal.title}
+                    </h3>
+
+                    {/* Tags + Category */}
+                    <div className="mb-1.5 flex items-center gap-2 flex-wrap">
+                      {proposal.tags && proposal.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {proposal.tags.slice(0, 2).map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-0.5 rounded bg-slate-800/70 px-1.5 py-0.5 text-[9px] font-medium text-slate-400"
+                            >
+                              <Tag className="h-2 w-2" />
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {proposal.category && (
+                        <span className="rounded bg-slate-800/70 px-1.5 py-0.5 text-[9px] font-medium text-slate-300">
+                          {proposal.category}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Stats: Views, Likes, Replies */}
+                    <div className="mb-2 flex items-center gap-2.5 text-[10px] text-slate-400">
+                      {proposal.views !== undefined && (
+                        <div className="flex items-center gap-1">
+                          <Eye className="h-2.5 w-2.5" />
+                          <span className="font-medium">{proposal.views}</span>
+                        </div>
+                      )}
+                      {proposal.likes !== undefined && proposal.likes > 0 && (
+                        <div className="flex items-center gap-1 text-rose-400">
+                          <Heart className="h-2.5 w-2.5 fill-rose-400/30" />
+                          <span className="font-medium">{proposal.likes}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1 text-cyan-400">
+                        <MessageSquare className="h-2.5 w-2.5" />
+                        <span className="font-medium">{proposal.replies}</span>
                       </div>
                     </div>
-                    <span className="text-slate-500">{formatTimeAgo(proposal.lastActivityAt)}</span>
-                  </div>
 
-                  {/* CTA */}
-                  <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-cyan-400 transition-colors group-hover:text-cyan-300">
-                    {proposal.destination === 'internal' ? (
-                      <>
-                        View Proposal
-                        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-                      </>
-                    ) : (
-                      <>
-                        Open Discussion
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </>
-                    )}
-                  </div>
-                </motion.a>
-              ))}
+                    {/* Author + Time + CTA */}
+                    <div className="mt-auto flex items-center justify-between border-t border-slate-700/40 pt-2">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-7 w-7 border border-slate-700/60">
+                          <AvatarImage src={proposal.authorAvatar} alt={authorName} />
+                          <AvatarFallback className="bg-gradient-to-br from-cyan-500/25 to-emerald-500/25 text-[10px] font-bold text-cyan-200">
+                            {authorInitials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[11px] font-semibold text-slate-200 truncate">{authorName}</span>
+                          <div className="flex items-center gap-1 text-[9px] text-slate-500">
+                            <Clock className="h-2 w-2" />
+                            <span>{formatTimeAgo(proposal.lastActivityAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 rounded bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold text-cyan-400 transition-colors group-hover:bg-cyan-500/20 group-hover:text-cyan-300">
+                        {proposal.destination === 'internal' ? (
+                          <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                        ) : (
+                          <ExternalLink className="h-3 w-3" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Hover glow effect */}
+                    <div className="absolute inset-0 -z-10 rounded-lg bg-gradient-to-br from-cyan-500/0 via-cyan-500/0 to-emerald-500/0 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-15" />
+                  </motion.a>
+                );
+              })}
+              </InfiniteSlider>
             </div>
-          )}
-        </div>
+
+            {/* Progressive blur edges */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-slate-950/30 to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-slate-950/30 to-transparent" />
+            <ProgressiveBlur
+              className="pointer-events-none absolute left-0 top-0 h-full w-24"
+              direction="left"
+              blurIntensity={2}
+            />
+            <ProgressiveBlur
+              className="pointer-events-none absolute right-0 top-0 h-full w-24"
+              direction="right"
+              blurIntensity={2}
+            />
+          </div>
+        )}
       </section>
     </>
   );

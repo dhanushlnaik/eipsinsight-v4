@@ -62,7 +62,7 @@ export const metadata: Metadata = {
     siteName: "EIPsInsight",
     images: [
       {
-        url: "/og/og-default.png",
+        url: "/eipsinsight.png",
         width: 1200,
         height: 630,
         alt: "EIPsInsight — Ethereum Standards Intelligence",
@@ -75,7 +75,7 @@ export const metadata: Metadata = {
     title: "EIPsInsight — Ethereum Standards Intelligence",
     description:
       "Clear, visual insights into Ethereum Improvement Proposals, ERCs, and RIPs.",
-    images: ["/og/og-default.png"],
+    images: ["/eipsinsight.png"],
     creator: "@EIPsInsight",
   },
 

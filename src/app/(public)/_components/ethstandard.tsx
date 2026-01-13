@@ -1,303 +1,355 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
-import { motion } from "motion/react";
-import { ArrowRight, Layers, Network, ShieldCheck } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import { Bar, BarChart, XAxis } from "recharts";
+  History, 
+  GitBranch, 
+  Clock, 
+  GitMerge, 
+  Network,
+  GitCommit,
+  Users,
+  FileCode,
+  ArrowRight
+} from "lucide-react";
+import { PageHeader } from "@/components/header";
+import { CanvasRevealEffect } from "@/components/ui/canvas-reveal-effect";
+import { cn } from "@/lib/utils";
 
-const chartData = [
-  { domain: "Execution", draft: 24, review: 18, final: 9 },
-  { domain: "Consensus", draft: 12, review: 9, final: 6 },
-  { domain: "Networking", draft: 8, review: 6, final: 3 },
-  { domain: "Interfaces", draft: 15, review: 10, final: 5 },
-  { domain: "ERCs", draft: 32, review: 22, final: 11 },
+// Skeleton Components (must be defined before trackingCards)
+const SkeletonOne = () => {
+  const events = [
+    { label: "Draft", date: "2024-01-15", colorClass: "bg-cyan-400/60" },
+    { label: "Review", date: "2024-02-20", colorClass: "bg-blue-400/60" },
+    { label: "Last Call", date: "2024-03-10", colorClass: "bg-amber-400/60" },
+    { label: "Final", date: "2024-04-05", colorClass: "bg-emerald-400/60" },
+  ];
+
+  return (
+    <div className="relative flex flex-col gap-4 h-full py-4">
+      <div className="flex flex-col gap-3">
+        {events.map((event, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: idx * 0.1 }}
+            className="flex items-center gap-3"
+          >
+            <div className={cn("w-2 h-2 rounded-full", event.colorClass)} />
+            <div className="flex-1 h-px bg-gradient-to-r from-slate-700 to-transparent" />
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-medium text-slate-300">{event.label}</span>
+              <span className="text-[10px] text-slate-500">{event.date}</span>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+      <div className="absolute bottom-0 z-40 inset-x-0 h-20 bg-gradient-to-t from-slate-900/60 via-slate-900/60 to-transparent w-full pointer-events-none" />
+    </div>
+  );
+};
+
+const SkeletonTwo = () => {
+  const blockers = [
+    { role: "Authors", count: 12, borderClass: "border-emerald-400/20", bgClass: "bg-emerald-500/10", textClass: "text-emerald-300" },
+    { role: "Editors", count: 8, borderClass: "border-cyan-400/20", bgClass: "bg-cyan-500/10", textClass: "text-cyan-300" },
+    { role: "Community", count: 5, borderClass: "border-blue-400/20", bgClass: "bg-blue-500/10", textClass: "text-blue-300" },
+  ];
+
+  return (
+    <div className="relative flex flex-col gap-4 h-full py-4">
+      <div className="grid grid-cols-3 gap-3">
+        {blockers.map((blocker, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: idx * 0.1 }}
+            className={cn("relative p-4 rounded-lg border backdrop-blur-sm", blocker.borderClass, blocker.bgClass)}
+          >
+            <div className={cn("text-2xl font-bold mb-1", blocker.textClass)}>
+              {blocker.count}
+            </div>
+            <div className="text-xs text-slate-400">{blocker.role}</div>
+          </motion.div>
+        ))}
+      </div>
+      <div className="absolute bottom-0 z-40 inset-x-0 h-20 bg-gradient-to-t from-slate-900/60 via-slate-900/60 to-transparent w-full pointer-events-none" />
+    </div>
+  );
+};
+
+const SkeletonThree = () => {
+  const timeline = Array.from({ length: 6 }, (_, i) => ({
+    month: `Q${Math.floor(i / 2) + 1}`,
+    activity: Math.random() * 100,
+  }));
+
+  return (
+    <div className="relative flex flex-col gap-3 h-full py-4">
+      <div className="flex items-end gap-2 h-32">
+        {timeline.map((item, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ height: 0 }}
+            animate={{ height: `${item.activity}%` }}
+            transition={{ delay: idx * 0.1, duration: 0.5 }}
+            className="flex-1 bg-gradient-to-t from-cyan-500/40 to-blue-500/40 rounded-t-sm"
+          />
+        ))}
+      </div>
+      <div className="flex gap-2 text-[10px] text-slate-500">
+        {timeline.map((item, idx) => (
+          <div key={idx} className="flex-1 text-center">{item.month}</div>
+        ))}
+      </div>
+      <div className="absolute bottom-0 z-40 inset-x-0 h-20 bg-gradient-to-t from-slate-900/60 via-slate-900/60 to-transparent w-full pointer-events-none" />
+    </div>
+  );
+};
+
+const SkeletonFour = () => {
+  return (
+    <div className="relative flex flex-col gap-3 h-full py-4">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 p-3 rounded-lg border border-emerald-400/20 bg-emerald-500/10">
+          <div className="text-xs text-emerald-300 mb-1">EIP-1234</div>
+          <div className="text-[10px] text-slate-400">Core</div>
+        </div>
+        <ArrowRight className="h-4 w-4 text-slate-500" />
+        <div className="flex-1 p-3 rounded-lg border border-violet-400/20 bg-violet-500/10">
+          <div className="text-xs text-violet-300 mb-1">ERC-1234</div>
+          <div className="text-[10px] text-slate-400">Token</div>
+        </div>
+      </div>
+      <div className="text-xs text-slate-400 text-center">History preserved across migration</div>
+      <div className="absolute bottom-0 z-40 inset-x-0 h-20 bg-gradient-to-t from-slate-900/60 via-slate-900/60 to-transparent w-full pointer-events-none" />
+    </div>
+  );
+};
+
+const SkeletonFive = () => {
+  const nodes = [
+    { label: "RIP-1", x: 20, y: 30 },
+    { label: "RIP-2", x: 50, y: 20 },
+    { label: "RIP-3", x: 80, y: 40 },
+  ];
+
+  return (
+    <div className="relative flex flex-col gap-3 h-full py-4">
+      <div className="relative h-32 w-full">
+        {nodes.map((node, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: idx * 0.2 }}
+            className="absolute"
+            style={{ left: `${node.x}%`, top: `${node.y}%` }}
+          >
+            <div className="p-2 rounded-lg border border-amber-400/30 bg-amber-500/10 backdrop-blur-sm">
+              <div className="text-xs font-medium text-amber-300">{node.label}</div>
+            </div>
+          </motion.div>
+        ))}
+        <svg className="absolute inset-0 w-full h-full" style={{ zIndex: -1 }}>
+          {nodes.slice(0, -1).map((node, idx) => (
+            <line
+              key={idx}
+              x1={`${node.x}%`}
+              y1={`${node.y}%`}
+              x2={`${nodes[idx + 1].x}%`}
+              y2={`${nodes[idx + 1].y}%`}
+              stroke="rgba(251, 191, 36, 0.2)"
+              strokeWidth="1"
+            />
+          ))}
+        </svg>
+      </div>
+      <div className="text-xs text-slate-400 text-center">Evolving governance network</div>
+      <div className="absolute bottom-0 z-40 inset-x-0 h-20 bg-gradient-to-t from-slate-900/60 via-slate-900/60 to-transparent w-full pointer-events-none" />
+    </div>
+  );
+};
+
+const trackingCards = [
+  {
+    title: "Immutable Governance Events",
+    description: "Every status, category, and deadline change is recorded as a permanent event, not overwritten state.",
+    icon: History,
+    color: "emerald",
+    skeleton: <SkeletonOne />,
+    className: "col-span-1 lg:col-span-3 border-b lg:border-r dark:border-slate-700/50",
+  },
+  {
+    title: "Who Is Actually Blocking Progress",
+    description: "We determine whether a proposal is waiting on authors, editors, or the community based on real PR activity.",
+    icon: GitBranch,
+    color: "cyan",
+    skeleton: <SkeletonTwo />,
+    className: "col-span-1 lg:col-span-3 border-b dark:border-slate-700/50",
+  },
+  {
+    title: "Editor & Author Timelines",
+    description: "Reviews, comments, commits, and responses are tracked as time-ordered events, not just labels.",
+    icon: Clock,
+    color: "blue",
+    skeleton: <SkeletonThree />,
+    className: "col-span-1 lg:col-span-2 lg:border-r dark:border-slate-700/50",
+  },
+  {
+    title: "ERC Migration Without History Loss",
+    description: "Proposals that moved from EIPs to ERCs retain full lifecycle continuity across repositories.",
+    icon: GitMerge,
+    color: "violet",
+    skeleton: <SkeletonFour />,
+    className: "col-span-1 lg:col-span-2 dark:border-slate-700/50",
+  },
+  {
+    title: "RIPs Tracked Without Forced Lifecycle",
+    description: "Rollup Improvement Proposals are recorded as evolving governance artifacts, not forced into EIP semantics.",
+    icon: Network,
+    color: "amber",
+    skeleton: <SkeletonFive />,
+    className: "col-span-1 lg:col-span-2 dark:border-slate-700/50",
+  },
 ];
 
-const chartConfig = {
-  draft: {
-    label: "Draft",
-    color: "#52f6d6", // aqua
-  },
-  review: {
-    label: "Review",
-    color: "#7f6dff", // violet
-  },
-  final: {
-    label: "Final",
-    color: "#ffb45a", // warm amber
-  },
-} satisfies ChartConfig;
+const getColorClasses = (color: string) => {
+  const colors: Record<string, { border: string; bg: string; icon: string; canvasColors: number[][] }> = {
+    emerald: {
+      border: "border-emerald-400/30",
+      bg: "bg-emerald-500/10",
+      icon: "text-emerald-300",
+      canvasColors: [[52, 211, 153], [34, 211, 238]],
+    },
+    cyan: {
+      border: "border-cyan-400/30",
+      bg: "bg-cyan-500/10",
+      icon: "text-cyan-300",
+      canvasColors: [[34, 211, 238], [52, 211, 153]],
+    },
+    blue: {
+      border: "border-blue-400/30",
+      bg: "bg-blue-500/10",
+      icon: "text-blue-300",
+      canvasColors: [[59, 130, 246], [34, 211, 238]],
+    },
+    violet: {
+      border: "border-violet-400/30",
+      bg: "bg-violet-500/10",
+      icon: "text-violet-300",
+      canvasColors: [[139, 92, 246], [34, 211, 238]],
+    },
+    amber: {
+      border: "border-amber-400/30",
+      bg: "bg-amber-500/10",
+      icon: "text-amber-300",
+      canvasColors: [[251, 191, 36], [34, 211, 238]],
+    },
+  };
+  return colors[color] || colors.cyan;
+};
 
-const stats = [
-  { label: "Active proposals", value: "112", change: "+8 this month" },
-  { label: "Finalized", value: "34", change: "15% of total" },
-  { label: "Core team reviewers", value: "42", change: "Expanding coverage" },
-  { label: "Average review time", value: "21d", change: "Down 12%" },
-];
+
+const FeatureCard = ({
+  children,
+  className,
+  card,
+  index,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+  card: typeof trackingCards[0];
+  index: number;
+}) => {
+  const [hovered, setHovered] = useState(false);
+  const colors = getColorClasses(card.color);
+
+  return (
+        <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.3, delay: index * 0.05 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        "group/canvas-card relative overflow-hidden bg-gradient-to-br from-slate-900/60 via-slate-900/50 to-slate-900/60 p-4 sm:p-8 backdrop-blur-sm transition-all duration-300 cursor-default",
+        className
+      )}
+    >
+      {/* Canvas Reveal Effect */}
+      <AnimatePresence>
+        {hovered && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="h-full w-full absolute inset-0 overflow-hidden"
+            aria-hidden="true"
+          >
+            <CanvasRevealEffect
+              animationSpeed={2}
+              containerClassName="bg-slate-950/80"
+              colors={colors.canvasColors}
+              dotSize={1.5}
+              showGradient={true}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Content */}
+      <div className="relative z-20">
+        <FeatureTitle>{card.title}</FeatureTitle>
+        <FeatureDescription>{card.description}</FeatureDescription>
+        <div className="h-full w-full mt-4">{children}</div>
+          </div>
+        </motion.div>
+  );
+};
+
+const FeatureTitle = ({ children }: { children?: React.ReactNode }) => {
+  return (
+    <p className="max-w-5xl text-left tracking-tight text-slate-100 dark:text-white text-xl md:text-2xl md:leading-snug font-semibold">
+      {children}
+    </p>
+  );
+};
+
+const FeatureDescription = ({ children }: { children?: React.ReactNode }) => {
+  return (
+    <p className="text-sm md:text-base text-left text-slate-300/90 dark:text-slate-300 max-w-sm my-2">
+      {children}
+    </p>
+  );
+};
 
 export default function EthStandard() {
   return (
-    <section className="relative overflow-hidden bg-background py-20">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_30%_20%,rgba(52,211,153,0.18),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(34,211,238,0.16),transparent_32%),radial-gradient(circle_at_50%_80%,rgba(59,130,246,0.12),transparent_38%)]" />
-
-      <div className="container relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-12 text-center"
-        >
-          <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-black/60 px-4 py-1 text-sm text-cyan-100 backdrop-blur">
-            <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-xs font-semibold text-black">New</span>
-            <span>Ethereum Standards Overview</span>
-            <ArrowRight className="h-4 w-4" />
-          </div>
-
-          <h1 className="dec-title bg-gradient-to-br from-emerald-300 via-slate-100 to-cyan-200 bg-clip-text text-4xl font-semibold tracking-tight text-transparent sm:text-2xl md:text-4xl">
-            A Structured View of Ethereum Proposals
-          </h1>
-          <p className="mt-4 text-md text-slate-200">
-            Explore EIPs, ERCs, and RIPs across execution, consensus, networking, and interfaces. Understand how proposals are categorized, reviewed, and progressed through their lifecycle.
-          </p>
-
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg transition hover:from-cyan-400 hover:to-blue-500 hover:text-white"
-            >
-              View dashboard
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/eips"
-              className="inline-flex items-center gap-2 rounded-full border border-cyan-300/40 bg-black/40 px-5 py-2.5 text-sm text-cyan-100 backdrop-blur transition hover:bg-cyan-400/10"
-            >
-              <Layers className="h-4 w-4" />
-              Browse proposals
-            </Link>
-          </div>
-        </motion.div>
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.45 }}
-            className="rounded-2xl border border-cyan-300/20 bg-black/50 p-6 shadow-xl backdrop-blur"
-          >
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
-              <Network className="h-4 w-4" />
-              Domains
-            </div>
-            <h3 className="dec-title text-2xl font-semibold text-slate-100">
-              Categorized by layers
-            </h3>
-            <p className="mt-2 text-slate-300">
-              Execution, consensus, networking, and interfaces—quickly spot where proposals sit and how they impact the stack.
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-200">
-              <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3">
-                <p className="text-xs uppercase tracking-wide text-emerald-200">Execution</p>
-                <p className="text-lg font-semibold">24 in review</p>
-              </div>
-              <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3">
-                <p className="text-xs uppercase tracking-wide text-cyan-200">Consensus</p>
-                <p className="text-lg font-semibold">12 drafts</p>
-              </div>
-              <div className="rounded-xl border border-blue-400/20 bg-blue-400/5 p-3">
-                <p className="text-xs uppercase tracking-wide text-blue-200">Networking</p>
-                <p className="text-lg font-semibold">6 in review</p>
-              </div>
-              <div className="rounded-xl border border-slate-300/20 bg-slate-300/5 p-3">
-                <p className="text-xs uppercase tracking-wide text-slate-200">Interfaces</p>
-                <p className="text-lg font-semibold">15 active</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.5, delay: 0.05 }}
-            className="rounded-2xl border border-cyan-300/20 bg-black/50 p-6 shadow-xl backdrop-blur"
-          >
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-200">
-              <ShieldCheck className="h-4 w-4" />
-              Review flow
-            </div>
-            <h3 className="dec-title text-2xl font-semibold text-slate-100">
-              Clear lifecycle signals
-            </h3>
-            <p className="mt-2 text-slate-300">
-              Track status, reviewers, and timelines. Spot blockers early and see which domains are accelerating.
-            </p>
-            <ul className="mt-4 space-y-3 text-sm text-slate-200">
-              <li className="flex items-center justify-between rounded-xl border border-cyan-300/20 bg-cyan-400/5 px-4 py-3">
-                <span className="font-semibold">Review queue</span>
-                <span className="text-emerald-200">18 proposals</span>
-              </li>
-              <li className="flex items-center justify-between rounded-xl border border-emerald-300/20 bg-emerald-400/5 px-4 py-3">
-                <span className="font-semibold">Ready for final</span>
-                <span className="text-emerald-200">9 proposals</span>
-              </li>
-              <li className="flex items-center justify-between rounded-xl border border-blue-300/20 bg-blue-400/5 px-4 py-3">
-                <span className="font-semibold">Needs authors</span>
-                <span className="text-cyan-200">6 drafts</span>
-              </li>
-            </ul>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.55, delay: 0.1 }}
-            className="rounded-2xl border border-cyan-300/20 bg-black/50 p-6 shadow-xl backdrop-blur"
-          >
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-400/10 px-3 py-1 text-xs font-semibold text-blue-200">
-              <ArrowRight className="h-4 w-4" />
-              Momentum
-            </div>
-            <h3 className="dec-title text-2xl font-semibold text-slate-100">
-              Signals at a glance
-            </h3>
-            <p className="mt-2 text-slate-300">
-              Engagement, throughput, and timelines—surface the signals that show where standards are moving.
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-200">
-              {stats.map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-xl border border-cyan-300/20 bg-white/5 p-3"
-                >
-                  <p className="text-xs uppercase tracking-wide text-slate-400">
-                    {item.label}
-                  </p>
-                  <p className="text-lg font-semibold text-slate-50">{item.value}</p>
-                  <p className="text-xs text-emerald-200">{item.change}</p>
-                </div>
+    <>
+      <PageHeader
+        title="What EIPsInsight Tracks?"
+        description="Governance isn't just proposals. It's events, responsibility, and time."
+        sectionId="what-we-track"
+        className="bg-slate-950/30"
+      />
+      <section className="relative w-full bg-slate-950/30">
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-8 sm:pb-12">
+          <div className="relative">
+            <div className="grid grid-cols-1 lg:grid-cols-6 border rounded-xl dark:border-slate-700/50 overflow-hidden">
+              {trackingCards.map((card, index) => (
+                <FeatureCard key={card.title} className={card.className} card={card} index={index}>
+                  {card.skeleton}
+                </FeatureCard>
               ))}
             </div>
-          </motion.div>
+          </div>
         </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.2 }}
-          transition={{ duration: 0.6, delay: 0.05 }}
-          className="mt-12"
-        >
-          <Card className="border-cyan-300/20 bg-black/60 backdrop-blur">
-            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle className="dec-title text-xl text-slate-50">
-                  Lifecycle across domains
-                </CardTitle>
-                <CardDescription className="text-slate-300">
-                  Draft, review, and final counts grouped by domain.
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <ChartContainer
-                config={chartConfig}
-                className="relative h-[320px] w-full overflow-hidden rounded-xl border border-cyan-300/10 bg-gradient-to-br from-slate-900/70 via-slate-900/40 to-black/60 px-4 pb-2 pt-4 shadow-[0_10px_50px_rgba(0,0,0,0.35)]"
-              >
-                <BarChart accessibilityLayer data={chartData}>
-                  <XAxis
-                    dataKey="domain"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={12}
-                    tick={{ fill: "#cbd5e1" }}
-                  />
-                  <Bar
-                    dataKey="draft"
-                    stackId="a"
-                    fill="var(--color-draft)"
-                    fillOpacity={0.6}
-                    stroke="var(--color-draft)"
-                    strokeOpacity={0.95}
-                    strokeWidth={1.6}
-                    radius={[6, 6, 0, 0]}
-                    className="[filter:drop-shadow(0_0_12px_rgba(82,246,214,0.35))]"
-                  />
-                  <Bar
-                    dataKey="review"
-                    stackId="a"
-                    fill="var(--color-review)"
-                    fillOpacity={0.6}
-                    stroke="var(--color-review)"
-                    strokeOpacity={0.95}
-                    strokeWidth={1.6}
-                    className="[filter:drop-shadow(0_0_12px_rgba(127,109,255,0.35))]"
-                  />
-                  <Bar
-                    dataKey="final"
-                    stackId="a"
-                    fill="var(--color-final)"
-                    fillOpacity={0.6}
-                    stroke="var(--color-final)"
-                    strokeOpacity={0.95}
-                    strokeWidth={1.6}
-                    radius={[0, 0, 6, 6]}
-                    className="[filter:drop-shadow(0_0_12px_rgba(255,180,90,0.35))]"
-                  />
-                  <ChartTooltip
-                    cursor={false}
-                    content={
-                      <ChartTooltipContent
-                        className="w-[220px]"
-                        hideLabel
-                        formatter={(value, name, item, index) => (
-                          <>
-                            <div
-                              className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                              style={{ backgroundColor: `var(--color-${name})` }}
-                            />
-                            {chartConfig[name as keyof typeof chartConfig]?.label || name}
-                            <div className="text-foreground ml-auto flex items-baseline gap-1 font-mono font-medium tabular-nums">
-                              {value}
-                              <span className="text-muted-foreground text-xs font-normal">items</span>
-                            </div>
-                            {index === 2 && (
-                              <div className="text-foreground mt-2 flex basis-full items-center border-t pt-2 text-xs font-medium">
-                                Total
-                                <div className="text-foreground ml-auto flex items-baseline gap-1 font-mono font-medium tabular-nums">
-                                  {item.payload.draft + item.payload.review + item.payload.final}
-                                  <span className="text-muted-foreground text-xs font-normal">items</span>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      />
-                    }
-                    defaultIndex={0}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
