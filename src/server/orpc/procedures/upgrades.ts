@@ -71,9 +71,10 @@ export const upgradesProcedures = {
 
       const [totalUpgrades, totalEIPs, executionUpgrades, consensusUpgrades, totalCoreEIPs] = await Promise.all([
         prisma.upgrades.count(),
-        prisma.upgrade_composition_current.count({
-          distinct: ['eip_number'],
-        }),
+        prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`
+          SELECT COUNT(DISTINCT eip_number)::bigint as count
+          FROM upgrade_composition_current
+        `).then(r => Number(r[0]?.count || 0)),
         prisma.upgrades.count({
           where: { meta_eip: { not: null } },
         }),
