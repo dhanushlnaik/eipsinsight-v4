@@ -163,8 +163,10 @@ export function SearchBar() {
       // TODO: Navigate to author page when available
       router.push(`/search?author=${encodeURIComponent(result.name)}`);
     } else if (result.kind === 'pr') {
-      // TODO: Navigate to PR page when available
-      router.push(`/pr/${result.repo}/${result.prNumber}`);
+      // Open GitHub PR directly using the full repository name from search results,
+      // e.g. "ethereum/EIPs" -> https://github.com/ethereum/EIPs/pull/11171
+      const githubUrl = `https://github.com/${result.repo}/pull/${result.prNumber}`;
+      window.open(githubUrl, "_blank", "noopener,noreferrer");
     }
     setShowDropdown(false);
     setQuery('');

@@ -121,7 +121,7 @@ export function PRStalenessSection({ stalenessData, highRiskPRs }: PRStalenessSe
             {highRiskPRs.slice(0, isMobile ? 5 : 10).map((pr) => (
               <Link
                 key={`${pr.repo}-${pr.prNumber}`}
-                href={`https://github.com/ethereum/${pr.repo}/pull/${pr.prNumber}`}
+                href={pr.repo.includes('/') ? `https://github.com/${pr.repo}/pull/${pr.prNumber}` : `https://github.com/ethereum/${pr.repo}/pull/${pr.prNumber}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block p-3 rounded-lg bg-slate-900/50 border border-amber-400/20 hover:border-amber-400/40 hover:bg-slate-900/70 transition-all group"

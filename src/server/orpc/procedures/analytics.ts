@@ -938,4 +938,551 @@ export const analyticsProcedures = {
         lastActivity: r.last_activity,
       }));
     }),
+
+  // Month-scoped hero KPIs (end-of-period snapshot)
+  getPRMonthHeroKPIs: os
+    .$context<Ctx>()
+    .input(z.object({
+      year: z.number(),
+      month: z.number(),
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const monthStr = `${input.year}-${String(input.month).padStart(2, '0')}`;
+      const monthEndDate = `${monthStr}-01`; // last day computed in SQL as end of month
+
+      const results = await prisma.$queryRawUnsafe<Array<{
+        open_prs: bigint;
+        new_prs: bigint;
+        merged_prs: bigint;
+        closed_unmerged: bigint;
+      }>>(`
+        WITH pr_base AS (
+          SELECT pr.pr_number, pr.repository_id, pr.created_at, pr.merged_at, pr.closed_at, pr.state
+          FROM pull_requests pr
+          JOIN repositories r ON pr.repository_id = r.id
+          WHERE pr.created_at >= '2015-01-01'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ),
+        month_bounds AS (
+          SELECT
+            ($2::text || '-01')::date AS month_start,
+            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+        ),
+        open_at_month_end AS (
+          SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
+          CROSS JOIN month_bounds m
+          WHERE pb.created_at <= m.month_end
+            AND (pb.merged_at IS NULL OR pb.merged_at > m.month_end)
+            AND (pb.closed_at IS NULL OR pb.closed_at > m.month_end)
+        ),
+        new_in_month AS (
+          SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
+          CROSS JOIN month_bounds m
+          WHERE pb.created_at >= m.month_start AND pb.created_at <= m.month_end
+        ),
+        merged_in_month AS (
+          SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
+          CROSS JOIN month_bounds m
+          WHERE pb.merged_at IS NOT NULL AND pb.merged_at >= m.month_start AND pb.merged_at <= m.month_end
+        ),
+        closed_unmerged_in_month AS (
+          SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
+          CROSS JOIN month_bounds m
+          WHERE pb.closed_at IS NOT NULL AND pb.merged_at IS NULL
+            AND pb.closed_at >= m.month_start AND pb.closed_at <= m.month_end
+        )
+        SELECT
+          (SELECT cnt FROM open_at_month_end) AS open_prs,
+          (SELECT cnt FROM new_in_month) AS new_prs,
+          (SELECT cnt FROM merged_in_month) AS merged_prs,
+          (SELECT cnt FROM closed_unmerged_in_month) AS closed_unmerged
+      `, input.repo || null, monthStr);
+
+      const r = results[0];
+      const openPRs = Number(r?.open_prs ?? 0);
+      const newPRs = Number(r?.new_prs ?? 0);
+      const mergedPRs = Number(r?.merged_prs ?? 0);
+      const closedUnmerged = Number(r?.closed_unmerged ?? 0);
+      const netDelta = newPRs - mergedPRs - closedUnmerged;
+
+      return {
+        month: monthStr,
+        openPRs,
+        newPRs,
+        mergedPRs,
+        closedUnmerged,
+        netDelta,
+      };
+    }),
+
+  // Open PR classification (DRAFT, TYPO, NEW_EIP, STATUS_CHANGE, OTHER) — one bucket per PR
+  getPROpenClassification: os
+    .$context<Ctx>()
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+
+      const results = await prisma.$queryRawUnsafe<Array<{
+        category: string;
+        count: bigint;
+      }>>(`
+        WITH open_prs AS (
+          SELECT pr.id AS pr_id, pr.pr_number, pr.repository_id, pr.title
+          FROM pull_requests pr
+          JOIN repositories r ON pr.repository_id = r.id
+          WHERE pr.state = 'open'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ),
+        classified AS (
+          SELECT op.pr_id,
+            CASE
+              WHEN LOWER(COALESCE(op.title, '')) LIKE '%wip%' OR LOWER(COALESCE(op.title, '')) LIKE '%draft%' THEN 'DRAFT'
+              WHEN LOWER(COALESCE(op.title, '')) LIKE '%typo%' OR LOWER(COALESCE(op.title, '')) LIKE '%fix typo%'
+                OR LOWER(COALESCE(op.title, '')) LIKE '%editorial%' OR LOWER(COALESCE(op.title, '')) LIKE '%grammar%' THEN 'TYPO'
+              WHEN EXISTS (
+                SELECT 1 FROM pull_request_eips pre
+                JOIN eip_snapshots s ON s.eip_id = pre.eip_id
+                WHERE pre.pr_id = op.pr_id AND s.status = 'Draft'
+              ) THEN 'NEW_EIP'
+              WHEN EXISTS (
+                SELECT 1 FROM pull_request_eips pre
+                JOIN eip_status_events ese ON ese.eip_id = pre.eip_id AND ese.pr_number = op.pr_number
+                WHERE pre.pr_id = op.pr_id
+              ) THEN 'STATUS_CHANGE'
+              ELSE 'OTHER'
+            END AS category
+          FROM open_prs op
+        )
+        SELECT category, COUNT(*)::bigint AS count
+        FROM classified
+        GROUP BY category
+        ORDER BY count DESC
+      `, input.repo || null);
+
+      const order = ['DRAFT', 'TYPO', 'NEW_EIP', 'STATUS_CHANGE', 'OTHER'];
+      const byCat = Object.fromEntries(results.map(r => [r.category, Number(r.count)]));
+      return order.map(category => ({ category, count: byCat[category] ?? 0 }));
+    }),
+
+  // Governance waiting state with median wait and oldest PR per bucket
+  getPRGovernanceWaitingState: os
+    .$context<Ctx>()
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+
+      const results = await prisma.$queryRawUnsafe<Array<{
+        state: string;
+        label: string;
+        count: bigint;
+        median_wait_days: number | null;
+        oldest_pr_number: number | null;
+        oldest_wait_days: number | null;
+      }>>(`
+        WITH open_with_state AS (
+          SELECT pr.pr_number, pr.repository_id, r.name AS repo_name,
+                 COALESCE(gs.current_state, 'NO_STATE') AS state,
+                 gs.waiting_since
+          FROM pull_requests pr
+          JOIN repositories r ON pr.repository_id = r.id
+          LEFT JOIN pr_governance_state gs ON pr.pr_number = gs.pr_number AND pr.repository_id = gs.repository_id
+          WHERE pr.state = 'open'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ),
+        wait_days AS (
+          SELECT state, pr_number,
+                 EXTRACT(DAY FROM (NOW() - COALESCE(waiting_since, NOW())))::int AS wait_days
+          FROM open_with_state
+        ),
+        by_state AS (
+          SELECT state,
+                 COUNT(*)::bigint AS count,
+                 PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY wait_days)::numeric AS median_wait_days,
+                 MIN(wait_days) AS min_days
+          FROM wait_days GROUP BY state
+        ),
+        oldest_per_state AS (
+          SELECT DISTINCT ON (wd.state) wd.state, wd.pr_number AS oldest_pr_number, wd.wait_days AS oldest_wait_days
+          FROM wait_days wd
+          ORDER BY wd.state, wd.wait_days DESC
+        )
+        SELECT bs.state,
+               CASE bs.state WHEN 'WAITING_ON_EDITOR' THEN 'Waiting on Editor' WHEN 'WAITING_ON_AUTHOR' THEN 'Waiting on Author'
+                 WHEN 'STALLED' THEN 'Stalled' WHEN 'DRAFT' THEN 'Draft' ELSE 'No State' END AS label,
+               bs.count,
+               bs.median_wait_days::numeric,
+               op.oldest_pr_number,
+               op.oldest_wait_days::numeric
+        FROM by_state bs
+        LEFT JOIN oldest_per_state op ON op.state = bs.state
+        ORDER BY bs.count DESC
+      `, input.repo || null);
+
+      return results.map(r => ({
+        state: r.state,
+        label: r.label,
+        count: Number(r.count),
+        medianWaitDays: r.median_wait_days != null ? Math.round(Number(r.median_wait_days)) : null,
+        oldestPRNumber: r.oldest_pr_number ?? null,
+        oldestWaitDays: r.oldest_wait_days != null ? Math.round(Number(r.oldest_wait_days)) : null,
+      }));
+    }),
+
+  // Export: open PRs with governance state (for CSV/JSON download)
+  getPROpenExport: os
+    .$context<Ctx>()
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        pr_number: number;
+        repo: string;
+        title: string | null;
+        author: string | null;
+        created_at: string;
+        state: string;
+        waiting_since: string | null;
+        last_event_type: string | null;
+        linked_eips: string | null;
+      }>>(`
+        SELECT pr.pr_number, r.name AS repo, pr.title, pr.author,
+               TO_CHAR(pr.created_at, 'YYYY-MM-DD') AS created_at,
+               COALESCE(gs.current_state, 'NO_STATE') AS state,
+               TO_CHAR(gs.waiting_since, 'YYYY-MM-DD') AS waiting_since,
+               gs.last_event_type,
+               (SELECT STRING_AGG(e.eip_number::text, ',') FROM pull_request_eips pre JOIN eips e ON e.id = pre.eip_id WHERE pre.pr_id = pr.id) AS linked_eips
+        FROM pull_requests pr
+        JOIN repositories r ON pr.repository_id = r.id
+        LEFT JOIN pr_governance_state gs ON pr.pr_number = gs.pr_number AND pr.repository_id = gs.repository_id
+        WHERE pr.state = 'open'
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ORDER BY pr.created_at ASC
+      `, input.repo || null);
+
+      return rows.map(r => ({
+        prNumber: r.pr_number,
+        repo: r.repo,
+        title: r.title,
+        author: r.author,
+        createdAt: r.created_at,
+        governanceState: r.state,
+        waitingSince: r.waiting_since,
+        lastEventType: r.last_event_type,
+        linkedEIPs: r.linked_eips ?? null,
+      }));
+    }),
+
+  // ——— Contributors Analytics ———
+  getContributorKPIs: os
+    .$context<Ctx>()
+    .input(z.object({}))
+    .handler(async ({ context }) => {
+      await checkAPIToken(context.headers);
+      const results = await prisma.$queryRaw<Array<{
+        total_contributors: bigint;
+        active_30d: bigint;
+        total_activities: bigint;
+        last_24h: bigint;
+      }>>`
+        SELECT
+          (SELECT COUNT(DISTINCT actor) FROM contributor_activity)::bigint AS total_contributors,
+          (SELECT COUNT(DISTINCT actor) FROM contributor_activity WHERE occurred_at >= NOW() - INTERVAL '30 days')::bigint AS active_30d,
+          (SELECT COUNT(*)::bigint FROM contributor_activity) AS total_activities,
+          (SELECT COUNT(*)::bigint FROM contributor_activity WHERE occurred_at >= NOW() - INTERVAL '24 hours') AS last_24h
+      `;
+      const r = results[0];
+      return {
+        totalContributors: Number(r?.total_contributors ?? 0),
+        activeContributors30d: Number(r?.active_30d ?? 0),
+        totalActivities: Number(r?.total_activities ?? 0),
+        last24hCount: Number(r?.last_24h ?? 0),
+      };
+    }),
+
+  getContributorActivityByType: os
+    .$context<Ctx>()
+    .input(z.object({
+      from: z.string().optional(),
+      to: z.string().optional(),
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const results = await prisma.$queryRawUnsafe<Array<{ action_type: string; count: bigint }>>(
+        `
+        SELECT ca.action_type, COUNT(*)::bigint AS count
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+          AND ($2::text IS NULL OR ca.occurred_at >= $2::timestamp)
+          AND ($3::text IS NULL OR ca.occurred_at <= $3::timestamp)
+        GROUP BY ca.action_type
+        ORDER BY count DESC
+      `,
+        input.repo ?? null,
+        input.from ?? null,
+        input.to ?? null
+      );
+      return results.map((r) => ({ actionType: r.action_type, count: Number(r.count) }));
+    }),
+
+  getContributorActivityByRepo: os
+    .$context<Ctx>()
+    .input(z.object({
+      from: z.string().optional(),
+      to: z.string().optional(),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const results = await prisma.$queryRawUnsafe<Array<{ repo: string; count: bigint }>>(
+        `
+        SELECT COALESCE(r.name, 'Unknown') AS repo, COUNT(*)::bigint AS count
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE ($1::text IS NULL OR ca.occurred_at >= $1::timestamp)
+          AND ($2::text IS NULL OR ca.occurred_at <= $2::timestamp)
+        GROUP BY r.name
+        ORDER BY count DESC
+      `,
+        input.from ?? null,
+        input.to ?? null
+      );
+      return results.map((r) => ({ repo: r.repo ?? 'Unknown', count: Number(r.count) }));
+    }),
+
+  getContributorRankings: os
+    .$context<Ctx>()
+    .input(z.object({
+      sortBy: z.enum(['total', 'reviews', 'status_changes', 'prs_authored', 'prs_reviewed']).optional().default('total'),
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+      limit: z.number().optional().default(50),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const results = await prisma.$queryRawUnsafe<Array<{
+        actor: string;
+        total: bigint;
+        reviews: bigint;
+        status_changes: bigint;
+        prs_authored: bigint;
+        prs_reviewed: bigint;
+      }>>(
+        `
+        WITH filtered AS (
+          SELECT ca.actor, ca.action_type, ca.pr_number
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            AND ($2::text IS NULL OR ca.occurred_at >= $2::timestamp)
+            AND ($3::text IS NULL OR ca.occurred_at <= $3::timestamp)
+        ),
+        agg AS (
+          SELECT actor,
+            COUNT(*)::bigint AS total,
+            COUNT(*) FILTER (WHERE action_type = 'reviewed')::bigint AS reviews,
+            COUNT(*) FILTER (WHERE action_type = 'status_change')::bigint AS status_changes,
+            COUNT(DISTINCT pr_number) FILTER (WHERE action_type = 'opened')::bigint AS prs_authored,
+            COUNT(DISTINCT pr_number) FILTER (WHERE action_type = 'reviewed')::bigint AS prs_reviewed
+          FROM filtered
+          GROUP BY actor
+        )
+        SELECT * FROM agg
+        ORDER BY total DESC
+        LIMIT $4
+      `,
+        input.repo ?? null,
+        input.from ?? null,
+        input.to ?? null,
+        input.limit
+      );
+      const rows = results.map((r) => ({
+        actor: r.actor,
+        total: Number(r.total),
+        reviews: Number(r.reviews),
+        statusChanges: Number(r.status_changes),
+        prsAuthored: Number(r.prs_authored),
+        prsReviewed: Number(r.prs_reviewed),
+      }));
+      const key = input.sortBy === 'reviews' ? 'reviews' : input.sortBy === 'status_changes' ? 'statusChanges' : input.sortBy === 'prs_authored' ? 'prsAuthored' : input.sortBy === 'prs_reviewed' ? 'prsReviewed' : 'total';
+      rows.sort((a, b) => (b[key as keyof typeof b] as number) - (a[key as keyof typeof a] as number));
+      return rows;
+    }),
+
+  getContributorProfile: os
+    .$context<Ctx>()
+    .input(z.object({ actor: z.string(), limit: z.number().optional().default(100) }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const activities = await prisma.contributor_activity.findMany({
+        where: { actor: input.actor },
+        orderBy: { occurred_at: 'desc' },
+        take: input.limit,
+        include: { repositories: true },
+      });
+      const byRepo = activities.reduce(
+        (acc, a) => {
+          const name = a.repositories?.name ?? 'Unknown';
+          acc[name] = (acc[name] ?? 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
+      return {
+        actor: input.actor,
+        totalActivities: activities.length,
+        byRepo: Object.entries(byRepo).map(([repo, count]) => ({ repo, count })),
+        recentActivities: activities.map((a) => ({
+          actionType: a.action_type,
+          prNumber: a.pr_number,
+          repo: a.repositories?.name ?? null,
+          occurredAt: a.occurred_at.toISOString(),
+        })),
+      };
+    }),
+
+  getContributorLiveFeed: os
+    .$context<Ctx>()
+    .input(z.object({ hours: z.number().optional().default(48), limit: z.number().optional().default(50) }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const since = new Date(Date.now() - input.hours * 60 * 60 * 1000);
+      const activities = await prisma.contributor_activity.findMany({
+        where: { occurred_at: { gte: since } },
+        orderBy: { occurred_at: 'desc' },
+        take: input.limit,
+        include: { repositories: true },
+      });
+      return activities.map((a) => ({
+        actor: a.actor,
+        actionType: a.action_type,
+        prNumber: a.pr_number,
+        repo: a.repositories?.name ?? null,
+        occurredAt: a.occurred_at.toISOString(),
+      }));
+    }),
+
+  // ——— Editors & Reviewers Analytics ———
+  getEditorsLeaderboard: os
+    .$context<Ctx>()
+    .input(z.object({ limit: z.number().optional().default(30) }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const results = await prisma.$queryRawUnsafe<Array<{
+        actor: string;
+        total_reviews: bigint;
+        prs_touched: bigint;
+        median_response_days: number | null;
+      }>>(
+        `
+        WITH editor_activity AS (
+          SELECT ca.actor, ca.pr_number, ca.repository_id, ca.occurred_at
+          FROM contributor_activity ca
+          WHERE ca.role = 'editor' OR ca.action_type = 'reviewed'
+        ),
+        by_actor AS (
+          SELECT actor,
+            COUNT(*)::bigint AS total_reviews,
+            COUNT(DISTINCT pr_number)::bigint AS prs_touched
+          FROM editor_activity
+          GROUP BY actor
+        ),
+        first_review AS (
+          SELECT ea.actor, ea.pr_number, ea.repository_id,
+            MIN(ea.occurred_at) AS first_at
+          FROM editor_activity ea
+          GROUP BY ea.actor, ea.pr_number, ea.repository_id
+        ),
+        pr_created AS (
+          SELECT pr.pr_number, pr.repository_id, pr.created_at
+          FROM pull_requests pr
+        ),
+        response_days AS (
+          SELECT fr.actor, EXTRACT(DAY FROM (fr.first_at - prc.created_at))::int AS days
+          FROM first_review fr
+          JOIN pr_created prc ON prc.pr_number = fr.pr_number AND prc.repository_id = fr.repository_id
+        ),
+        medians AS (
+          SELECT actor, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days)::numeric AS median_response_days
+          FROM response_days
+          GROUP BY actor
+        )
+        SELECT ba.actor, ba.total_reviews, ba.prs_touched, m.median_response_days
+        FROM by_actor ba
+        LEFT JOIN medians m ON m.actor = ba.actor
+        ORDER BY ba.total_reviews DESC
+        LIMIT $1
+      `,
+        input.limit
+      );
+      return results.map((r) => ({
+        actor: r.actor,
+        totalReviews: Number(r.total_reviews),
+        prsTouched: Number(r.prs_touched),
+        medianResponseDays: r.median_response_days != null ? Math.round(Number(r.median_response_days)) : null,
+      }));
+    }),
+
+  getEditorsRepoDistribution: os
+    .$context<Ctx>()
+    .input(z.object({ actor: z.string().optional() }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const results = await prisma.$queryRawUnsafe<Array<{ actor: string; repo: string; count: bigint; pct: number }>>(
+        `
+        WITH base AS (
+          SELECT ca.actor, r.name AS repo
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          WHERE (ca.role = 'editor' OR ca.action_type = 'reviewed')
+            AND ($1::text IS NULL OR ca.actor = $1)
+        ),
+        totals AS (SELECT actor, COUNT(*) AS total FROM base GROUP BY actor)
+        SELECT b.actor, b.repo, COUNT(*)::bigint AS count,
+          ROUND(100.0 * COUNT(*) / NULLIF(t.total, 0), 1)::numeric AS pct
+        FROM base b
+        JOIN totals t ON t.actor = b.actor
+        GROUP BY b.actor, b.repo, t.total
+        ORDER BY b.actor, count DESC
+      `,
+        input.actor ?? null
+      );
+      return results.map((r) => ({
+        actor: r.actor,
+        repo: r.repo ?? 'Unknown',
+        count: Number(r.count),
+        pct: Number(r.pct),
+      }));
+    }),
+
+  getMonthlyReviewTrend: os
+    .$context<Ctx>()
+    .input(z.object({ actor: z.string().optional(), from: z.string().optional() }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const results = await prisma.$queryRawUnsafe<Array<{ month: string; count: bigint }>>(
+        `
+        SELECT TO_CHAR(date_trunc('month', ca.occurred_at), 'YYYY-MM') AS month, COUNT(*)::bigint AS count
+        FROM contributor_activity ca
+        WHERE (ca.role = 'editor' OR ca.action_type = 'reviewed')
+          AND ($1::text IS NULL OR ca.actor = $1)
+          AND ($2::text IS NULL OR ca.occurred_at >= $2::timestamp)
+        GROUP BY date_trunc('month', ca.occurred_at)
+        ORDER BY month ASC
+      `,
+        input.actor ?? null,
+        input.from ?? '2015-01-01'
+      );
+      return results.map((r) => ({ month: r.month, count: Number(r.count) }));
+    }),
 }

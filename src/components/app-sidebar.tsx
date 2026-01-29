@@ -108,7 +108,12 @@ const sidebarItems = [
   {
     title: "Analytics",
     icon: LineChart,
-    href: "/Analytics",
+    href: "/analytics/prs",
+    items: [
+      { title: "PR Analytics", href: "/analytics/prs" },
+      { title: "Contributors", href: "/analytics/contributors" },
+      { title: "Editors & Reviewers", href: "/analytics/editors" },
+    ],
   },
   {
     title: "Resources",
