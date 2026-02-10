@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useAnalytics } from "../layout";
 import { client } from "@/lib/orpc";
-import { Loader2, UserCheck, Clock, FileText } from "lucide-react";
+import { Loader2, Users, Clock, MessageSquare } from "lucide-react";
 import {
   ChartContainer,
   ChartTooltip,
@@ -23,16 +23,16 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 
-interface EditorLeaderboardRow {
+interface ReviewerLeaderboardRow {
   actor: string;
   totalReviews: number;
   prsTouched: number;
   medianResponseDays: number | null;
 }
 
-interface CategoryCoverage {
-  category: string;
-  actors: string[];
+interface CyclesData {
+  cycles: number;
+  count: number;
 }
 
 interface RepoDistribution {
@@ -46,16 +46,6 @@ interface MonthlyTrendPoint {
   month: string;
   [actor: string]: string | number;
 }
-
-const categoryColors: Record<string, string> = {
-  core: "#34d399",
-  erc: "#60a5fa",
-  networking: "#a78bfa",
-  interface: "#f472b6",
-  meta: "#fbbf24",
-  informational: "#94a3b8",
-  governance: "#ef4444",
-};
 
 const repoColors: Record<string, string> = {
   "ethereum/EIPs": "#22d3ee",
@@ -92,13 +82,13 @@ function getTimeWindow(timeRange: string): { from: string | undefined; to: strin
   return { from: from.toISOString().split('T')[0], to };
 }
 
-export default function EditorsAnalyticsPage() {
+export default function ReviewersAnalyticsPage() {
   const { timeRange, repoFilter } = useAnalytics();
   const [loading, setLoading] = useState(true);
   
-  const [leaderboard, setLeaderboard] = useState<EditorLeaderboardRow[]>([]);
+  const [leaderboard, setLeaderboard] = useState<ReviewerLeaderboardRow[]>([]);
   const [monthlyTrend, setMonthlyTrend] = useState<MonthlyTrendPoint[]>([]);
-  const [categoryCoverage, setCategoryCoverage] = useState<CategoryCoverage[]>([]);
+  const [cyclesData, setCyclesData] = useState<CyclesData[]>([]);
   const [repoDistribution, setRepoDistribution] = useState<RepoDistribution[]>([]);
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
@@ -110,21 +100,21 @@ export default function EditorsAnalyticsPage() {
       try {
         const months = timeRange === "7d" ? 3 : timeRange === "30d" ? 6 : timeRange === "90d" ? 12 : 24;
         
-        const [leaderboardData, trendData, categoryData, repoData] = await Promise.all([
-          client.analytics.getEditorsLeaderboard({
+        const [leaderboardData, trendData, cyclesDataRes, repoData] = await Promise.all([
+          client.analytics.getReviewersLeaderboard({
             repo: repoParam,
             from,
             to,
             limit: 30,
           }),
-          client.analytics.getEditorsMonthlyTrend({
+          client.analytics.getReviewersMonthlyTrend({
             repo: repoParam,
             months,
           }),
-          client.analytics.getEditorsByCategory({
+          client.analytics.getReviewerCyclesPerPR({
             repo: repoParam,
           }),
-          client.analytics.getEditorsRepoDistribution({
+          client.analytics.getReviewersRepoDistribution({
             repo: repoParam,
             from,
             to,
@@ -133,10 +123,10 @@ export default function EditorsAnalyticsPage() {
 
         setLeaderboard(leaderboardData);
         setMonthlyTrend(trendData);
-        setCategoryCoverage(categoryData);
+        setCyclesData(cyclesDataRes);
         setRepoDistribution(repoData);
       } catch (error) {
-        console.error("Failed to fetch editors analytics:", error);
+        console.error("Failed to fetch reviewers analytics:", error);
       } finally {
         setLoading(false);
       }
@@ -145,35 +135,27 @@ export default function EditorsAnalyticsPage() {
     fetchData();
   }, [timeRange, repoFilter, repoParam, from, to]);
 
-  // Aggregate repo distribution into cards
-  const repoCards = useMemo(() => {
+  // Aggregate repo distribution
+  const repoBars = useMemo(() => {
     const totals: Record<string, number> = {};
     repoDistribution.forEach(r => {
       const repoName = r.repo.split('/')[1] || r.repo;
       totals[repoName] = (totals[repoName] || 0) + r.count;
     });
     return [
-      { name: "EIPs", count: totals["EIPs"] || 0, color: repoColors["ethereum/EIPs"] },
-      { name: "ERCs", count: totals["ERCs"] || 0, color: repoColors["ethereum/ERCs"] },
-      { name: "RIPs", count: totals["RIPs"] || 0, color: repoColors["ethereum/RIPs"] },
+      { repo: "EIPs", count: totals["EIPs"] || 0 },
+      { repo: "ERCs", count: totals["ERCs"] || 0 },
+      { repo: "RIPs", count: totals["RIPs"] || 0 },
     ];
   }, [repoDistribution]);
 
-  // Prepare category coverage for stacked bars
-  const categoryData = useMemo(() => {
-    const categories = categoryCoverage.map(c => c.category);
-    const allActors = new Set<string>();
-    categoryCoverage.forEach(c => c.actors.forEach(a => allActors.add(a)));
-    
-    return categories.map(category => {
-      const coverage = categoryCoverage.find(c => c.category === category);
-      return {
-        category: category.charAt(0).toUpperCase() + category.slice(1),
-        count: coverage?.actors.length || 0,
-        actors: coverage?.actors || [],
-      };
-    }).filter(c => c.count > 0);
-  }, [categoryCoverage]);
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+      </div>
+    );
+  }
 
   // Get unique actors from monthly trend for legend
   const trendActors = useMemo(() => {
@@ -189,14 +171,6 @@ export default function EditorsAnalyticsPage() {
     return Array.from(actors).slice(0, 8); // Limit to 8 for readability
   }, [monthlyTrend]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Hero KPIs */}
@@ -204,11 +178,11 @@ export default function EditorsAnalyticsPage() {
         <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-400">Total Editors</p>
+              <p className="text-sm text-slate-400">Total Reviewers</p>
               <p className="text-3xl font-bold text-white">{leaderboard.length}</p>
             </div>
-            <div className="rounded-full bg-violet-500/20 p-3">
-              <UserCheck className="h-6 w-6 text-violet-400" />
+            <div className="rounded-full bg-emerald-500/20 p-3">
+              <Users className="h-6 w-6 text-emerald-400" />
             </div>
           </div>
         </div>
@@ -218,11 +192,11 @@ export default function EditorsAnalyticsPage() {
             <div>
               <p className="text-sm text-slate-400">Total Reviews</p>
               <p className="text-3xl font-bold text-white">
-                {leaderboard.reduce((sum, e) => sum + e.totalReviews, 0).toLocaleString()}
+                {leaderboard.reduce((sum, r) => sum + r.totalReviews, 0).toLocaleString()}
               </p>
             </div>
             <div className="rounded-full bg-blue-500/20 p-3">
-              <FileText className="h-6 w-6 text-blue-400" />
+              <MessageSquare className="h-6 w-6 text-blue-400" />
             </div>
           </div>
         </div>
@@ -234,7 +208,7 @@ export default function EditorsAnalyticsPage() {
               <p className="text-3xl font-bold text-white">
                 {(() => {
                   const medians = leaderboard
-                    .map(e => e.medianResponseDays)
+                    .map(r => r.medianResponseDays)
                     .filter((d): d is number => d !== null);
                   if (medians.length === 0) return "–";
                   const overall = medians.reduce((a, b) => a + b, 0) / medians.length;
@@ -249,39 +223,39 @@ export default function EditorsAnalyticsPage() {
         </div>
       </div>
 
-      {/* Editor Leaderboard */}
+      {/* Reviewer Leaderboard */}
       <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-6 backdrop-blur-sm">
-        <h2 className="mb-4 text-xl font-semibold text-white">Editor Leaderboard</h2>
+        <h2 className="mb-4 text-xl font-semibold text-white">Reviewer Leaderboard</h2>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700">
                 <th className="py-3 px-4 text-left text-sm font-medium text-slate-400">Rank</th>
-                <th className="py-3 px-4 text-left text-sm font-medium text-slate-400">Editor</th>
+                <th className="py-3 px-4 text-left text-sm font-medium text-slate-400">Reviewer</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-slate-400">Reviews</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-slate-400">PRs Touched</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-slate-400">Median Response</th>
               </tr>
             </thead>
             <tbody>
-              {leaderboard.map((editor, idx) => (
+              {leaderboard.map((reviewer, idx) => (
                 <tr
-                  key={editor.actor}
+                  key={reviewer.actor}
                   className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors"
                 >
                   <td className="py-3 px-4 text-sm text-slate-400">#{idx + 1}</td>
                   <td className="py-3 px-4">
-                    <span className="font-medium text-slate-200">{editor.actor}</span>
+                    <span className="font-medium text-slate-200">{reviewer.actor}</span>
                   </td>
                   <td className="py-3 px-4 text-right text-sm text-slate-300">
-                    {editor.totalReviews.toLocaleString()}
+                    {reviewer.totalReviews.toLocaleString()}
                   </td>
                   <td className="py-3 px-4 text-right text-sm text-slate-300">
-                    {editor.prsTouched.toLocaleString()}
+                    {reviewer.prsTouched.toLocaleString()}
                   </td>
                   <td className="py-3 px-4 text-right text-sm text-slate-300">
-                    {editor.medianResponseDays != null
-                      ? `${editor.medianResponseDays}d`
+                    {reviewer.medianResponseDays != null
+                      ? `${reviewer.medianResponseDays}d`
                       : "–"}
                   </td>
                 </tr>
@@ -289,7 +263,7 @@ export default function EditorsAnalyticsPage() {
               {leaderboard.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-6 text-center text-sm text-slate-500">
-                    No editor data found for the current filters.
+                    No reviewer data found for the current filters.
                   </td>
                 </tr>
               )}
@@ -298,10 +272,10 @@ export default function EditorsAnalyticsPage() {
         </div>
       </div>
 
-      {/* Monthly Trend + Repo Distribution */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-xl border border-slate-700/50 bg-slate-900/40 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-white">Review Load Over Time</h2>
+      {/* Monthly Trend + Cycles per PR */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-6 backdrop-blur-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">Review Activity Over Time</h2>
           <ChartContainer
             config={Object.fromEntries(
               trendActors.map((actor, idx) => [
@@ -338,61 +312,68 @@ export default function EditorsAnalyticsPage() {
         </div>
 
         <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-white">Repo Distribution</h2>
-          <div className="space-y-4">
-            {repoCards.map((repo) => (
-              <div key={repo.name} className="rounded-lg border border-slate-700/50 bg-slate-800/30 p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-300">{repo.name}</span>
-                  <span className="text-lg font-bold text-white">{repo.count.toLocaleString()}</span>
-                </div>
-                <div className="h-2 rounded-full bg-slate-800">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(100, (repo.count / Math.max(...repoCards.map(r => r.count), 1)) * 100)}%`,
-                      backgroundColor: repo.color,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+          <h2 className="mb-4 text-lg font-semibold text-white">Review Cycles per PR</h2>
+          <ChartContainer
+            config={{
+              count: { label: "PRs", color: "#22c55e" },
+            }}
+            className="h-72 w-full"
+          >
+            <ResponsiveContainer>
+              <BarChart data={cyclesData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="cycles" stroke="#94a3b8" label={{ value: "Number of Reviewers", position: "insideBottom", offset: -5 }} />
+                <YAxis stroke="#94a3b8" />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#22c55e">
+                  {cyclesData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.cycles <= 2 ? "#22c55e" : entry.cycles <= 4 ? "#eab308" : "#ef4444"}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+          <p className="mt-2 text-xs text-slate-500">
+            Distribution of how many reviewers typically review each PR
+          </p>
         </div>
       </div>
 
-      {/* Category Coverage */}
+      {/* Top Reviewers by Repo */}
       <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-6 backdrop-blur-sm">
-        <h2 className="mb-4 text-lg font-semibold text-white">Category Coverage</h2>
+        <h2 className="mb-4 text-lg font-semibold text-white">Reviewers by Repository</h2>
         <ChartContainer
           config={Object.fromEntries(
-            Object.entries(categoryColors).map(([cat, color]) => [
-              cat,
-              { label: cat, color },
+            repoBars.map((r, idx) => [
+              r.repo,
+              {
+                label: r.repo,
+                color: repoColors[`ethereum/${r.repo}`] || "#94a3b8",
+              },
             ])
           )}
           className="h-64 w-full"
         >
           <ResponsiveContainer>
-            <BarChart data={categoryData} layout="vertical">
+            <BarChart data={repoBars}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis type="number" stroke="#94a3b8" />
-              <YAxis dataKey="category" type="category" stroke="#94a3b8" width={100} />
+              <XAxis dataKey="repo" stroke="#94a3b8" />
+              <YAxis stroke="#94a3b8" />
               <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-                {categoryData.map((entry, index) => (
+              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                {repoBars.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
-                    fill={categoryColors[entry.category.toLowerCase()] || "#94a3b8"}
+                    fill={repoColors[`ethereum/${entry.repo}`] || "#94a3b8"}
                   />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </ChartContainer>
-        <p className="mt-2 text-xs text-slate-500">
-          Number of editors active in each category
-        </p>
       </div>
     </div>
   );

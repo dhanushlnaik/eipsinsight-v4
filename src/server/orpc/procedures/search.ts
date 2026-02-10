@@ -110,96 +110,157 @@ export const searchProcedures = {
       }));
     }),
 
-  // Search authors (derived from eips.author)
+  // Search authors/people (from EIPs, PRs, Issues, and contributor_activity)
   searchAuthors: os
     .$context<Ctx>()
     .input(z.object({
       query: z.string().min(1),
-      limit: z.number().optional().default(20),
+      limit: z.number().optional().default(50),
     }))
     .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
 
       const searchTerm = `%${input.query}%`;
 
-      // Extract and aggregate authors
+      // Get actors from PRs, Issues, and contributor_activity - simplified without EIP matching for now
       const results = await prisma.$queryRawUnsafe<Array<{
-        author_name: string;
-        contributions: bigint;
+        actor: string;
+        role: string | null;
+        eip_count: bigint;
+        pr_count: bigint;
+        issue_count: bigint;
+        review_count: bigint;
+        last_activity: Date | null;
       }>>(`
-        WITH author_list AS (
-          SELECT
-            TRIM(unnest(string_to_array(author, ','))) AS author_name
-          FROM eips
-          WHERE author IS NOT NULL AND author != ''
+        WITH all_actors AS (
+          SELECT DISTINCT author AS actor
+          FROM pull_requests
+          WHERE author IS NOT NULL AND author != '' AND author ILIKE $1
+          UNION
+          SELECT DISTINCT author AS actor
+          FROM issues
+          WHERE author IS NOT NULL AND author != '' AND author ILIKE $1
+          UNION
+          SELECT DISTINCT actor
+          FROM contributor_activity
+          WHERE actor IS NOT NULL AND actor != '' AND actor ILIKE $1
         ),
-        normalized_authors AS (
+        pr_counts AS (
+          SELECT author AS actor, COUNT(*)::bigint AS pr_count
+          FROM pull_requests
+          WHERE author IS NOT NULL AND author ILIKE $1
+          GROUP BY author
+        ),
+        issue_counts AS (
+          SELECT author AS actor, COUNT(*)::bigint AS issue_count
+          FROM issues
+          WHERE author IS NOT NULL AND author ILIKE $1
+          GROUP BY author
+        ),
+        activity_stats AS (
           SELECT
-            CASE
-              -- Extract GitHub handle from (@handle)
-              WHEN author_name ~ '\\(@([\\w-]+)\\)' THEN 
-                SUBSTRING(author_name FROM '\\(@([\\w-]+)\\)')
-              -- Extract name before <email>
-              WHEN author_name ~ '<' THEN 
-                TRIM(SPLIT_PART(author_name, '<', 1))
-              -- Use as-is
-              ELSE TRIM(author_name)
-            END AS normalized_name,
-            author_name AS original_name
-          FROM author_list
+            actor,
+            COUNT(*) FILTER (WHERE action_type = 'reviewed')::bigint AS review_count,
+            MAX(occurred_at) AS last_activity,
+            MAX(role) AS role
+          FROM contributor_activity
+          WHERE actor IS NOT NULL AND actor ILIKE $1
+          GROUP BY actor
+        ),
+        eip_counts AS (
+          SELECT
+            aa.actor,
+            COUNT(*)::bigint AS eip_count
+          FROM all_actors aa
+          JOIN eips e ON e.author ILIKE '%' || aa.actor || '%'
+          GROUP BY aa.actor
         )
         SELECT
-          COALESCE(normalized_name, original_name) AS author_name,
-          COUNT(*)::bigint AS contributions
-        FROM normalized_authors
-        WHERE normalized_name ILIKE $1 OR original_name ILIKE $1
-        GROUP BY COALESCE(normalized_name, original_name)
-        ORDER BY contributions DESC, author_name ASC
+          aa.actor,
+          act.role,
+          COALESCE(ec.eip_count, 0)::bigint AS eip_count,
+          COALESCE(pc.pr_count, 0)::bigint AS pr_count,
+          COALESCE(ic.issue_count, 0)::bigint AS issue_count,
+          COALESCE(act.review_count, 0)::bigint AS review_count,
+          act.last_activity
+        FROM all_actors aa
+        LEFT JOIN pr_counts pc ON pc.actor = aa.actor
+        LEFT JOIN issue_counts ic ON ic.actor = aa.actor
+        LEFT JOIN activity_stats act ON act.actor = aa.actor
+        LEFT JOIN eip_counts ec ON ec.actor = aa.actor
+        WHERE COALESCE(ec.eip_count, 0) > 0 
+           OR COALESCE(pc.pr_count, 0) > 0 
+           OR COALESCE(ic.issue_count, 0) > 0 
+           OR COALESCE(act.review_count, 0) > 0
+        ORDER BY (
+          COALESCE(ec.eip_count, 0) +
+          COALESCE(pc.pr_count, 0) +
+          COALESCE(ic.issue_count, 0) +
+          COALESCE(act.review_count, 0)
+        ) DESC, aa.actor ASC
         LIMIT $2
       `, searchTerm, input.limit);
 
       return results.map(r => ({
         kind: 'author' as const,
-        name: r.author_name,
-        contributionCount: Number(r.contributions),
+        name: r.actor,
+        role: r.role || null,
+        eipCount: Number(r.eip_count),
+        prCount: Number(r.pr_count),
+        issueCount: Number(r.issue_count),
+        reviewCount: Number(r.review_count),
+        lastActivity: r.last_activity?.toISOString() || null,
       }));
     }),
 
-  // Search pull requests (secondary)
+  // Search pull requests
   searchPRs: os
     .$context<Ctx>()
     .input(z.object({
       query: z.string().min(1),
-      limit: z.number().optional().default(20),
+      limit: z.number().optional().default(50),
     }))
     .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
 
-      // Only search if query is numeric or starts with pr/#/pull
+      const searchTerm = `%${input.query}%`;
       const numericQuery = input.query.replace(/[^\d]/g, '');
-      if (!numericQuery && !/^(pr|#|pull)/i.test(input.query)) {
-        return [];
-      }
-
-      const searchTerm = numericQuery ? `%${numericQuery}%` : `%${input.query}%`;
 
       const results = await prisma.$queryRawUnsafe<Array<{
         pr_number: number;
         repo: string;
         title: string | null;
+        author: string | null;
         state: string | null;
+        merged_at: Date | null;
+        created_at: Date | null;
+        updated_at: Date | null;
+        labels: string[];
+        governance_state: string | null;
       }>>(`
         SELECT
           p.pr_number,
           r.name AS repo,
           p.title,
-          p.state
+          p.author,
+          p.state,
+          p.merged_at,
+          p.created_at,
+          p.updated_at,
+          COALESCE(p.labels, ARRAY[]::text[]) AS labels,
+          gs.current_state AS governance_state
         FROM pull_requests p
         JOIN repositories r ON r.id = p.repository_id
+        LEFT JOIN pr_governance_state gs ON gs.pr_number = p.pr_number AND gs.repository_id = p.repository_id
         WHERE 
-          p.pr_number::text LIKE $1
+          p.pr_number::text ILIKE $1
           OR p.title ILIKE $1
-        ORDER BY p.pr_number DESC
+          OR p.author ILIKE $1
+          OR EXISTS (
+            SELECT 1 FROM unnest(COALESCE(p.labels, ARRAY[]::text[])) AS label
+            WHERE label ILIKE $1
+          )
+        ORDER BY p.created_at DESC
         LIMIT $2
       `, searchTerm, input.limit);
 
@@ -208,7 +269,75 @@ export const searchProcedures = {
         prNumber: r.pr_number,
         repo: r.repo,
         title: r.title || null,
+        author: r.author || null,
         state: r.state || null,
+        mergedAt: r.merged_at?.toISOString() || null,
+        createdAt: r.created_at?.toISOString() || null,
+        updatedAt: r.updated_at?.toISOString() || null,
+        labels: r.labels || [],
+        governanceState: r.governance_state || null,
+      }));
+    }),
+
+  // Search issues
+  searchIssues: os
+    .$context<Ctx>()
+    .input(z.object({
+      query: z.string().min(1),
+      limit: z.number().optional().default(50),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+
+      const searchTerm = `%${input.query}%`;
+      const numericQuery = input.query.replace(/[^\d]/g, '');
+
+      const results = await prisma.$queryRawUnsafe<Array<{
+        issue_number: number;
+        repo: string;
+        title: string | null;
+        author: string | null;
+        state: string | null;
+        created_at: Date | null;
+        updated_at: Date | null;
+        closed_at: Date | null;
+        labels: string[];
+      }>>(`
+        SELECT
+          i.issue_number,
+          r.name AS repo,
+          i.title,
+          i.author,
+          i.state,
+          i.created_at,
+          i.updated_at,
+          i.closed_at,
+          COALESCE(i.labels, ARRAY[]::text[]) AS labels
+        FROM issues i
+        JOIN repositories r ON r.id = i.repository_id
+        WHERE 
+          i.issue_number::text ILIKE $1
+          OR i.title ILIKE $1
+          OR i.author ILIKE $1
+          OR EXISTS (
+            SELECT 1 FROM unnest(COALESCE(i.labels, ARRAY[]::text[])) AS label
+            WHERE label ILIKE $1
+          )
+        ORDER BY i.created_at DESC
+        LIMIT $2
+      `, searchTerm, input.limit);
+
+      return results.map(r => ({
+        kind: 'issue' as const,
+        issueNumber: r.issue_number,
+        repo: r.repo,
+        title: r.title || null,
+        author: r.author || null,
+        state: r.state || null,
+        createdAt: r.created_at?.toISOString() || null,
+        updatedAt: r.updated_at?.toISOString() || null,
+        closedAt: r.closed_at?.toISOString() || null,
+        labels: r.labels || [],
       }));
     }),
 }

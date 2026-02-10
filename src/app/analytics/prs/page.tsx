@@ -1,412 +1,602 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { PageHeader, SectionSeparator } from '@/components/header';
-import { client } from '@/lib/orpc';
-import { Loader2 } from 'lucide-react';
-import { PRVolumeChart } from '@/app/analytics/pr/_components/pr-volume-chart';
-import { PROpenStateSnapshot } from '@/app/analytics/pr/_components/pr-open-state-snapshot';
-import { PRLifecycleFunnel } from '@/app/analytics/pr/_components/pr-lifecycle-funnel';
-import { PRTimeToOutcome } from '@/app/analytics/pr/_components/pr-time-to-outcome';
-import { PRStalenessSection } from '@/app/analytics/pr/_components/pr-staleness-section';
-import { PRHeroKPIs } from './_components/pr-hero-kpis';
-import { PRClassificationDonut } from './_components/pr-classification-donut';
-import { PRGovernanceWaiting } from './_components/pr-governance-waiting';
+import React, { useEffect, useMemo, useState } from "react";
+import { useAnalytics } from "../layout";
+import { client } from "@/lib/orpc";
+import {
+  Loader2,
+  GitPullRequest,
+  ArrowUpRight,
+  AlertCircle,
+  Clock,
+  Tag,
+} from "lucide-react";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  Legend,
+} from "recharts";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
-type RepoFilter = 'eips' | 'ercs' | 'rips' | undefined;
-
-function getDefaultMonth(): { year: number; month: number } {
-  const now = new Date();
-  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+interface PRMonthlyPoint {
+  month: string;
+  created: number;
+  merged: number;
+  closed: number;
+  openAtMonthEnd: number;
 }
 
-export default function PRAnalyticsPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const yearParam = searchParams.get('year');
-  const monthParam = searchParams.get('month');
-  const [year, setYear] = useState(() => (yearParam ? parseInt(yearParam, 10) : getDefaultMonth().year));
-  const [month, setMonth] = useState(() => (monthParam ? parseInt(monthParam, 10) : getDefaultMonth().month));
+interface PRMonthHero {
+  month: string;
+  openPRs: number;
+  newPRs: number;
+  mergedPRs: number;
+  closedUnmerged: number;
+  netDelta: number;
+}
 
+interface OpenStateSummary {
+  totalOpen: number;
+  medianAge: number;
+  oldestPR: {
+    pr_number: number;
+    title: string;
+    author: string;
+    age_days: number;
+    repo: string;
+  } | null;
+}
+
+interface GovernanceState {
+  state: string;
+  label: string;
+  count: number;
+}
+
+interface LabelStat {
+  label: string;
+  count: number;
+}
+
+interface LifecycleStage {
+  stage: string;
+  count: number;
+  percentage: number;
+}
+
+interface TimeToOutcomeMetric {
+  metric: string;
+  medianDays: number;
+  p75Days: number;
+  p90Days: number;
+}
+
+interface StalenessBucket {
+  bucket: string;
+  count: number;
+}
+
+interface OpenPRRow {
+  prNumber: number;
+  repo: string;
+  title: string | null;
+  author: string | null;
+  createdAt: string;
+  governanceState: string;
+  waitingSince: string | null;
+  lastEventType: string | null;
+  linkedEIPs: string | null;
+}
+
+type TimeRange = "7d" | "30d" | "90d" | "1y" | "all" | "custom";
+
+function getMonthWindow(range: TimeRange): { from?: string; to?: string } {
+  const now = new Date();
+  const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  if (range === "all") {
+    // No from/to limits -> full history
+    return { from: undefined, to: undefined };
+  }
+
+  const monthsBack =
+    range === "7d" ? 1 : range === "30d" ? 3 : range === "90d" ? 6 : 12;
+
+  const fromDate = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1);
+  const from = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}`;
+
+  return { from, to };
+}
+
+const governanceColors: Record<string, string> = {
+  WAITING_ON_EDITOR: "#60a5fa",
+  WAITING_ON_AUTHOR: "#f97316",
+  STALLED: "#f97373",
+  DRAFT: "#a855f7",
+  NO_STATE: "#64748b",
+};
+
+const stalenessColors: Record<string, string> = {
+  "0-7 days": "#22c55e",
+  "7-30 days": "#eab308",
+  "30-90 days": "#f97316",
+  "90+ days": "#ef4444",
+};
+
+export default function PRsAnalyticsPage() {
+  const { timeRange, repoFilter } = useAnalytics();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedRepo, setSelectedRepo] = useState<RepoFilter>('eips');
-  const [heroKPIs, setHeroKPIs] = useState<{
-    month: string;
-    openPRs: number;
-    newPRs: number;
-    mergedPRs: number;
-    closedUnmerged: number;
-    netDelta: number;
-  } | null>(null);
-  const [monthlyData, setMonthlyData] = useState<any[]>([]);
-  const [openState, setOpenState] = useState<any>(null);
-  const [governanceStates, setGovernanceStates] = useState<any[]>([]);
-  const [governanceWaiting, setGovernanceWaiting] = useState<any[]>([]);
-  const [classification, setClassification] = useState<any[]>([]);
-  const [labels, setLabels] = useState<any[]>([]);
-  const [lifecycleData, setLifecycleData] = useState<any[]>([]);
-  const [timeToOutcome, setTimeToOutcome] = useState<any[]>([]);
-  const [stalenessData, setStalenessData] = useState<any[]>([]);
-  const [highRiskPRs, setHighRiskPRs] = useState<any[]>([]);
-  const [openExport, setOpenExport] = useState<any[]>([]);
+
+  const [monthlySeries, setMonthlySeries] = useState<PRMonthlyPoint[]>([]);
+  const [heroMonth, setHeroMonth] = useState<PRMonthHero | null>(null);
+  const [openSummary, setOpenSummary] = useState<OpenStateSummary | null>(null);
+  const [governanceStates, setGovernanceStates] = useState<GovernanceState[]>([]);
+  const [labelStats, setLabelStats] = useState<LabelStat[]>([]);
+  const [lifecycleStages, setLifecycleStages] = useState<LifecycleStage[]>([]);
+  const [timeToOutcome, setTimeToOutcome] = useState<TimeToOutcomeMetric[]>([]);
+  const [staleness, setStaleness] = useState<StalenessBucket[]>([]);
+  const [openPRs, setOpenPRs] = useState<OpenPRRow[]>([]);
+
+  const repoParam = repoFilter === "all" ? undefined : repoFilter;
 
   useEffect(() => {
-    const y = yearParam ? parseInt(yearParam, 10) : getDefaultMonth().year;
-    const m = monthParam ? parseInt(monthParam, 10) : getDefaultMonth().month;
-    if (!isNaN(y)) setYear(y);
-    if (!isNaN(m) && m >= 1 && m <= 12) setMonth(m);
-  }, [yearParam, monthParam]);
-
-  useEffect(() => {
-    async function fetchData() {
+    const fetchData = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        setError(null);
-        const apiParams = selectedRepo ? { repo: selectedRepo } : {};
-        const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+        const { from, to } = getMonthWindow(timeRange as TimeRange);
+        const now = new Date();
 
-        const [
-          kpis,
-          monthly,
-          openStateData,
-          governance,
-          govWaiting,
-          classificationData,
-          labelsData,
-          lifecycle,
-          timeData,
-          staleness,
-          highRisk,
-          exportData,
-        ] = await Promise.all([
-          client.analytics.getPRMonthHeroKPIs({ year, month, ...apiParams }),
-          client.analytics.getPRMonthlyActivity({ from: '2015-01', to: monthStr, ...apiParams }),
-          client.analytics.getPROpenState(apiParams),
-          client.analytics.getPRGovernanceStates(apiParams),
-          client.analytics.getPRGovernanceWaitingState(apiParams),
-          client.analytics.getPROpenClassification(apiParams),
-          client.analytics.getPRLabels(apiParams),
-          client.analytics.getPRLifecycleFunnel({}),
-          client.analytics.getPRTimeToOutcome(apiParams),
-          client.analytics.getPRStaleness(apiParams),
-          client.analytics.getPRStaleHighRisk({ days: 30, ...apiParams }),
-          client.analytics.getPROpenExport(apiParams),
+        // Batch 1: Critical data (Hero KPIs and open state)
+        const [openState, hero] = await Promise.all([
+          client.analytics.getPROpenState({ repo: repoParam }),
+          client.analytics.getPRMonthHeroKPIs({
+            year: now.getFullYear(),
+            month: now.getMonth() + 1,
+            repo: repoParam,
+          }),
         ]);
 
-        setHeroKPIs(kpis);
-        setMonthlyData(monthly);
-        setOpenState(openStateData);
-        setGovernanceStates(governance);
-        setGovernanceWaiting(govWaiting);
-        setClassification(classificationData);
-        setLabels(labelsData);
-        setLifecycleData(lifecycle);
-        setTimeToOutcome(timeData);
-        setStalenessData(staleness);
-        setHighRiskPRs(highRisk);
-        setOpenExport(exportData);
+        setOpenSummary(openState);
+        setHeroMonth(hero);
+
+        // Batch 2: Charts and visualizations
+        const [monthly, govStates, labels, lifecycle] = await Promise.all([
+          client.analytics.getPRMonthlyActivity({
+            repo: repoParam,
+            from,
+            to,
+          }),
+          client.analytics.getPRGovernanceStates({ repo: repoParam }),
+          client.analytics.getPRLabels({ repo: repoParam }),
+          client.analytics.getPRLifecycleFunnel({}),
+        ]);
+
+        setMonthlySeries(monthly);
+        setGovernanceStates(govStates);
+        setLabelStats(labels.slice(0, 20));
+        setLifecycleStages(lifecycle);
+
+        // Batch 3: Heavy queries (load sequentially to avoid connection exhaustion)
+        const tto = await client.analytics.getPRTimeToOutcome({ repo: repoParam });
+        setTimeToOutcome(tto);
+
+        const stale = await client.analytics.getPRStaleness({ repo: repoParam });
+        setStaleness(stale);
+
+        // Batch 4: Export data (load last, can be deferred)
+        const openExport = await client.analytics.getPROpenExport({ repo: repoParam });
+        setOpenPRs(openExport.slice(0, 50));
       } catch (err) {
-        console.error('Failed to fetch PR analytics:', err);
-        setError('Failed to load PR analytics data');
+        console.error("Failed to fetch PR analytics:", err);
+        // Set empty states on error
+        setMonthlySeries([]);
+        setHeroMonth(null);
+        setOpenSummary(null);
+        setGovernanceStates([]);
+        setLabelStats([]);
+        setLifecycleStages([]);
+        setTimeToOutcome([]);
+        setStaleness([]);
+        setOpenPRs([]);
       } finally {
         setLoading(false);
       }
-    }
+    };
 
     fetchData();
-  }, [selectedRepo, year, month]);
+  }, [timeRange, repoFilter, repoParam]);
 
-  const handleMonthChange = (newYear: number, newMonth: number) => {
-    setYear(newYear);
-    setMonth(newMonth);
-    router.push(`/analytics/prs?year=${newYear}&month=${newMonth}`);
-  };
+  const totalOpen = openSummary?.totalOpen ?? 0;
 
-  const downloadOpenCSV = () => {
-    if (openExport.length === 0) return;
-    const headers = ['prNumber', 'repo', 'title', 'author', 'createdAt', 'governanceState', 'waitingSince', 'lastEventType', 'linkedEIPs'];
-    const rows = openExport.map((r) => [
-      r.prNumber,
-      r.repo,
-      (r.title ?? '').replace(/"/g, '""'),
-      r.author ?? '',
-      r.createdAt,
-      r.governanceState,
-      r.waitingSince ?? '',
-      r.lastEventType ?? '',
-      r.linkedEIPs ?? '',
-    ]);
-    const csv = [headers.join(','), ...rows.map((row) => row.map((c) => `"${c}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pr-open-export-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadOpenJSON = () => {
-    const blob = new Blob([JSON.stringify(openExport, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pr-open-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadClassificationCSV = () => {
-    const csv = ['category,count\n' + classification.map((r) => `${r.category},${r.count}`).join('\n')];
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pr-classification-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadClassificationJSON = () => {
-    const blob = new Blob([JSON.stringify(classification, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pr-classification-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  if (loading && !heroKPIs) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 text-cyan-400 animate-spin" />
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
       </div>
     );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-400">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1;
-  const monthOptions: { year: number; month: number; label: string }[] = [];
-  for (let i = 0; i < 24; i++) {
-    const m = currentMonth - i;
-    let y = currentYear;
-    let mo = m;
-    if (m <= 0) {
-      mo = m + 12;
-      y = currentYear - 1;
-    }
-    monthOptions.push({
-      year: y,
-      month: mo,
-      label: new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-    });
   }
 
   return (
-    <div className="bg-background relative w-full overflow-hidden min-h-screen">
-      <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(52,211,153,0.15),_transparent_50%),_radial-gradient(ellipse_at_bottom_right,_rgba(6,182,212,0.12),_transparent_50%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(34,211,238,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(34,211,238,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem]" />
-        <div className="absolute top-0 left-1/2 h-[800px] w-[800px] -translate-x-1/2 rounded-full bg-gradient-to-br from-cyan-400/10 via-emerald-400/5 to-transparent blur-3xl" />
-      </div>
-
-      <div className="relative z-10">
-        <PageHeader
-          title="PR Analytics"
-          description="Governance throughput, backlog, and friction in PR flow. Time-aware, end-of-period snapshots."
-          sectionId="pr-analytics"
-          className="bg-background/80 backdrop-blur-xl"
-        />
-
-        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-3">
-              <label htmlFor="repo-filter" className="text-sm font-medium text-slate-300">
-                Repository:
-              </label>
-              <select
-                id="repo-filter"
-                value={selectedRepo || 'all'}
-                onChange={(e) => setSelectedRepo(e.target.value === 'all' ? undefined : (e.target.value as RepoFilter))}
-                className="rounded-lg border border-cyan-400/20 bg-slate-950/50 backdrop-blur-sm px-3 py-1.5 text-sm text-white focus:border-cyan-400/40 focus:outline-none focus:ring-2 focus:ring-cyan-400/20 transition-all"
-              >
-                <option value="all">All Repositories</option>
-                <option value="eips">EIPs</option>
-                <option value="ercs">ERCs</option>
-                <option value="rips">RIPs</option>
-              </select>
+    <div className="space-y-6">
+      {/* Hero KPIs */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-400">Open PRs</p>
+              <p className="mt-1 text-3xl font-semibold text-white">
+                {totalOpen.toLocaleString()}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Median age:{" "}
+                {openSummary?.medianAge != null ? `${openSummary.medianAge} days` : "–"}
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <label htmlFor="month-select" className="text-sm font-medium text-slate-300">
-                Month:
-              </label>
-              <select
-                id="month-select"
-                value={`${year}-${String(month).padStart(2, '0')}`}
-                onChange={(e) => {
-                  const [y, m] = e.target.value.split('-').map(Number);
-                  handleMonthChange(y, m);
-                }}
-                className="rounded-lg border border-cyan-400/20 bg-slate-950/50 backdrop-blur-sm px-3 py-1.5 text-sm text-white focus:border-cyan-400/40 focus:outline-none focus:ring-2 focus:ring-cyan-400/20 transition-all"
-              >
-                {monthOptions.map((opt) => (
-                  <option key={`${opt.year}-${opt.month}`} value={`${opt.year}-${String(opt.month).padStart(2, '0')}`}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+            <div className="rounded-full bg-cyan-500/20 p-3">
+              <GitPullRequest className="h-6 w-6 text-cyan-400" />
             </div>
           </div>
         </div>
 
-        <SectionSeparator />
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <p className="text-sm text-slate-400">
+            Created this month ({heroMonth?.month ?? ""})
+          </p>
+          <p className="mt-1 text-3xl font-semibold text-white">
+            {heroMonth?.newPRs.toLocaleString() ?? "0"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Net delta:{" "}
+            <span
+              className={cn(
+                "font-medium",
+                (heroMonth?.netDelta ?? 0) > 0
+                  ? "text-emerald-400"
+                  : (heroMonth?.netDelta ?? 0) < 0
+                    ? "text-rose-400"
+                    : "text-slate-400",
+              )}
+            >
+              {(heroMonth?.netDelta ?? 0) >= 0 ? "+" : ""}
+              {heroMonth?.netDelta ?? 0}
+            </span>
+          </p>
+        </div>
 
-        <section className="relative w-full bg-slate-950/30">
-          <PageHeader
-            title="Hero KPIs"
-            description={`Snapshot as of end of ${new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
-            sectionId="hero-kpis"
-            className="bg-slate-950/30"
-          />
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
-            <PRHeroKPIs data={heroKPIs} loading={loading} />
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <p className="text-sm text-slate-400">Merged this month</p>
+          <p className="mt-1 text-3xl font-semibold text-emerald-400">
+            {heroMonth?.mergedPRs.toLocaleString() ?? "0"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">Includes all repos in scope</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <p className="text-sm text-slate-400">Closed (unmerged)</p>
+          <p className="mt-1 text-3xl font-semibold text-slate-200">
+            {heroMonth?.closedUnmerged.toLocaleString() ?? "0"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Closed without merge during this month
+          </p>
+        </div>
+      </div>
+
+      {/* Monthly Activity + Governance Distribution */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">Monthly Activity</h2>
+          <ChartContainer
+            config={{
+              created: { label: "Created", color: "#60a5fa" },
+              merged: { label: "Merged", color: "#22c55e" },
+              closed: { label: "Closed", color: "#f97316" },
+              openAtMonthEnd: { label: "Open (EOM)", color: "#e5e7eb" },
+            }}
+            className="h-72 w-full"
+          >
+            <ResponsiveContainer>
+              <LineChart data={monthlySeries}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="month" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="created"
+                  stroke="#60a5fa"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="merged"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="closed"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="openAtMonthEnd"
+                  stroke="#e5e7eb"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        </div>
+
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">
+            Governance State Distribution
+          </h2>
+          <div className="space-y-3">
+            {governanceStates.map((g) => {
+              const total = governanceStates.reduce((acc, s) => acc + s.count, 0);
+              const pct = total > 0 ? (g.count / total) * 100 : 0;
+              return (
+                <div key={g.state}>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="text-slate-300">{g.label}</span>
+                    <span className="text-slate-400">
+                      {g.count.toLocaleString()} ({pct.toFixed(1)}%)
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-800">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: governanceColors[g.state] ?? "#64748b",
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </section>
+        </div>
+      </div>
 
-        <SectionSeparator />
-
-        <section className="relative w-full bg-slate-950/30">
-          <PageHeader
-            title="PR Volume Over Time"
-            description={`Monthly PR activity for ${selectedRepo ? selectedRepo.toUpperCase() : 'all repositories'} since 2015`}
-            sectionId="pr-volume"
-            className="bg-slate-950/30"
-          />
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
-            <PRVolumeChart data={monthlyData} />
+      {/* Labels + Lifecycle Funnel */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">
+            Label Distribution (Open PRs)
+          </h2>
+          <div className="space-y-2">
+            {labelStats.map((l) => (
+              <div key={l.label} className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-5 w-5 items-center justify-center rounded bg-slate-800">
+                    <Tag className="h-3 w-3 text-slate-300" />
+                  </div>
+                  <span className="max-w-[160px] truncate text-sm text-slate-200">
+                    {l.label}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-400">
+                  {l.count.toLocaleString()}
+                </span>
+              </div>
+            ))}
+            {labelStats.length === 0 && (
+              <p className="text-sm text-slate-500">No labels found for open PRs.</p>
+            )}
           </div>
-        </section>
+        </div>
 
-        <SectionSeparator />
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">Lifecycle Funnel</h2>
+          <ChartContainer
+            config={{
+              count: { label: "PRs", color: "#22c55e" },
+            }}
+            className="h-64 w-full"
+          >
+            <ResponsiveContainer>
+              <BarChart data={lifecycleStages}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="stage" stroke="#94a3b8" />
+                <YAxis stroke="#94a3b8" />
+                <RechartsTooltip />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {lifecycleStages.map((s) => (
+                    <Bar
+                      key={s.stage}
+                      dataKey="count"
+                      fill="#22c55e"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        </div>
+      </div>
 
-        <section className="relative w-full bg-slate-950/30">
-          <PageHeader
-            title="Current Open PR State"
-            description="Snapshot of open PRs and their governance states"
-            sectionId="open-state"
-            className="bg-slate-950/30"
-          />
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
-            <PROpenStateSnapshot openState={openState} governanceStates={governanceStates} labels={labels} />
-          </div>
-        </section>
-
-        <SectionSeparator />
-
-        <section className="relative w-full bg-slate-950/30">
-          <PageHeader
-            title="Open PR Classification"
-            description="DRAFT, TYPO, NEW_EIP, STATUS_CHANGE, OTHER — click to drill down"
-            sectionId="classification"
-            className="bg-slate-950/30"
-          />
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
-            <PRClassificationDonut
-              data={classification}
-              onDownloadCSV={downloadClassificationCSV}
-              onDownloadJSON={downloadClassificationJSON}
-            />
-          </div>
-        </section>
-
-        <SectionSeparator />
-
-        <section className="relative w-full bg-slate-950/30">
-          <PageHeader
-            title="Governance Waiting State"
-            description="Waiting on Editor, Author, Stalled — median wait and oldest PR per bucket"
-            sectionId="governance-waiting"
-            className="bg-slate-950/30"
-          />
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
-            <PRGovernanceWaiting data={governanceWaiting} repoName={selectedRepo ? `ethereum/${selectedRepo.toUpperCase()}` : 'ethereum/EIPs'} />
-          </div>
-        </section>
-
-        <SectionSeparator />
-
-        <section className="relative w-full bg-slate-950/30">
-          <PageHeader
-            title="PR Lifecycle & Latency"
-            description="Opened → Reviewed → Merged/Closed and time-to-outcome"
-            sectionId="lifecycle"
-            className="bg-slate-950/30"
-          />
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <PRLifecycleFunnel data={lifecycleData} />
-              <PRTimeToOutcome data={timeToOutcome} />
-            </div>
-          </div>
-        </section>
-
-        <SectionSeparator />
-
-        <section className="relative w-full bg-slate-950/30">
-          <PageHeader
-            title="Staleness & Risk"
-            description="PRs that may be abandoned or require attention"
-            sectionId="staleness"
-            className="bg-slate-950/30"
-          />
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
-            <PRStalenessSection stalenessData={stalenessData} highRiskPRs={highRiskPRs} />
-          </div>
-        </section>
-
-        <SectionSeparator />
-
-        <section className="relative w-full bg-slate-950/30">
-          <PageHeader
-            title="PR Detail Export"
-            description="Download all open PRs with governance state (CSV / JSON)"
-            sectionId="export"
-            className="bg-slate-950/30"
-          />
-          <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
-            <div className="flex gap-3">
-              <button
-                onClick={downloadOpenCSV}
-                disabled={openExport.length === 0}
-                className="rounded-lg border border-cyan-400/20 bg-slate-900/50 px-4 py-2 text-sm font-medium text-cyan-300 transition-all hover:border-cyan-400/40 hover:bg-cyan-400/10 disabled:opacity-50"
+      {/* Time to Outcome + Staleness */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">Time to Outcome</h2>
+          <div className="space-y-3">
+            {timeToOutcome.map((m) => (
+              <div
+                key={m.metric}
+                className="flex items-center justify-between rounded-lg border border-slate-700/60 bg-slate-900/70 px-3 py-2"
               >
-                Download open PRs (CSV)
-              </button>
-              <button
-                onClick={downloadOpenJSON}
-                disabled={openExport.length === 0}
-                className="rounded-lg border border-cyan-400/20 bg-slate-900/50 px-4 py-2 text-sm font-medium text-cyan-300 transition-all hover:border-cyan-400/40 hover:bg-cyan-400/10 disabled:opacity-50"
-              >
-                Download open PRs (JSON)
-              </button>
-            </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-slate-400" />
+                  <span className="text-sm font-medium capitalize text-slate-100">
+                    {m.metric.replace("_", " ")}
+                  </span>
+                </div>
+                <div className="flex gap-4 text-xs text-slate-300">
+                  <span>p50: {m.medianDays}d</span>
+                  <span>p75: {m.p75Days}d</span>
+                  <span>p90: {m.p90Days}d</span>
+                </div>
+              </div>
+            ))}
+            {timeToOutcome.length === 0 && (
+              <p className="text-sm text-slate-500">
+                Not enough data to compute time to outcome metrics.
+              </p>
+            )}
           </div>
-        </section>
+        </div>
+
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+          <h2 className="mb-4 text-lg font-semibold text-white">Staleness Buckets</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {staleness.map((b) => (
+              <div
+                key={b.bucket}
+                className="rounded-lg border border-slate-700/70 bg-slate-900/80 p-3"
+              >
+                <p className="text-xs text-slate-400">{b.bucket}</p>
+                <p className="mt-1 text-2xl font-semibold text-white">
+                  {b.count.toLocaleString()}
+                </p>
+                <div className="mt-2 h-1.5 w-full rounded-full bg-slate-800">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        (b.count /
+                          Math.max(...staleness.map((s) => s.count), 1)) *
+                          100,
+                      )}%`,
+                      backgroundColor: stalenessColors[b.bucket] ?? "#64748b",
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+            {staleness.length === 0 && (
+              <p className="col-span-2 text-sm text-slate-500">
+                No open PRs in the current scope.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Open PRs Table */}
+      <div className="rounded-xl border border-slate-700/60 bg-slate-900/50 p-5 backdrop-blur-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Open PRs</h2>
+            <p className="text-xs text-slate-500">
+              Snapshot of currently open pull requests in the selected repositories.
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-800 text-xs font-medium text-slate-400">
+                <th className="py-2 pr-4">PR</th>
+                <th className="py-2 pr-4">Title</th>
+                <th className="py-2 pr-4">Repo</th>
+                <th className="py-2 pr-4">Author</th>
+                <th className="py-2 pr-4">Governance</th>
+                <th className="py-2 pr-4">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {openPRs.map((pr) => {
+                const [org, repoName] = pr.repo.split("/");
+                const url = `https://github.com/${org}/${repoName}/pull/${pr.prNumber}`;
+                return (
+                  <tr
+                    key={`${pr.repo}-${pr.prNumber}`}
+                    className="border-b border-slate-800/60 text-xs last:border-0 hover:bg-slate-800/40"
+                  >
+                    <td className="py-2 pr-4">
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300"
+                      >
+                        #{pr.prNumber}
+                        <ArrowUpRight className="h-3 w-3" />
+                      </a>
+                    </td>
+                    <td className="py-2 pr-4 text-slate-200">
+                      {pr.title || <span className="text-slate-500">No title</span>}
+                    </td>
+                    <td className="py-2 pr-4 text-slate-400">{repoName}</td>
+                    <td className="py-2 pr-4 text-slate-300">
+                      {pr.author || <span className="text-slate-500">Unknown</span>}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <span className="inline-flex items-center rounded-full bg-slate-800/80 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">
+                        {pr.governanceState || "NO_STATE"}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 text-slate-400">{pr.createdAt}</td>
+                  </tr>
+                );
+              })}
+              {openPRs.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="py-6 text-center text-sm text-slate-500"
+                  >
+                    No open PRs found for the current filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {openSummary?.oldestPR && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>
+              Oldest open PR:{" "}
+              <span className="font-semibold">
+                {openSummary.oldestPR.repo}#{openSummary.oldestPR.pr_number}
+              </span>{" "}
+              by {openSummary.oldestPR.author} — open for{" "}
+              {openSummary.oldestPR.age_days} days.
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+

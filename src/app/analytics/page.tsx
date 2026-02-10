@@ -1,52 +1,101 @@
 "use client";
 
-import * as React from "react";
-import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import { usePersonaStore } from "@/stores/personaStore";
-import { getPersonaPageConfig } from "@/lib/persona";
-import { FEATURES } from "@/lib/features";
+import React from "react";
+import Link from "next/link";
+import { ArrowRight, BarChart3, Users, FileText, GitPullRequest, UserCheck } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-/**
- * Analytics index page - redirects to persona-appropriate default view
- */
-export default function AnalyticsIndexPage() {
-  const router = useRouter();
-  const { persona, isHydrated } = usePersonaStore();
+const analyticsSections = [
+  {
+    title: "EIPs",
+    description: "Track proposal lifecycle, status transitions, and category breakdowns",
+    href: "/analytics/eips",
+    icon: FileText,
+    color: "cyan",
+  },
+  {
+    title: "PRs",
+    description: "Monitor pull request activity, governance states, and merge velocity",
+    href: "/analytics/prs",
+    icon: GitPullRequest,
+    color: "blue",
+  },
+  {
+    title: "Editors",
+    description: "Analyze editor workload, review patterns, and category coverage",
+    href: "/analytics/editors",
+    icon: UserCheck,
+    color: "violet",
+  },
+  {
+    title: "Reviewers",
+    description: "Track reviewer contributions, cycles per PR, and repo distribution",
+    href: "/analytics/reviewers",
+    icon: Users,
+    color: "emerald",
+  },
+  {
+    title: "Authors",
+    description: "Monitor author activity, success rates, and proposal creation trends",
+    href: "/analytics/authors",
+    icon: FileText,
+    color: "amber",
+  },
+  {
+    title: "Contributors",
+    description: "Explore contributor activity, engagement patterns, and live feeds",
+    href: "/analytics/contributors",
+    icon: Users,
+    color: "pink",
+  },
+];
 
-  React.useEffect(() => {
-    if (!isHydrated) return;
-
-    // Get persona-specific default analytics view
-    const pageConfig = getPersonaPageConfig(persona);
-    
-    // Redirect to appropriate analytics page based on persona (if feature enabled)
-    // or default to PR Analytics
-    if (FEATURES.PERSONA_NAV_REORDER || FEATURES.PERSONA_SWITCHER) {
-      const defaultTab = pageConfig.analyticsDefault;
-      switch (defaultTab) {
-        case "editors":
-          router.replace("/analytics/editors");
-          break;
-        case "contributors":
-          router.replace("/analytics/contributors");
-          break;
-        case "prs":
-        default:
-          router.replace("/analytics/prs");
-          break;
-      }
-    } else {
-      // Feature disabled - default to PR Analytics
-      router.replace("/analytics/prs");
-    }
-  }, [isHydrated, persona, router]);
-
+export default function AnalyticsOverviewPage() {
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <Loader2 className="h-8 w-8 text-cyan-400 animate-spin" />
-        <p className="text-sm text-slate-400">Loading analytics...</p>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-2">Analytics Dashboard</h1>
+        <p className="text-slate-400">
+          Comprehensive insights into Ethereum standards governance and activity
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {analyticsSections.map((section) => {
+          const Icon = section.icon;
+          return (
+            <Link
+              key={section.href}
+              href={section.href}
+              className="group rounded-xl border border-slate-700/50 bg-slate-900/40 p-6 backdrop-blur-sm hover:border-slate-600/50 transition-all"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className={cn(
+                  "rounded-lg p-3",
+                  section.color === "cyan" && "bg-cyan-500/20",
+                  section.color === "blue" && "bg-blue-500/20",
+                  section.color === "violet" && "bg-violet-500/20",
+                  section.color === "emerald" && "bg-emerald-500/20",
+                  section.color === "amber" && "bg-amber-500/20",
+                  section.color === "pink" && "bg-pink-500/20",
+                )}>
+                  <Icon className={cn(
+                    "h-6 w-6",
+                    section.color === "cyan" && "text-cyan-400",
+                    section.color === "blue" && "text-blue-400",
+                    section.color === "violet" && "text-violet-400",
+                    section.color === "emerald" && "text-emerald-400",
+                    section.color === "amber" && "text-amber-400",
+                    section.color === "pink" && "text-pink-400",
+                  )} />
+                </div>
+                <ArrowRight className="h-5 w-5 text-slate-400 group-hover:text-slate-300 group-hover:translate-x-1 transition-all" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-2">{section.title}</h3>
+              <p className="text-sm text-slate-400">{section.description}</p>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

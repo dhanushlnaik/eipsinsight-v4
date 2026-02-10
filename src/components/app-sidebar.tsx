@@ -17,6 +17,7 @@ import {
   PanelLeft,
   PanelLeftOpen,
   Compass,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 import { useSidebarStore } from "@/stores/sidebarStore";
@@ -77,6 +78,18 @@ const sidebarItems: SidebarItem[] = [
     items: pageSections,
   },
   {
+    title: "Search",
+    icon: Search,
+    href: "/search",
+    items: [
+      { title: "EIP Number", href: "/search?tab=eips&scope=eips" },
+      { title: "Title", href: "/search?tab=eips&scope=eips" },
+      { title: "Author", href: "/search?tab=eips&scope=eips" },
+      { title: "Type / Category", href: "/search?tab=eips&scope=eips" },
+      { title: "PRs & Issues", href: "/search?tab=prs&scope=prs" },
+    ],
+  },
+  {
     title: "Standards",
     icon: Layers,
     items: [
@@ -108,9 +121,12 @@ const sidebarItems: SidebarItem[] = [
     icon: LineChart,
     href: "/analytics",
     items: [
-      { title: "PR Analytics", href: "/analytics/prs" },
+      { title: "EIPs", href: "/analytics/eips" },
+      { title: "PRs", href: "/analytics/prs" },
+      { title: "Editors", href: "/analytics/editors" },
+      { title: "Reviewers", href: "/analytics/reviewers" },
+      { title: "Authors", href: "/analytics/authors" },
       { title: "Contributors", href: "/analytics/contributors" },
-      { title: "Editors & Reviewers", href: "/analytics/editors" },
     ],
   },
   {
@@ -171,6 +187,7 @@ function getOrderedSidebarItems(persona: Persona | null): SidebarItem[] {
 // Helper to get which menu item should be open based on path
 function getActiveMenuItem(pathname: string): string | null {
   if (pathname === "/") return "Home";
+  if (pathname.startsWith("/search")) return "Search";
   if (pathname.startsWith("/all") || pathname.startsWith("/eip") || pathname.startsWith("/erc") || pathname.startsWith("/rip")) return "Standards";
   if (pathname.startsWith("/explore")) return "Explore";
   if (pathname.startsWith("/analytics")) return "Analytics";

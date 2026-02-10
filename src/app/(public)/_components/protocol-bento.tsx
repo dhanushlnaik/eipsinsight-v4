@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { TrendingUp, ArrowRight, Clock, Activity, Info, Download } from "lucide-react";
+import { TrendingUp, ArrowRight, Clock, Activity, Info, Download, BarChart3, LineChart as LineChartIcon } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PieChart, Pie,  Label, AreaChart, Area, CartesianGrid, XAxis, YAxis } from "recharts";
+import { PieChart, Pie, Label, AreaChart, Area, BarChart, Bar, Cell, LineChart, Line, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
   ChartTooltip,
@@ -56,9 +56,17 @@ interface RecentChange {
   changed_at: Date;
 }
 
+interface DecisionVelocityTransition {
+  from: string;
+  to: string;
+  medianDays: number | null;
+  count: number;
+}
+
 interface DecisionVelocity {
-  current: number;
-  previous: number;
+  transitions: DecisionVelocityTransition[];
+  draftToFinalMedian: number;
+  previousYearPlaceholder: number;
   change: number;
 }
 
@@ -136,12 +144,18 @@ export default function ProtocolBento() {
   const [lifecycleData, setLifecycleData] = useState<LifecycleStage[]>([]);
   const [standardsMix, setStandardsMix] = useState<StandardsMix[]>([]);
   const [recentChanges, setRecentChanges] = useState<RecentChange[]>([]);
-  const [decisionVelocity, setDecisionVelocity] = useState<DecisionVelocity>({ current: 0, previous: 0, change: 0 });
+  const [decisionVelocity, setDecisionVelocity] = useState<DecisionVelocity>({
+    transitions: [],
+    draftToFinalMedian: 0,
+    previousYearPlaceholder: 0,
+    change: 0,
+  });
   const [momentumData, setMomentumData] = useState<number[]>([]);
   const [prsData, setPrsData] = useState<PRData[]>([]);
   const [lastCallWatchlist, setLastCallWatchlist] = useState<LastCallItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStandards, setSelectedStandards] = useState<Set<string>>(new Set(['Core', 'ERC', 'Networking', 'Interface', 'Meta', 'Informational', 'RIP']));
+  const [velocityChartMode, setVelocityChartMode] = useState<'bars' | 'line'>('bars');
 
   const repoParam = repoFilter === 'all' ? undefined : repoFilter;
 
@@ -475,17 +489,17 @@ export default function ProtocolBento() {
             </div>
           </motion.div>
 
-          {/* Proposal Lifecycle - Col 1, Rows 3-4 (TALL LEFT BOTTOM) */}
+          {/* Proposal Lifecycle - Col 2, Row 4 (single row, right column on lg) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.05, margin: "0px 0px 80px 0px" }}
             transition={{ duration: 0.4, delay: 0.25 }}
-            className="group relative col-span-1 order-5 overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-4 sm:p-6 shadow-lg backdrop-blur transition-all hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/20 lg:col-start-1 lg:row-start-3 lg:row-span-2 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
+            className="group relative col-span-1 order-5 overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-4 sm:p-6 shadow-lg backdrop-blur transition-all hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/20 lg:col-start-2 lg:row-start-4 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
           >
-            <div className="relative z-10 flex h-full flex-col">
-              {/* Header */}
-              <div className="mb-4 flex items-center justify-between">
+            <div className="relative z-10 flex h-full min-h-0 flex-col">
+              {/* Header - compact */}
+              <div className="mb-2 flex shrink-0 items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-300">
                     Proposal Lifecycle
@@ -506,7 +520,7 @@ export default function ProtocolBento() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button 
-                      className="flex h-11 w-11 min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg border border-emerald-400/20 bg-emerald-500/10 transition-all hover:border-emerald-400/40 hover:bg-emerald-500/20"
+                      className="flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-emerald-400/20 bg-emerald-500/10 transition-all hover:border-emerald-400/40 hover:bg-emerald-500/20"
                       onClick={async () => {
                         try {
                           const data = await client.analytics.getLifecycleDetailed(repoParam ? { repo: repoParam } : {});
@@ -537,76 +551,37 @@ export default function ProtocolBento() {
                   </TooltipContent>
                 </Tooltip>
               </div>
-              
-              {/* Content */}
-              <div className="flex-1 space-y-2">
-                {lifecycleData.map((stage, index) => {
-                  const maxCount = Math.max(...lifecycleData.map((d) => d.count));
-                  const width = (stage.count / maxCount) * 100;
-                  const isDimmed = stage.opacity === "dim";
-                  
-                  const colorClasses = {
-                    cyan: isDimmed ? "bg-cyan-400/20 border-cyan-400/30" : "bg-cyan-400/40 border-cyan-400/50",
-                    blue: isDimmed ? "bg-blue-400/20 border-blue-400/30" : "bg-blue-400/40 border-blue-400/50",
-                    amber: "bg-amber-400/40 border-amber-400/50",
-                    emerald: isDimmed ? "bg-emerald-400/20 border-emerald-400/30" : "bg-emerald-400/40 border-emerald-400/50",
-                    slate: "bg-slate-400/15 border-slate-400/25 border-dashed",
-                    violet: "bg-violet-400/40 border-violet-400/50",
-                    pink: "bg-pink-400/40 border-pink-400/50",
-                    orange: "bg-orange-400/40 border-orange-400/50",
-                  };
-                  
-                  const textColors = {
-                    cyan: isDimmed ? "text-cyan-300/60" : "text-cyan-300",
-                    blue: isDimmed ? "text-blue-300/60" : "text-blue-300",
-                    amber: "text-amber-300",
-                    emerald: isDimmed ? "text-emerald-300/60" : "text-emerald-300",
-                    slate: "text-slate-400/60",
-                    violet: "text-violet-300",
-                    pink: "text-pink-300",
-                    orange: "text-orange-300",
-                  };
-                  
-                  return (
-                    <div key={stage.stage} className="flex items-center gap-2">
-                      <span className={`w-20 text-[11px] font-medium ${textColors[stage.color as keyof typeof textColors]}`}>
-                        {stage.stage}
-                      </span>
-                      <div className="relative h-5 flex-1 overflow-hidden rounded-md border border-slate-700/50 bg-slate-900/30">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          whileInView={{ width: `${width}%` }}
-                          viewport={{ once: true, amount: 0.05, margin: "0px 0px 80px 0px" }}
-                          transition={{ duration: 1, delay: index * 0.1, ease: "easeOut" }}
-                          className={`h-full ${colorClasses[stage.color as keyof typeof colorClasses]} ${isDimmed ? 'opacity-60' : ''} border-r-2`}
-                        />
-                      </div>
-                      <span className={`w-10 text-right text-[11px] font-bold ${isDimmed ? 'text-white/40' : 'text-white'}`}>
-                        {stage.count}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Footer with summary stats */}
-              <div className="mt-4 space-y-2 border-t border-emerald-400/10 pt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">Total EIPs</span>
-                  <span className="text-sm font-bold text-emerald-300">
-                    {lifecycleData.reduce((sum, d) => sum + d.count, 0)}
-                  </span>
+
+              {/* Bar chart - no scroll */}
+              {lifecycleData.length > 0 ? (
+                <div className="flex flex-1 min-h-0 flex-col">
+                  <ChartContainer
+                    config={{ count: { label: "Proposals", color: "#34d399" } }}
+                    className="h-full w-full min-h-[140px]"
+                  >
+                    <BarChart
+                      data={lifecycleData.map((d) => ({ stage: d.stage, count: d.count, fill: ({ cyan: "#22d3ee", blue: "#60a5fa", amber: "#fbbf24", emerald: "#34d399", slate: "#64748b", violet: "#a78bfa", red: "#f87171" } as Record<string, string>)[d.color] ?? "#94a3b8" }))}
+                      layout="vertical"
+                      margin={{ top: 4, right: 8, left: 8, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                      <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 10 }} tickLine={false} axisLine={false} />
+                      <YAxis type="category" dataKey="stage" width={52} tick={{ fill: "#94a3b8", fontSize: 9 }} tickLine={false} axisLine={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} cursor={false} />
+                      <Bar dataKey="count" radius={[0, 4, 4, 0]} layout="vertical">
+                        {lifecycleData.map((d, i) => (
+                          <Cell key={d.stage} fill={({ cyan: "#22d3ee", blue: "#60a5fa", amber: "#fbbf24", emerald: "#34d399", slate: "#64748b", violet: "#a78bfa", red: "#f87171" } as Record<string, string>)[d.color] ?? "#94a3b8"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ChartContainer>
+                  <p className="mt-1 shrink-0 text-center text-[10px] text-slate-500">
+                    Total {lifecycleData.reduce((s, d) => s + d.count, 0)} · Draft→Review→Last Call→Final
+                  </p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">Active (Draft+Review)</span>
-                  <span className="text-sm font-bold text-cyan-300">
-                    {lifecycleData.filter(d => d.stage === 'Draft' || d.stage === 'Review').reduce((sum, d) => sum + d.count, 0)}
-                  </span>
-                </div>
-                <p className="pt-2 text-[10px] text-slate-600">
-                  Draft → Review → Last Call → Final
-                </p>
-              </div>
+              ) : (
+                <p className="py-4 text-center text-sm text-slate-500">No lifecycle data</p>
+              )}
             </div>
           </motion.div>
 
@@ -1183,14 +1158,12 @@ export default function ProtocolBento() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.05, margin: "0px 0px 80px 0px" }}
             transition={{ duration: 0.4, delay: 0.4 }}
-            className="group relative col-span-1 md:col-span-2 order-8 overflow-hidden rounded-2xl sm:rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-5 sm:p-6 lg:p-8 shadow-2xl backdrop-blur transition-all hover:border-emerald-400/50 hover:shadow-[0_20px_70px_rgba(16,185,129,0.3)] lg:col-span-2 lg:col-start-3 lg:row-start-4 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
+            className="group relative col-span-1 md:col-span-2 order-8 overflow-hidden rounded-2xl sm:rounded-3xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-5 sm:p-6 lg:p-6 shadow-2xl backdrop-blur transition-all hover:border-emerald-400/50 hover:shadow-[0_20px_70px_rgba(16,185,129,0.3)] lg:col-span-2 lg:col-start-3 lg:row-start-4 bg-dot-white/[0.02] lg:hover:scale-[1.01]"
           >
-            {/* Subtle inner glow */}
             <div className="absolute inset-0 bg-gradient-to-tr from-emerald-400/5 via-transparent to-cyan-500/5" />
-            
-            <div className="relative z-10 flex h-full flex-col">
-              {/* Header */}
-              <div className="mb-4 sm:mb-6 lg:mb-8">
+            <div className="relative z-10 flex h-full min-h-0 flex-col">
+              {/* Header - compact + toggle */}
+              <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-300">
                     Decision Velocity
@@ -1203,90 +1176,100 @@ export default function ProtocolBento() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-xs text-xs">
-                        Median time taken for EIPs to move from Draft to Final.
+                        Median time between lifecycle transitions (last 365 days). Toggle to see bars or line trend.
                       </p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <p className="mt-1 sm:mt-2 text-[10px] sm:text-xs text-slate-500">Lower is better ↓ · Reflects governance efficiency</p>
-              </div>
-
-              {/* Content - centered */}
-              <div className="flex flex-1 flex-col items-center justify-center">
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  whileInView={{ scale: 1, opacity: 1 }}
-                  viewport={{ once: true, amount: 0.05, margin: "0px 0px 80px 0px" }}
-                  transition={{ duration: 0.6, delay: 0.4 }}
-                  className="text-center"
-                >
-                  <div className="flex items-baseline justify-center gap-2">
-                    <span className="text-5xl sm:text-6xl lg:text-7xl font-bold text-emerald-300 drop-shadow-[0_0_20px_rgba(52,211,153,0.3)]">
-                      {decisionVelocity.current}
-                    </span>
-                    <span className="text-xl sm:text-2xl text-slate-400">days</span>
-                  </div>
-                  <p className="mt-3 text-sm text-slate-400">median to finalization</p>
-                </motion.div>
-                
-                {/* Comparison */}
-                <div className="mt-6 sm:mt-8 lg:mt-12 w-full max-w-xs">
-                  <div className="mb-3 flex items-center justify-between text-xs font-medium text-slate-400">
-                    <span>This year</span>
-                    <span>Last year</span>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-3">
-                    <div className="relative flex-1">
-                      <div className="h-3 overflow-hidden rounded-full bg-slate-800/50 shadow-inner">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          whileInView={{ width: "100%" }}
-                          viewport={{ once: true, amount: 0.05, margin: "0px 0px 80px 0px" }}
-                          transition={{ duration: 1, delay: 0.6 }}
-                          className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 shadow-sm shadow-emerald-400/50"
-                        />
-                      </div>
-                      <span className="absolute -top-6 left-0 text-sm font-bold text-emerald-300">
-                        {decisionVelocity.current}d
-                      </span>
-                    </div>
-                    <div className="relative flex-1">
-                      <div className="h-3 overflow-hidden rounded-full bg-slate-800/50 shadow-inner">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          whileInView={{ width: `${(decisionVelocity.current / decisionVelocity.previous) * 100}%` }}
-                          viewport={{ once: true, amount: 0.05, margin: "0px 0px 80px 0px" }}
-                          transition={{ duration: 1, delay: 0.6 }}
-                          className="h-full bg-slate-500/70"
-                        />
-                      </div>
-                      <span className="absolute -top-6 right-0 text-sm font-bold text-slate-400">
-                        {decisionVelocity.previous}d
-                      </span>
-                    </div>
-                  </div>
+                <div className="flex rounded-lg border border-slate-700/50 bg-slate-900/40 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setVelocityChartMode("bars")}
+                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${velocityChartMode === "bars" ? "bg-emerald-500/20 text-emerald-300" : "text-slate-400 hover:text-slate-200"}`}
+                    title="Bar view"
+                  >
+                    <BarChart3 className="h-3 w-3" />
+                    Bars
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVelocityChartMode("line")}
+                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${velocityChartMode === "line" ? "bg-emerald-500/20 text-emerald-300" : "text-slate-400 hover:text-slate-200"}`}
+                    title="Line chart"
+                  >
+                    <LineChartIcon className="h-3 w-3" />
+                    Line
+                  </button>
                 </div>
-
-                {/* Improvement badge */}
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, amount: 0.05, margin: "0px 0px 80px 0px" }}
-                  transition={{ duration: 0.5, delay: 0.8 }}
-                  className="mt-8 flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2"
-                >
-                  <Clock className="h-4 w-4 text-emerald-400" />
-                  <span className="text-sm font-bold text-emerald-300">{Math.abs(decisionVelocity.change)}% faster</span>
-                  <span className="text-sm text-slate-400">YoY</span>
-                </motion.div>
               </div>
 
-              {/* Footer */}
-              <div className="mt-8 border-t border-emerald-400/10 pt-4">
-                <p className="text-center text-xs text-slate-500">
-                  Governance is accelerating
-                </p>
+              {/* Content - bars or line chart */}
+              <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+                {decisionVelocity.transitions.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-slate-500">No transition data in the last 365 days</p>
+                ) : velocityChartMode === "line" ? (
+                  <ChartContainer
+                    config={{ days: { label: "Median days", color: "#34d399" } }}
+                    className="h-full w-full min-h-[160px]"
+                  >
+                    <LineChart
+                      data={decisionVelocity.transitions.map((t) => ({
+                        name: `${t.from}→${t.to}`,
+                        days: t.medianDays ?? 0,
+                        count: t.count,
+                      }))}
+                      margin={{ top: 8, right: 8, left: 0, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 9 }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} tickLine={false} axisLine={false} />
+                      <ChartTooltip content={<ChartTooltipContent />} cursor={false} />
+                      <Line type="monotone" dataKey="days" stroke="#34d399" strokeWidth={2} dot={{ fill: "#34d399", r: 3 }} name="Median days" />
+                    </LineChart>
+                  </ChartContainer>
+                ) : (
+                  <>
+                    {decisionVelocity.draftToFinalMedian > 0 && (
+                      <div className="shrink-0 mb-1.5 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-2 py-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-medium text-emerald-300">Draft → Final</span>
+                          <span className="text-sm font-bold tabular-nums text-emerald-300">{decisionVelocity.draftToFinalMedian}d</span>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex-1 min-h-0 flex flex-col gap-1.5 overflow-hidden">
+                      {decisionVelocity.transitions.map((t, i) => {
+                        const maxDays = Math.max(1, ...decisionVelocity.transitions.map((x) => x.medianDays ?? 0));
+                        const barPct = t.medianDays != null ? Math.min(100, (t.medianDays / maxDays) * 100) : 0;
+                        return (
+                          <div key={`${t.from}-${t.to}`} className="flex items-center gap-2 shrink-0">
+                            <span className="w-20 shrink-0 truncate text-[10px] text-slate-400" title={`${t.from} → ${t.to}`}>
+                              {t.from}→{t.to}
+                            </span>
+                            <div className="relative h-2 flex-1 min-w-0 overflow-hidden rounded-full bg-slate-800/50">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                whileInView={{ width: `${barPct}%` }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.4, delay: i * 0.04 }}
+                                className="h-full rounded-full bg-emerald-400/80"
+                              />
+                            </div>
+                            <span className="w-10 shrink-0 text-right text-[10px] font-semibold tabular-nums text-emerald-300">
+                              {t.medianDays != null ? `${t.medianDays}d` : "—"}
+                            </span>
+                            <span className="w-6 shrink-0 text-right text-[10px] text-slate-500">n{t.count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
+
+              <p className="shrink-0 border-t border-emerald-400/10 pt-2 text-center text-[10px] text-slate-500">
+                Last 365 days · median days
+              </p>
             </div>
           </motion.div>
 
@@ -1461,13 +1444,13 @@ export default function ProtocolBento() {
             </div>
           </motion.div>
 
-          {/* PRs - Col 2, Row 4 */}
+          {/* Recent PRs - Col 1, Rows 3-4 (TALL LEFT on lg) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.05, margin: "0px 0px 80px 0px" }}
             transition={{ duration: 0.4, delay: 0.4 }}
-            className="group relative col-span-1 order-9 overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-4 sm:p-5 shadow-lg backdrop-blur transition-all hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/20 lg:col-start-2 lg:row-start-4 bg-dot-white/[0.02] lg:hover:scale-[1.02]"
+            className="group relative col-span-1 order-9 overflow-hidden rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/5 to-transparent p-4 sm:p-5 shadow-lg backdrop-blur transition-all hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/20 lg:col-start-1 lg:row-start-3 lg:row-span-2 bg-dot-white/[0.02] lg:hover:scale-[1.02]"
           >
             <div className="relative z-10 flex h-full flex-col">
               {/* Header */}
