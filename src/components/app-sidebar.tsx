@@ -8,6 +8,7 @@ import {
   Home,
   Layers,
   LineChart,
+  Lightbulb,
   Package,
   Settings,
   ChevronRight,
@@ -58,16 +59,60 @@ const pageSections = [
   { title: "FAQs", href: "/#faqs", sectionId: "faqs" },
 ];
 
+// Standards page sections for scroll spy (tree structure)
+const standardsSections: SidebarSubItem[] = [
+  { 
+    title: "All Standards", 
+    href: "/standards",
+    items: [
+      { title: "Overview", href: "/standards#standards-kpis", sectionId: "standards-kpis" },
+      { title: "Charts", href: "/standards#standards-charts", sectionId: "standards-charts" },
+      { title: "Data Table", href: "/standards#standards-table", sectionId: "standards-table" },
+    ]
+  },
+  { 
+    title: "EIPs", 
+    href: "/standards?repo=eips",
+    items: [
+      { title: "Overview", href: "/standards?repo=eips#standards-kpis", sectionId: "standards-kpis" },
+      { title: "Charts", href: "/standards?repo=eips#standards-charts", sectionId: "standards-charts" },
+      { title: "Data Table", href: "/standards?repo=eips#standards-table", sectionId: "standards-table" },
+    ]
+  },
+  { 
+    title: "ERCs", 
+    href: "/standards?repo=ercs",
+    items: [
+      { title: "Overview", href: "/standards?repo=ercs#standards-kpis", sectionId: "standards-kpis" },
+      { title: "Charts", href: "/standards?repo=ercs#standards-charts", sectionId: "standards-charts" },
+      { title: "Data Table", href: "/standards?repo=ercs#standards-table", sectionId: "standards-table" },
+    ]
+  },
+  { 
+    title: "RIPs", 
+    href: "/standards?repo=rips",
+    items: [
+      { title: "Overview", href: "/standards?repo=rips#standards-kpis", sectionId: "standards-kpis" },
+      { title: "Charts", href: "/standards?repo=rips#standards-charts", sectionId: "standards-charts" },
+      { title: "Data Table", href: "/standards?repo=rips#standards-table", sectionId: "standards-table" },
+    ]
+  },
+];
+
+// Type for sidebar sub-items (supports nesting)
+interface SidebarSubItem {
+  title: string;
+  href: string;
+  sectionId?: string;
+  items?: SidebarSubItem[];
+}
+
 // Type for sidebar items
 interface SidebarItem {
   title: string;
   icon: LucideIcon;
   href?: string;
-  items?: Array<{
-    title: string;
-    href: string;
-    sectionId?: string;
-  }>;
+  items?: SidebarSubItem[];
 }
 
 const sidebarItems: SidebarItem[] = [
@@ -92,12 +137,8 @@ const sidebarItems: SidebarItem[] = [
   {
     title: "Standards",
     icon: Layers,
-    items: [
-      { title: "All Standards", href: "/all" },
-      { title: "EIPs", href: "/eip" },
-      { title: "ERCs", href: "/erc" },
-      { title: "RIPs", href: "/rip" },
-    ],
+    href: "/standards",
+    items: standardsSections,
   },
   {
     title: "Explore",
@@ -130,9 +171,29 @@ const sidebarItems: SidebarItem[] = [
     ],
   },
   {
+    title: "Insights",
+    icon: Lightbulb,
+    href: "/insights",
+    items: [
+      { title: "Overview", href: "/insights" },
+      { title: "Year–Month Analysis", href: "/insights/year-month-analysis" },
+      { title: "Governance & Process", href: "/insights/governance-and-process" },
+      { title: "Upgrade Insights", href: "/insights/upgrade-insights" },
+      { title: "Editorial Commentary", href: "/insights/editorial-commentary" },
+    ],
+  },
+  {
     title: "Resources",
     icon: BookOpen,
     href: "/resources",
+    items: [
+      { title: "Overview", href: "/resources" },
+      { title: "FAQ", href: "/resources/faq" },
+      { title: "Blogs", href: "/resources/blogs" },
+      { title: "Videos", href: "/resources/videos" },
+      { title: "News", href: "/resources/news" },
+      { title: "Documentation", href: "/resources/docs" },
+    ],
   },
   {
     title: "Profile",
@@ -188,9 +249,11 @@ function getOrderedSidebarItems(persona: Persona | null): SidebarItem[] {
 function getActiveMenuItem(pathname: string): string | null {
   if (pathname === "/") return "Home";
   if (pathname.startsWith("/search")) return "Search";
-  if (pathname.startsWith("/all") || pathname.startsWith("/eip") || pathname.startsWith("/erc") || pathname.startsWith("/rip")) return "Standards";
+  if (pathname.startsWith("/standards") || pathname.startsWith("/all") || pathname.startsWith("/eip") || pathname.startsWith("/erc") || pathname.startsWith("/rip")) return "Standards";
   if (pathname.startsWith("/explore")) return "Explore";
   if (pathname.startsWith("/analytics")) return "Analytics";
+  if (pathname.startsWith("/insights")) return "Insights";
+  if (pathname.startsWith("/resources")) return "Resources";
   return null;
 }
 
@@ -207,6 +270,18 @@ export function AppSidebar() {
   });
   const rememberedOpen = React.useRef<string[]>(openItems);
   const [activeSection, setActiveSection] = React.useState<string>("");
+  const [openSubCategories, setOpenSubCategories] = React.useState<string[]>(() => {
+    // Auto-open the active standards subcategory based on URL (client-side only)
+    if (typeof window !== 'undefined' && pathname.startsWith("/standards")) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const repo = searchParams.get("repo");
+      if (repo === "eips") return ["standards-eips"];
+      if (repo === "ercs") return ["standards-ercs"];
+      if (repo === "rips") return ["standards-rips"];
+      return ["standards-all"];
+    }
+    return [];
+  });
 
   // Get ordered sidebar items based on persona
   const orderedItems = React.useMemo(
@@ -219,6 +294,14 @@ export function AppSidebar() {
       prev.includes(title)
         ? prev.filter((item) => item !== title)
         : [...prev, title]
+    );
+  };
+
+  const toggleSubCategory = (id: string) => {
+    setOpenSubCategories((prev) =>
+      prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id]
     );
   };
 
@@ -266,16 +349,46 @@ export function AppSidebar() {
     } else if (!activeItem) {
       setOpenItems([]);
     }
+
+    // Auto-expand the active standards subcategory
+    if (pathname.startsWith("/standards")) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const repo = searchParams.get("repo");
+      let activeSubCat = "standards-all";
+      if (repo === "eips") activeSubCat = "standards-eips";
+      else if (repo === "ercs") activeSubCat = "standards-ercs";
+      else if (repo === "rips") activeSubCat = "standards-rips";
+      
+      setOpenSubCategories([activeSubCat]);
+    } else {
+      setOpenSubCategories([]);
+    }
   }, [pathname]);
 
-  // Scroll spy for homepage sections
+  // Helper to recursively extract section IDs
+  const extractSectionIds = (items: SidebarSubItem[]): string[] => {
+    const ids: string[] = [];
+    items.forEach((item) => {
+      if (item.sectionId) ids.push(item.sectionId);
+      if (item.items) ids.push(...extractSectionIds(item.items));
+    });
+    return ids;
+  };
+
+  // Scroll spy for homepage and standards sections
   React.useEffect(() => {
-    if (pathname !== "/") {
+    let sectionIds: string[] = [];
+    
+    if (pathname === "/") {
+      sectionIds = pageSections.map((s) => s.sectionId).filter(Boolean) as string[];
+    } else if (pathname.startsWith("/standards")) {
+      sectionIds = extractSectionIds(standardsSections);
+    }
+
+    if (sectionIds.length === 0) {
       setActiveSection("");
       return;
     }
-
-    const sectionIds = pageSections.map((s) => s.sectionId);
 
     const observerCallback = (entries: IntersectionObserverEntry[]) => {
       let maxRatio = 0;
@@ -300,8 +413,10 @@ export function AppSidebar() {
     });
 
     sectionIds.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
+      if (id) {
+        const el = document.getElementById(id);
+        if (el) observer.observe(el);
+      }
     });
 
     return () => observer.disconnect();
@@ -445,53 +560,147 @@ export function AppSidebar() {
                           <CollapsibleContent>
                             <SidebarMenuSub className="ml-0 border-l-2 border-cyan-400/10 pl-6 pt-2">
                               {item.items?.map((subItem) => {
+                                // Check if this sub-item has nested items (category/parent)
+                                const hasNestedItems = subItem.items && subItem.items.length > 0;
                                 const isSubActive = subItem.sectionId
-                                  ? pathname === "/" && activeSection === subItem.sectionId
+                                  ? ((pathname === "/" || pathname.startsWith("/standards")) && activeSection === subItem.sectionId)
                                   : isPathActive(subItem.href);
 
-                                return (
-                                  <SidebarMenuSubItem key={subItem.title}>
-                                    <SidebarMenuSubButton
-                                      asChild
-                                      isActive={isSubActive}
-                                      className={cn(
-                                        "rounded-md py-1.5 transition-all duration-200",
-                                        "hover:bg-cyan-500/10 hover:text-white hover:translate-x-0.5",
-                                        "border border-transparent hover:border-cyan-400/20",
-                                        isSubActive &&
-                                          "bg-gradient-to-r from-emerald-400/15 via-cyan-400/15 to-blue-400/15 text-white font-medium shadow-[0_0_12px_rgba(34,211,238,0.15)] border-cyan-400/30"
-                                      )}
+                                if (hasNestedItems) {
+                                  // Generate unique ID for this subcategory
+                                  const subCatId = `standards-${subItem.title.toLowerCase().replace(/\s+/g, '-')}`;
+                                  const isSubCatOpen = openSubCategories.includes(subCatId);
+                                  
+                                  // Render as collapsible category with nested items
+                                  return (
+                                    <Collapsible
+                                      key={subItem.title}
+                                      open={isSubCatOpen}
+                                      onOpenChange={() => toggleSubCategory(subCatId)}
                                     >
-                                      <Link
-                                        href={subItem.href}
-                                        onClick={(e) => {
-                                          if (subItem.sectionId) {
-                                            e.preventDefault();
-                                            const el = document.getElementById(
-                                              subItem.sectionId
-                                            );
-                                            if (el) {
-                                              el.scrollIntoView({
-                                                behavior: "smooth",
-                                                block: "start",
-                                              });
-                                              window.history.pushState(
-                                                null,
-                                                "",
-                                                subItem.href
-                                              );
-                                              setActiveSection(subItem.sectionId);
-                                            }
-                                          }
-                                        }}
+                                      <SidebarMenuSubItem>
+                                        <CollapsibleTrigger asChild>
+                                          <button
+                                            className={cn(
+                                              "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-all duration-200",
+                                              "hover:bg-cyan-500/10 hover:text-white",
+                                              "border border-transparent hover:border-cyan-400/20",
+                                              isPathActive(subItem.href)
+                                                ? "text-cyan-300 font-semibold"
+                                                : "text-slate-300"
+                                            )}
+                                          >
+                                            <Link
+                                              href={subItem.href}
+                                              className="flex-1 text-left"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              {subItem.title}
+                                            </Link>
+                                            <ChevronRight
+                                              className={cn(
+                                                "h-3 w-3 text-slate-400 transition-transform shrink-0",
+                                                isSubCatOpen && "rotate-90 text-cyan-400"
+                                              )}
+                                            />
+                                          </button>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent>
+                                          {/* Nested sub-items */}
+                                          <div className="ml-3 mt-1 space-y-1 border-l border-cyan-400/10 pl-3">
+                                            {subItem.items?.map((nestedItem) => {
+                                          const isNestedActive = nestedItem.sectionId
+                                            ? ((pathname === "/" || pathname.startsWith("/standards")) && activeSection === nestedItem.sectionId)
+                                            : isPathActive(nestedItem.href);
+
+                                          return (
+                                            <Link
+                                              key={nestedItem.title}
+                                              href={nestedItem.href}
+                                              onClick={(e) => {
+                                                if (nestedItem.sectionId) {
+                                                  e.preventDefault();
+                                                  const el = document.getElementById(
+                                                    nestedItem.sectionId
+                                                  );
+                                                  if (el) {
+                                                    el.scrollIntoView({
+                                                      behavior: "smooth",
+                                                      block: "start",
+                                                    });
+                                                    window.history.pushState(
+                                                      null,
+                                                      "",
+                                                      nestedItem.href
+                                                    );
+                                                    setActiveSection(nestedItem.sectionId);
+                                                  }
+                                                }
+                                              }}
+                                              className={cn(
+                                                "block rounded-md px-2 py-1 text-xs transition-all duration-200",
+                                                "hover:bg-cyan-500/10 hover:text-white hover:translate-x-0.5",
+                                                "border border-transparent hover:border-cyan-400/20",
+                                                isNestedActive
+                                                  ? "bg-linear-to-r from-emerald-400/15 via-cyan-400/15 to-blue-400/15 text-white font-medium shadow-[0_0_12px_rgba(34,211,238,0.15)] border-cyan-400/30"
+                                                  : "text-slate-400"
+                                              )}
+                                            >
+                                              {nestedItem.title}
+                                            </Link>
+                                          );
+                                        })}
+                                          </div>
+                                        </CollapsibleContent>
+                                      </SidebarMenuSubItem>
+                                    </Collapsible>
+                                  );
+                                } else {
+                                  // Render as regular link
+                                  return (
+                                    <SidebarMenuSubItem key={subItem.title}>
+                                      <SidebarMenuSubButton
+                                        asChild
+                                        isActive={isSubActive}
+                                        className={cn(
+                                          "rounded-md py-1.5 transition-all duration-200",
+                                          "hover:bg-cyan-500/10 hover:text-white hover:translate-x-0.5",
+                                          "border border-transparent hover:border-cyan-400/20",
+                                          isSubActive &&
+                                            "bg-linear-to-r from-emerald-400/15 via-cyan-400/15 to-blue-400/15 text-white font-medium shadow-[0_0_12px_rgba(34,211,238,0.15)] border-cyan-400/30"
+                                        )}
                                       >
-                                        <span className="text-xs">
-                                          {subItem.title}
-                                        </span>
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                );
+                                        <Link
+                                          href={subItem.href}
+                                          onClick={(e) => {
+                                            if (subItem.sectionId) {
+                                              e.preventDefault();
+                                              const el = document.getElementById(
+                                                subItem.sectionId
+                                              );
+                                              if (el) {
+                                                el.scrollIntoView({
+                                                  behavior: "smooth",
+                                                  block: "start",
+                                                });
+                                                window.history.pushState(
+                                                  null,
+                                                  "",
+                                                  subItem.href
+                                                );
+                                                setActiveSection(subItem.sectionId);
+                                              }
+                                            }
+                                          }}
+                                        >
+                                          <span className="text-xs">
+                                            {subItem.title}
+                                          </span>
+                                        </Link>
+                                      </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                  );
+                                }
                               })}
                             </SidebarMenuSub>
                           </CollapsibleContent>

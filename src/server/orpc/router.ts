@@ -9,6 +9,8 @@ import { upgradesProcedures } from './procedures/upgrades'
 import { searchProcedures } from './procedures/search'
 import { preferencesProcedures } from './procedures/preferences'
 import { exploreProcedures } from './procedures/explore'
+import { standardsProcedures } from './procedures/standards'
+import { insightsProcedures } from './procedures/insights'
 
 export const router = {
   auth: authProcedures,
@@ -22,4 +24,6 @@ export const router = {
   search: searchProcedures,
   preferences: preferencesProcedures,
   explore: exploreProcedures,
+  standards: standardsProcedures,
+  insights: insightsProcedures,
 }
