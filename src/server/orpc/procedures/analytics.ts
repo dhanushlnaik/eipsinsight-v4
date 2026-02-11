@@ -602,6 +602,225 @@ const getContributorActivityByRepoCached = unstable_cache(
   { tags: ['analytics-contributors-activity-repo'], revalidate: 600 }
 );
 
+// ——— Cached helpers for Editors & Reviewers analytics ———
+
+const getEditorsLeaderboardCached = unstable_cache(
+  async (repo: string | null, from: string | null, to: string | null, limit: number) => {
+    const results = await prisma.$queryRawUnsafe<Array<{
+      actor: string;
+      total_reviews: bigint;
+      prs_touched: bigint;
+      median_response_days: number | null;
+    }>>(
+      `
+      WITH editor_activity AS (
+        SELECT ca.actor, ca.pr_number, ca.repository_id, ca.occurred_at
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE ca.role = 'editor'
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+          AND ($2::text IS NULL OR ca.occurred_at >= $2::timestamp)
+          AND ($3::text IS NULL OR ca.occurred_at <= $3::timestamp)
+      ),
+      by_actor AS (
+        SELECT actor, COUNT(*)::bigint AS total_reviews, COUNT(DISTINCT pr_number)::bigint AS prs_touched
+        FROM editor_activity GROUP BY actor
+      ),
+      first_review AS (
+        SELECT ea.actor, ea.pr_number, ea.repository_id, MIN(ea.occurred_at) AS first_at
+        FROM editor_activity ea GROUP BY ea.actor, ea.pr_number, ea.repository_id
+      ),
+      response_days AS (
+        SELECT fr.actor, EXTRACT(DAY FROM (fr.first_at - pr.created_at))::int AS days
+        FROM first_review fr
+        JOIN pull_requests pr ON pr.pr_number = fr.pr_number AND pr.repository_id = fr.repository_id
+      ),
+      medians AS (
+        SELECT actor, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days)::numeric AS median_response_days
+        FROM response_days GROUP BY actor
+      )
+      SELECT ba.actor, ba.total_reviews, ba.prs_touched, m.median_response_days
+      FROM by_actor ba LEFT JOIN medians m ON m.actor = ba.actor
+      ORDER BY ba.total_reviews DESC LIMIT $4
+    `,
+      repo, from, to, limit
+    );
+    return results.map((r) => ({
+      actor: r.actor,
+      totalReviews: Number(r.total_reviews),
+      prsTouched: Number(r.prs_touched),
+      medianResponseDays: r.median_response_days != null ? Math.round(Number(r.median_response_days)) : null,
+    }));
+  },
+  ['analytics-getEditorsLeaderboard'],
+  { tags: ['analytics-editors-leaderboard'], revalidate: 600 }
+);
+
+const getReviewersLeaderboardCached = unstable_cache(
+  async (repo: string | null, from: string | null, to: string | null, limit: number) => {
+    const results = await prisma.$queryRawUnsafe<Array<{
+      actor: string;
+      total_reviews: bigint;
+      prs_touched: bigint;
+      median_response_days: number | null;
+    }>>(
+      `
+      WITH reviewer_activity AS (
+        SELECT ca.actor, ca.pr_number, ca.repository_id, ca.occurred_at
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE (ca.role = 'reviewer' OR (ca.action_type = 'reviewed' AND (ca.role IS NULL OR ca.role != 'editor')))
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+          AND ($2::text IS NULL OR ca.occurred_at >= $2::timestamp)
+          AND ($3::text IS NULL OR ca.occurred_at <= $3::timestamp)
+      ),
+      by_actor AS (
+        SELECT actor, COUNT(*)::bigint AS total_reviews, COUNT(DISTINCT pr_number)::bigint AS prs_touched
+        FROM reviewer_activity GROUP BY actor
+      ),
+      first_review AS (
+        SELECT ra.actor, ra.pr_number, ra.repository_id, MIN(ra.occurred_at) AS first_at
+        FROM reviewer_activity ra GROUP BY ra.actor, ra.pr_number, ra.repository_id
+      ),
+      response_days AS (
+        SELECT fr.actor, EXTRACT(DAY FROM (fr.first_at - pr.created_at))::int AS days
+        FROM first_review fr
+        JOIN pull_requests pr ON pr.pr_number = fr.pr_number AND pr.repository_id = fr.repository_id
+      ),
+      medians AS (
+        SELECT actor, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days)::numeric AS median_response_days
+        FROM response_days GROUP BY actor
+      )
+      SELECT ba.actor, ba.total_reviews, ba.prs_touched, m.median_response_days
+      FROM by_actor ba LEFT JOIN medians m ON m.actor = ba.actor
+      ORDER BY ba.total_reviews DESC LIMIT $4
+    `,
+      repo, from, to, limit
+    );
+    return results.map((r) => ({
+      actor: r.actor,
+      totalReviews: Number(r.total_reviews),
+      prsTouched: Number(r.prs_touched),
+      medianResponseDays: r.median_response_days != null ? Math.round(Number(r.median_response_days)) : null,
+    }));
+  },
+  ['analytics-getReviewersLeaderboard'],
+  { tags: ['analytics-reviewers-leaderboard'], revalidate: 600 }
+);
+
+const getEditorsByCategoryCached = unstable_cache(
+  async (repo: string | null) => {
+    const results = await prisma.$queryRawUnsafe<Array<{
+      category: string;
+      actor: string;
+      review_count: bigint;
+    }>>(
+      `
+      WITH pr_eip AS (
+        SELECT pr.id AS pr_id, pr.pr_number, pr.repository_id, pre.eip_id
+        FROM pull_requests pr
+        JOIN pull_request_eips pre ON pre.pr_id = pr.id
+      ),
+      review_with_category AS (
+        SELECT ca.actor, COALESCE(LOWER(TRIM(es.category)), 'unknown') AS category
+        FROM contributor_activity ca
+        JOIN pr_eip pe ON pe.pr_number = ca.pr_number AND pe.repository_id = ca.repository_id
+        JOIN eip_snapshots es ON es.eip_id = pe.eip_id
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE (ca.role = 'editor' OR ca.action_type = 'reviewed')
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+      ),
+      ranked AS (
+        SELECT category, actor, COUNT(*)::bigint AS review_count,
+          ROW_NUMBER() OVER (PARTITION BY category ORDER BY COUNT(*) DESC) AS rn
+        FROM review_with_category
+        GROUP BY category, actor
+      )
+      SELECT category, actor, review_count FROM ranked WHERE rn <= 20 ORDER BY category, rn
+    `,
+      repo
+    );
+    const byCategory: Record<string, string[]> = {};
+    for (const r of results) {
+      const cat = r.category === 'unknown' ? 'informational' : r.category;
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(r.actor);
+    }
+    const order = ['governance', 'core', 'erc', 'networking', 'interface', 'meta', 'informational'];
+    return order.map((category) => ({ category, actors: byCategory[category] ?? [] }));
+  },
+  ['analytics-getEditorsByCategory'],
+  { tags: ['analytics-editors-by-category'], revalidate: 600 }
+);
+
+const getEditorsRepoDistributionCached = unstable_cache(
+  async (actor: string | null, repo: string | null, from: string | null, to: string | null) => {
+    const results = await prisma.$queryRawUnsafe<Array<{ actor: string; repo: string; count: bigint; pct: number }>>(
+      `
+      WITH base AS (
+        SELECT ca.actor, COALESCE(r.name, 'Unknown') AS repo
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE ca.role = 'editor'
+          AND ($1::text IS NULL OR ca.actor = $1)
+          AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+          AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+          AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+      ),
+      totals AS (SELECT actor, COUNT(*) AS total FROM base GROUP BY actor)
+      SELECT b.actor, b.repo, COUNT(*)::bigint AS count,
+        ROUND((100.0 * COUNT(*) / NULLIF(t.total, 0))::numeric, 1)::numeric AS pct
+      FROM base b JOIN totals t ON t.actor = b.actor
+      GROUP BY b.actor, b.repo, t.total
+      ORDER BY b.actor, count DESC
+    `,
+      actor, repo, from, to
+    );
+    return results.map((r) => ({
+      actor: r.actor,
+      repo: r.repo ?? 'Unknown',
+      count: Number(r.count),
+      pct: Number(r.pct),
+    }));
+  },
+  ['analytics-getEditorsRepoDistribution'],
+  { tags: ['analytics-editors-repo-distribution'], revalidate: 600 }
+);
+
+const getReviewersRepoDistributionCached = unstable_cache(
+  async (actor: string | null, repo: string | null, from: string | null, to: string | null) => {
+    const results = await prisma.$queryRawUnsafe<Array<{ actor: string; repo: string; count: bigint; pct: number }>>(
+      `
+      WITH base AS (
+        SELECT ca.actor, COALESCE(r.name, 'Unknown') AS repo
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE (ca.role = 'reviewer' OR (ca.action_type = 'reviewed' AND (ca.role IS NULL OR ca.role != 'editor')))
+          AND ($1::text IS NULL OR ca.actor = $1)
+          AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+          AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+          AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+      ),
+      totals AS (SELECT actor, COUNT(*) AS total FROM base GROUP BY actor)
+      SELECT b.actor, b.repo, COUNT(*)::bigint AS count,
+        ROUND((100.0 * COUNT(*) / NULLIF(t.total, 0))::numeric, 1)::numeric AS pct
+      FROM base b JOIN totals t ON t.actor = b.actor
+      GROUP BY b.actor, b.repo, t.total
+      ORDER BY b.actor, count DESC
+    `,
+      actor, repo, from, to
+    );
+    return results.map((r) => ({
+      actor: r.actor,
+      repo: r.repo ?? 'Unknown',
+      count: Number(r.count),
+      pct: Number(r.pct),
+    }));
+  },
+  ['analytics-getReviewersRepoDistribution'],
+  { tags: ['analytics-reviewers-repo-distribution'], revalidate: 600 }
+);
+
 export const analyticsProcedures = {
   getActiveProposals: os
     .$context<Ctx>()
@@ -1920,7 +2139,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  // ——— Editors & Reviewers Analytics ———
+  // ——— Editors & Reviewers Analytics (cached) ———
   getEditorsLeaderboard: os
     .$context<Ctx>()
     .input(z.object({
@@ -1931,54 +2150,12 @@ export const analyticsProcedures = {
     }))
     .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
-      const results = await prisma.$queryRawUnsafe<Array<{
-        actor: string;
-        total_reviews: bigint;
-        prs_touched: bigint;
-        median_response_days: number | null;
-      }>>(
-        `
-        WITH editor_activity AS (
-          SELECT ca.actor, ca.pr_number, ca.repository_id, ca.occurred_at
-          FROM contributor_activity ca
-          LEFT JOIN repositories r ON r.id = ca.repository_id
-          WHERE ca.role = 'editor'
-            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
-            AND ($2::text IS NULL OR ca.occurred_at >= $2::timestamp)
-            AND ($3::text IS NULL OR ca.occurred_at <= $3::timestamp)
-        ),
-        by_actor AS (
-          SELECT actor, COUNT(*)::bigint AS total_reviews, COUNT(DISTINCT pr_number)::bigint AS prs_touched
-          FROM editor_activity GROUP BY actor
-        ),
-        first_review AS (
-          SELECT ea.actor, ea.pr_number, ea.repository_id, MIN(ea.occurred_at) AS first_at
-          FROM editor_activity ea GROUP BY ea.actor, ea.pr_number, ea.repository_id
-        ),
-        response_days AS (
-          SELECT fr.actor, EXTRACT(DAY FROM (fr.first_at - pr.created_at))::int AS days
-          FROM first_review fr
-          JOIN pull_requests pr ON pr.pr_number = fr.pr_number AND pr.repository_id = fr.repository_id
-        ),
-        medians AS (
-          SELECT actor, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days)::numeric AS median_response_days
-          FROM response_days GROUP BY actor
-        )
-        SELECT ba.actor, ba.total_reviews, ba.prs_touched, m.median_response_days
-        FROM by_actor ba LEFT JOIN medians m ON m.actor = ba.actor
-        ORDER BY ba.total_reviews DESC LIMIT $4
-      `,
+      return getEditorsLeaderboardCached(
         input.repo ?? null,
         input.from ?? null,
         input.to ?? null,
         input.limit
       );
-      return results.map((r) => ({
-        actor: r.actor,
-        totalReviews: Number(r.total_reviews),
-        prsTouched: Number(r.prs_touched),
-        medianResponseDays: r.median_response_days != null ? Math.round(Number(r.median_response_days)) : null,
-      }));
     }),
 
   getReviewersLeaderboard: os
@@ -1991,54 +2168,12 @@ export const analyticsProcedures = {
     }))
     .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
-      const results = await prisma.$queryRawUnsafe<Array<{
-        actor: string;
-        total_reviews: bigint;
-        prs_touched: bigint;
-        median_response_days: number | null;
-      }>>(
-        `
-        WITH reviewer_activity AS (
-          SELECT ca.actor, ca.pr_number, ca.repository_id, ca.occurred_at
-          FROM contributor_activity ca
-          LEFT JOIN repositories r ON r.id = ca.repository_id
-          WHERE (ca.role = 'reviewer' OR (ca.action_type = 'reviewed' AND (ca.role IS NULL OR ca.role != 'editor')))
-            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
-            AND ($2::text IS NULL OR ca.occurred_at >= $2::timestamp)
-            AND ($3::text IS NULL OR ca.occurred_at <= $3::timestamp)
-        ),
-        by_actor AS (
-          SELECT actor, COUNT(*)::bigint AS total_reviews, COUNT(DISTINCT pr_number)::bigint AS prs_touched
-          FROM reviewer_activity GROUP BY actor
-        ),
-        first_review AS (
-          SELECT ra.actor, ra.pr_number, ra.repository_id, MIN(ra.occurred_at) AS first_at
-          FROM reviewer_activity ra GROUP BY ra.actor, ra.pr_number, ra.repository_id
-        ),
-        response_days AS (
-          SELECT fr.actor, EXTRACT(DAY FROM (fr.first_at - pr.created_at))::int AS days
-          FROM first_review fr
-          JOIN pull_requests pr ON pr.pr_number = fr.pr_number AND pr.repository_id = fr.repository_id
-        ),
-        medians AS (
-          SELECT actor, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY days)::numeric AS median_response_days
-          FROM response_days GROUP BY actor
-        )
-        SELECT ba.actor, ba.total_reviews, ba.prs_touched, m.median_response_days
-        FROM by_actor ba LEFT JOIN medians m ON m.actor = ba.actor
-        ORDER BY ba.total_reviews DESC LIMIT $4
-      `,
+      return getReviewersLeaderboardCached(
         input.repo ?? null,
         input.from ?? null,
         input.to ?? null,
         input.limit
       );
-      return results.map((r) => ({
-        actor: r.actor,
-        totalReviews: Number(r.total_reviews),
-        prsTouched: Number(r.prs_touched),
-        medianResponseDays: r.median_response_days != null ? Math.round(Number(r.median_response_days)) : null,
-      }));
     }),
 
   getEditorsByCategory: os
@@ -2046,44 +2181,7 @@ export const analyticsProcedures = {
     .input(z.object({ repo: z.enum(['eips', 'ercs', 'rips']).optional() }))
     .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
-      const results = await prisma.$queryRawUnsafe<Array<{
-        category: string;
-        actor: string;
-        review_count: bigint;
-      }>>(
-        `
-        WITH pr_eip AS (
-          SELECT pr.id AS pr_id, pr.pr_number, pr.repository_id, pre.eip_id
-          FROM pull_requests pr
-          JOIN pull_request_eips pre ON pre.pr_id = pr.id
-        ),
-        review_with_category AS (
-          SELECT ca.actor, COALESCE(LOWER(TRIM(es.category)), 'unknown') AS category
-          FROM contributor_activity ca
-          JOIN pr_eip pe ON pe.pr_number = ca.pr_number AND pe.repository_id = ca.repository_id
-          JOIN eip_snapshots es ON es.eip_id = pe.eip_id
-          LEFT JOIN repositories r ON r.id = ca.repository_id
-          WHERE (ca.role = 'editor' OR ca.action_type = 'reviewed')
-            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
-        ),
-        ranked AS (
-          SELECT category, actor, COUNT(*)::bigint AS review_count,
-            ROW_NUMBER() OVER (PARTITION BY category ORDER BY COUNT(*) DESC) AS rn
-          FROM review_with_category
-          GROUP BY category, actor
-        )
-        SELECT category, actor, review_count FROM ranked WHERE rn <= 20 ORDER BY category, rn
-      `,
-        input.repo ?? null
-      );
-      const byCategory: Record<string, string[]> = {};
-      for (const r of results) {
-        const cat = r.category === 'unknown' ? 'informational' : r.category;
-        if (!byCategory[cat]) byCategory[cat] = [];
-        byCategory[cat].push(r.actor);
-      }
-      const order = ['governance', 'core', 'erc', 'networking', 'interface', 'meta', 'informational'];
-      return order.map((category) => ({ category, actors: byCategory[category] ?? [] }));
+      return getEditorsByCategoryCached(input.repo ?? null);
     }),
 
   getEditorsRepoDistribution: os
@@ -2096,36 +2194,12 @@ export const analyticsProcedures = {
     }))
     .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
-      const results = await prisma.$queryRawUnsafe<Array<{ actor: string; repo: string; count: bigint; pct: number }>>(
-        `
-        WITH base AS (
-          SELECT ca.actor, COALESCE(r.name, 'Unknown') AS repo
-          FROM contributor_activity ca
-          LEFT JOIN repositories r ON r.id = ca.repository_id
-          WHERE ca.role = 'editor'
-            AND ($1::text IS NULL OR ca.actor = $1)
-            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
-            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
-            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
-        ),
-        totals AS (SELECT actor, COUNT(*) AS total FROM base GROUP BY actor)
-        SELECT b.actor, b.repo, COUNT(*)::bigint AS count,
-          ROUND((100.0 * COUNT(*) / NULLIF(t.total, 0))::numeric, 1)::numeric AS pct
-        FROM base b JOIN totals t ON t.actor = b.actor
-        GROUP BY b.actor, b.repo, t.total
-        ORDER BY b.actor, count DESC
-      `,
+      return getEditorsRepoDistributionCached(
         input.actor ?? null,
         input.repo ?? null,
         input.from ?? null,
         input.to ?? null
       );
-      return results.map((r) => ({
-        actor: r.actor,
-        repo: r.repo ?? 'Unknown',
-        count: Number(r.count),
-        pct: Number(r.pct),
-      }));
     }),
 
   getReviewersRepoDistribution: os
@@ -2138,36 +2212,12 @@ export const analyticsProcedures = {
     }))
     .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
-      const results = await prisma.$queryRawUnsafe<Array<{ actor: string; repo: string; count: bigint; pct: number }>>(
-        `
-        WITH base AS (
-          SELECT ca.actor, COALESCE(r.name, 'Unknown') AS repo
-          FROM contributor_activity ca
-          LEFT JOIN repositories r ON r.id = ca.repository_id
-          WHERE (ca.role = 'reviewer' OR (ca.action_type = 'reviewed' AND (ca.role IS NULL OR ca.role != 'editor')))
-            AND ($1::text IS NULL OR ca.actor = $1)
-            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
-            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
-            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
-        ),
-        totals AS (SELECT actor, COUNT(*) AS total FROM base GROUP BY actor)
-        SELECT b.actor, b.repo, COUNT(*)::bigint AS count,
-          ROUND((100.0 * COUNT(*) / NULLIF(t.total, 0))::numeric, 1)::numeric AS pct
-        FROM base b JOIN totals t ON t.actor = b.actor
-        GROUP BY b.actor, b.repo, t.total
-        ORDER BY b.actor, count DESC
-      `,
+      return getReviewersRepoDistributionCached(
         input.actor ?? null,
         input.repo ?? null,
         input.from ?? null,
         input.to ?? null
       );
-      return results.map((r) => ({
-        actor: r.actor,
-        repo: r.repo ?? 'Unknown',
-        count: Number(r.count),
-        pct: Number(r.pct),
-      }));
     }),
 
   getEditorsMonthlyTrend: os

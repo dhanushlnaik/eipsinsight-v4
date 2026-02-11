@@ -12,7 +12,9 @@ const pool = new Pool({
   connectionString: env.DATABASE_URL,
   max: 10, // Limit max connections per pool
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000, // 10s — enough for cold starts + SSL handshake
+  statement_timeout: 30000, // Kill queries running longer than 30s
+  query_timeout: 30000, // Client-side query timeout
 });
 const adapter = new PrismaPg(pool);
 

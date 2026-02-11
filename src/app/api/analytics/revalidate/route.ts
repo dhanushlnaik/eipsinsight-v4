@@ -37,6 +37,11 @@ export async function POST(request: Request) {
         'analytics-contributors-kpis',
         'analytics-contributors-activity-type',
         'analytics-contributors-activity-repo',
+        'analytics-editors-leaderboard',
+        'analytics-reviewers-leaderboard',
+        'analytics-editors-by-category',
+        'analytics-editors-repo-distribution',
+        'analytics-reviewers-repo-distribution',
       ];
 
       analyticsTags.forEach(t => revalidateTag(t, 'max'));

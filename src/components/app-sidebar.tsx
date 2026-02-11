@@ -19,6 +19,7 @@ import {
   PanelLeftOpen,
   Compass,
   Search,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { useSidebarStore } from "@/stores/sidebarStore";
@@ -171,6 +172,18 @@ const sidebarItems: SidebarItem[] = [
     ],
   },
   {
+    title: "Tools",
+    icon: Wrench,
+    href: "/tools",
+    items: [
+      { title: "Overview", href: "/tools" },
+      { title: "EIP Builder", href: "/tools/eip-builder" },
+      { title: "Board", href: "/tools/board" },
+      { title: "Dependencies", href: "/tools/dependencies" },
+      { title: "Timeline", href: "/tools/timeline" },
+    ],
+  },
+  {
     title: "Insights",
     icon: Lightbulb,
     href: "/insights",
@@ -252,6 +265,7 @@ function getActiveMenuItem(pathname: string): string | null {
   if (pathname.startsWith("/standards") || pathname.startsWith("/all") || pathname.startsWith("/eip") || pathname.startsWith("/erc") || pathname.startsWith("/rip")) return "Standards";
   if (pathname.startsWith("/explore")) return "Explore";
   if (pathname.startsWith("/analytics")) return "Analytics";
+  if (pathname.startsWith("/tools")) return "Tools";
   if (pathname.startsWith("/insights")) return "Insights";
   if (pathname.startsWith("/resources")) return "Resources";
   return null;
