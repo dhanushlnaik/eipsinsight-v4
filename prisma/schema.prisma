@@ -205,7 +205,6 @@ model eips {
   eip_snapshots       eip_snapshots?
   eip_status_events   eip_status_events[]
   eip_type_events     eip_type_events[]
-  pull_request_eips   pull_request_eips[]
 }
 
 model pgmigrations {
@@ -215,33 +214,36 @@ model pgmigrations {
 }
 
 model pull_request_eips {
-  pr_id         Int
-  eip_id        Int
-  eips          eips          @relation(fields: [eip_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  pull_requests pull_requests @relation(fields: [pr_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pr_number     Int
+  repository_id Int
+  eip_number    Int
+  linked_at     DateTime     @default(now()) @db.Timestamptz(6)
+  repositories  repositories @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@id([pr_id, eip_id])
+  @@id([pr_number, repository_id, eip_number])
+  @@index([eip_number], map: "pull_request_eips_eip_number_index")
+  @@index([repository_id, eip_number], map: "pull_request_eips_repository_id_eip_number_index")
 }
 
 model pull_requests {
-  id                Int                 @id @default(autoincrement())
-  pr_number         Int
-  repository_id     Int?
-  title             String?
-  author            String?
-  merged_at         DateTime?           @db.Timestamp(6)
-  closed_at         DateTime?           @db.Timestamp(6)
-  num_commits       Int?
-  num_files         Int?
-  num_participants  Int?
-  created_at        DateTime?           @default(now()) @db.Timestamp(6)
-  updated_at        DateTime?           @db.Timestamp(6)
-  state             String?
-  num_comments      Int?                @default(0)
-  num_reviews       Int?                @default(0)
-  labels            String[]            @default([])
-  pull_request_eips pull_request_eips[]
-  repositories      repositories?       @relation(fields: [repository_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id               Int           @id @default(autoincrement())
+  pr_number        Int
+  repository_id    Int?
+  title            String?
+  author           String?
+  merged_at        DateTime?     @db.Timestamp(6)
+  closed_at        DateTime?     @db.Timestamp(6)
+  updated_at       DateTime?     @db.Timestamp(6)
+  state            String?
+  num_commits      Int?
+  num_files        Int?
+  num_participants Int?
+  num_comments     Int?          @default(0)
+  num_reviews      Int?          @default(0)
+  labels           String[]      @default([])
+  created_at       DateTime?     @default(now()) @db.Timestamp(6)
+  body             String?
+  repositories     repositories? @relation(fields: [repository_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([pr_number, repository_id], map: "pull_requests_unique")
   @@index([labels], map: "idx_pull_requests_labels", type: Gin)
@@ -262,11 +264,16 @@ model repositories {
   eip_status_events    eip_status_events[]
   eip_type_events      eip_type_events[]
   issue_custom_tags    issue_custom_tags[]
+  issue_eips           issue_eips[]
   issue_events         issue_events[]
   issues               issues[]
   pr_custom_tags       pr_custom_tags[]
   pr_events            pr_events[]
   pr_governance_state  pr_governance_state[]
+  pr_label_snapshot    pr_label_snapshot[]
+  pr_monthly_snapshot  pr_monthly_snapshot[]
+  pr_reviews           pr_reviews[]
+  pull_request_eips    pull_request_eips[]
   pull_requests        pull_requests[]
 }
 
@@ -378,6 +385,7 @@ model upgrades {
   file_path                  String?
   created_at                 DateTime?                    @default(now()) @db.Timestamp(6)
   upgrade_composition_events upgrade_composition_events[]
+  upgrade_meta_eip_events    upgrade_meta_eip_events[]
 }
 
 model contributor_scores {
@@ -440,6 +448,7 @@ model issues {
   closed_at     DateTime?    @db.Timestamptz(6)
   labels        String[]     @default([])
   num_comments  Int?         @default(0)
+  body          String?
   repositories  repositories @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([issue_number, repository_id])
@@ -459,4 +468,99 @@ model pr_custom_tags {
   @@unique([pr_number, repository_id, tag])
   @@index([pr_number, repository_id], map: "idx_pr_custom_tags_pr")
   @@index([tag], map: "idx_pr_custom_tags_tag")
+}
+
+model insights_monthly {
+  month_year String   @id
+  summary    Json
+  highlights Json?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model issue_eips {
+  issue_number  Int
+  repository_id Int
+  eip_number    Int
+  linked_at     DateTime     @default(now()) @db.Timestamptz(6)
+  repositories  repositories @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([issue_number, repository_id, eip_number])
+  @@index([eip_number], map: "issue_eips_eip_number_index")
+  @@index([repository_id, eip_number], map: "issue_eips_repository_id_eip_number_index")
+}
+
+model pr_label_snapshot {
+  pr_number     Int
+  repository_id Int
+  month_year    String
+  labels        String[]     @default([])
+  created_at    DateTime     @default(now()) @db.Timestamptz(6)
+  repositories  repositories @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([repository_id, pr_number, month_year])
+  @@index([month_year], map: "idx_pr_label_snapshot_month")
+}
+
+model pr_monthly_board_stats {
+  month_year   String
+  category     String
+  subcategory  String
+  count        Int      @default(0)
+  last_updated DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([month_year, category, subcategory])
+  @@index([month_year], map: "idx_pr_monthly_board_stats_month")
+}
+
+model pr_monthly_snapshot {
+  pr_number        Int
+  repository_id    Int
+  month_year       String
+  state            String
+  governance_state String?
+  labels           String[]     @default([])
+  created_at       DateTime     @default(now()) @db.Timestamptz(6)
+  repositories     repositories @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([repository_id, pr_number, month_year])
+  @@index([month_year, state], map: "idx_pr_monthly_snapshot_month_state")
+}
+
+model pr_reviews {
+  id            BigInt       @id @default(autoincrement())
+  pr_number     Int
+  repository_id Int
+  reviewer      String
+  review_state  String
+  submitted_at  DateTime     @db.Timestamptz(6)
+  github_id     String?      @unique
+  repositories  repositories @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([repository_id, reviewer], map: "pr_reviews_repository_id_reviewer_index")
+  @@index([submitted_at], map: "pr_reviews_submitted_at_index")
+}
+
+model scheduler_runs {
+  id                   BigInt    @id @default(autoincrement())
+  started_at           DateTime  @default(now()) @db.Timestamptz(6)
+  finished_at          DateTime? @db.Timestamptz(6)
+  status               String    @default("running")
+  last_repo            String?
+  error                String?
+  records_ingested     Int       @default(0)
+  rate_limit_remaining Int?
+
+  @@index([started_at], map: "idx_scheduler_runs_started_at")
+}
+
+model upgrade_meta_eip_events {
+  id         BigInt   @id @default(autoincrement())
+  upgrade_id Int
+  from_eip   Int?
+  to_eip     Int
+  commit_sha String
+  changed_at DateTime @db.Timestamptz(6)
+  upgrades   upgrades @relation(fields: [upgrade_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([upgrade_id, changed_at], map: "idx_upgrade_meta_eip_events_upgrade_changed")
 }
