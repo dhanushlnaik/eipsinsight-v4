@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { client } from '@/lib/orpc';
 import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
+import { X } from 'lucide-react';
 import {
   ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight,
   Download, Loader2, FileText, Layers, Info, Code, FileCode2,
@@ -189,6 +190,10 @@ export default function EIPsHomePage() {
   const [reviewers, setReviewers] = useState<Array<{ actor: string; totalReviews: number; prsTouched: number; medianResponseDays: number | null }> | null>(null);
   const [govStates, setGovStates] = useState<Array<{ state: string; label: string; count: number; medianWaitDays: number | null }> | null>(null);
 
+  // Overlay filters (set by clicking numbers throughout the page)
+  const [overlayFilters, setOverlayFilters] = useState<{ status?: string[]; category?: string[]; label: string } | null>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+
   const isRipMode = activeTab === 'rips';
   const currentTabs = viewMode === 'type' ? TYPE_TABS : STATUS_TABS;
   const activeTabDef = currentTabs.find((t) => t.id === activeTab);
@@ -196,10 +201,10 @@ export default function EIPsHomePage() {
   const totalPages = isRipMode ? (ripData?.totalPages || 1) : (eipData?.totalPages || 1);
 
   // ─── Effects ────────────────────────────────────────────────
-  useEffect(() => { setPage(1); setColumnSearch({}); }, [activeTab]);
+  useEffect(() => { setPage(1); setColumnSearch({}); setOverlayFilters(null); }, [activeTab]);
   useEffect(() => {
     if (activeTab !== 'rips') setActiveTab('all');
-    setPage(1); setColumnSearch({});
+    setPage(1); setColumnSearch({}); setOverlayFilters(null);
   }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isRipMode && !(RIP_SORT_FIELDS as readonly string[]).includes(sortBy)) setSortBy('number');
@@ -263,19 +268,24 @@ export default function EIPsHomePage() {
       try {
         if (isRipMode) {
           const sb = (RIP_SORT_FIELDS as readonly string[]).includes(sortBy) ? (sortBy as RipSortField) : 'number';
-          setRipData(await client.standards.getRIPsTable({ sortBy: sb, sortDir, page, pageSize: 50 }));
+          setRipData(await client.standards.getRIPsTable({ sortBy: sb, sortDir, page, pageSize: 10 }));
         } else {
-          const tab = currentTabs.find((t) => t.id === activeTab);
           const sb = (EIP_SORT_FIELDS as readonly string[]).includes(sortBy) ? (sortBy as EipSortField) : 'number';
           const f: { sortBy: EipSortField; sortDir: 'asc' | 'desc'; page: number; pageSize: number; category?: string[]; type?: string[]; status?: string[] } =
-            { sortBy: sb, sortDir, page, pageSize: 50 };
-          if (tab?.filter) { if (tab.filter.category) f.category = tab.filter.category; if (tab.filter.type) f.type = tab.filter.type; if (tab.filter.status) f.status = tab.filter.status; }
+            { sortBy: sb, sortDir, page, pageSize: 10 };
+          if (overlayFilters) {
+            if (overlayFilters.status) f.status = overlayFilters.status;
+            if (overlayFilters.category) f.category = overlayFilters.category;
+          } else {
+            const tab = currentTabs.find((t) => t.id === activeTab);
+            if (tab?.filter) { if (tab.filter.category) f.category = tab.filter.category; if (tab.filter.type) f.type = tab.filter.type; if (tab.filter.status) f.status = tab.filter.status; }
+          }
           setEipData(await client.standards.getTable(f));
         }
       } catch (err) { console.error('Failed to load table:', err); }
       finally { setTableLoading(false); }
     })();
-  }, [activeTab, sortBy, sortDir, page, isRipMode, currentTabs, viewMode]);
+  }, [activeTab, sortBy, sortDir, page, isRipMode, currentTabs, viewMode, overlayFilters]);
 
   // ─── Column filtering ──────────────────────────────────────
   const filteredEipRows = useMemo(() => {
@@ -321,19 +331,34 @@ export default function EIPsHomePage() {
   const getProposalUrl = useCallback((repo: string, num: number) => `/${(repo.toLowerCase().split('/').pop() || 'eips').replace(/s$/, '')}/${num}`, []);
   const getProposalPrefix = useCallback((repo: string) => { const s = repo.toLowerCase().split('/').pop() || 'eips'; return s === 'ercs' ? 'ERC' : s === 'rips' ? 'RIP' : 'EIP'; }, []);
 
+  const navigateToTable = useCallback((filters: { status?: string[]; category?: string[] }, label: string) => {
+    if (isRipMode) { setActiveTab('all'); }
+    setOverlayFilters({ ...filters, label });
+    setPage(1);
+    setColumnSearch({});
+    setTimeout(() => tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }, [isRipMode]);
+
+  const clearOverlay = useCallback(() => { setOverlayFilters(null); setPage(1); }, []);
+
   const handleExportCSV = useCallback(async () => {
     setExporting(true);
     try {
       if (isRipMode) { const r = await client.standards.exportCSV({ repo: 'rips' }); downloadCSV(r.csv, r.filename); }
       else {
-        const tab = currentTabs.find((t) => t.id === activeTab);
         const f: { category?: string[]; type?: string[]; status?: string[] } = {};
-        if (tab?.filter) { if (tab.filter.category) f.category = tab.filter.category; if (tab.filter.type) f.type = tab.filter.type; if (tab.filter.status) f.status = tab.filter.status; }
+        if (overlayFilters) {
+          if (overlayFilters.status) f.status = overlayFilters.status;
+          if (overlayFilters.category) f.category = overlayFilters.category;
+        } else {
+          const tab = currentTabs.find((t) => t.id === activeTab);
+          if (tab?.filter) { if (tab.filter.category) f.category = tab.filter.category; if (tab.filter.type) f.type = tab.filter.type; if (tab.filter.status) f.status = tab.filter.status; }
+        }
         const r = await client.standards.exportCSV(f); downloadCSV(r.csv, r.filename);
       }
     } catch (err) { console.error('CSV export failed:', err); }
     finally { setExporting(false); }
-  }, [activeTab, isRipMode, currentTabs]);
+  }, [activeTab, isRipMode, currentTabs, overlayFilters]);
 
   // ─── Computed ──────────────────────────────────────────────
   const standardsTrackTotal = useMemo(() => categoryBreakdown.filter((c) => ['core', 'networking', 'interface', 'erc'].includes(c.category.toLowerCase())).reduce((s, c) => s + c.count, 0), [categoryBreakdown]);
@@ -405,81 +430,17 @@ export default function EIPsHomePage() {
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.05 }}
           className="mb-6 overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-900/50">
           <div className="grid min-w-max grid-flow-col divide-x divide-slate-800/80">
-            <MetricCell label="Total" value={kpis?.total || 0} color="text-white" />
+            <MetricCell label="Total" value={kpis?.total || 0} color="text-white" onClick={() => { clearOverlay(); tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} />
             {statusSummary.map((s) => (
               <MetricCell key={s.status} label={s.status} value={s.count} color={STATUS_TEXT_COLORS[s.status] || 'text-slate-300'}
-                onClick={() => { setViewMode('status'); setActiveTab(STATUS_TABS.find((t) => t.filter?.status?.[0] === s.status)?.id || 'all'); }} />
+                onClick={() => navigateToTable({ status: [s.status] }, s.status)} />
             ))}
             <MetricCell label="RIPs" value={ripKpis?.total || 0} color="text-violet-300" onClick={() => setActiveTab('rips')} />
             <MetricCell label={`New ${new Date().getFullYear()}`} value={kpis?.newThisYear || 0} color="text-emerald-300" />
           </div>
         </motion.div>
 
-        {/* ─── 3. Recent Governance Activity ───────────────── */}
-        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.08 }} className="mb-6">
-          <SectionCard title="Recent Governance Activity" icon={<Activity className="h-3.5 w-3.5" />}>
-            {!recentChanges ? <SkeletonPulse rows={5} /> : recentChanges.length === 0 ? (
-              <p className="text-sm text-slate-600">No status changes in the last 7 days.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {recentChanges.map((e, i) => (
-                  <div key={i} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-slate-800/30">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_COLORS[e.to] || 'bg-slate-500'}`} />
-                    <Link href={`/${e.eip_type === 'RIP' ? 'rip' : e.eip_type === 'ERC' ? 'erc' : 'eip'}/${e.eip}`}
-                      className="shrink-0 font-mono text-sm font-semibold text-cyan-400 hover:text-cyan-300">
-                      {e.eip_type}-{e.eip}
-                    </Link>
-                    <span className="flex items-center gap-1.5 text-slate-500">
-                      {e.from ? <><span className="text-slate-500">{e.from}</span><ArrowRight className="h-3 w-3 text-slate-700" /></> : 'entered '}
-                      <span className={STATUS_TEXT_COLORS[e.to] || 'text-slate-300'}>{e.to}</span>
-                    </span>
-                    <span className="ml-auto shrink-0 text-xs tabular-nums text-slate-600">
-                      {e.days === 0 ? 'today' : e.days === 1 ? '1 day ago' : `${e.days}d ago`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-        </motion.div>
-
-        {/* ─── 4. Upgrade Impact Snapshot ──────────────────── */}
-        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.1 }} className="mb-6">
-          <SectionCard title="Upgrade Impact Snapshot" icon={<TrendingUp className="h-3.5 w-3.5" />}>
-            {!upgradeImpact ? <SkeletonPulse rows={3} /> : upgradeImpact.length === 0 ? (
-              <p className="text-sm text-slate-600">No upgrade data available.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-xs text-slate-500">
-                      <th className="pb-2 text-left font-medium">Upgrade</th>
-                      <th className="pb-2 text-right font-medium">Final</th>
-                      <th className="pb-2 text-right font-medium">Review</th>
-                      <th className="pb-2 text-right font-medium">Last Call</th>
-                      <th className="pb-2 text-right font-medium">Draft</th>
-                      <th className="pb-2 text-right font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {upgradeImpact.map((u) => (
-                      <tr key={u.slug} className="border-t border-slate-800/30 transition-colors hover:bg-slate-800/20">
-                        <td className="py-1.5 font-medium text-slate-200 capitalize">{u.name}</td>
-                        <td className="py-1.5 text-right tabular-nums text-emerald-400">{u.finalized || <span className="text-slate-700">—</span>}</td>
-                        <td className="py-1.5 text-right tabular-nums text-amber-300">{u.inReview || <span className="text-slate-700">—</span>}</td>
-                        <td className="py-1.5 text-right tabular-nums text-orange-300">{u.lastCall || <span className="text-slate-700">—</span>}</td>
-                        <td className="py-1.5 text-right tabular-nums text-slate-400">{u.draft || <span className="text-slate-700">—</span>}</td>
-                        <td className="py-1.5 text-right tabular-nums font-medium text-white">{u.total}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </SectionCard>
-        </motion.div>
-
-        {/* ─── 5. Matrix + Category Breakdown ─────────────── */}
+        {/* ─── 3. Matrix + Category Breakdown ─────────────── */}
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.12 }}
           className="mb-6 grid gap-4 lg:grid-cols-5">
           {/* Status Distribution Matrix */}
@@ -499,25 +460,46 @@ export default function EIPsHomePage() {
                 {matrixData.rows.map((row) => (
                   <tr key={row.status} className="border-b border-slate-800/30 transition-colors hover:bg-slate-800/20">
                     <td className="px-4 py-2">
-                      <button onClick={() => { setViewMode('status'); setActiveTab(STATUS_TABS.find((t) => t.filter?.status?.[0] === row.status)?.id || 'all'); }}
+                      <button onClick={() => navigateToTable({ status: [row.status] }, row.status)}
                         className="flex items-center gap-2 transition-colors hover:text-white">
                         <span className={`h-2 w-2 rounded-full ${STATUS_DOT_COLORS[row.status] || 'bg-slate-500'}`} />
                         <span className={`text-sm ${STATUS_TEXT_COLORS[row.status] || 'text-slate-300'}`}>{row.status}</span>
                       </button>
                     </td>
                     {matrixData.groups.map((g) => (
-                      <td key={g} className="px-4 py-2 text-right text-sm tabular-nums text-slate-400">
-                        {row.cells[g] ? row.cells[g].toLocaleString() : <span className="text-slate-700">—</span>}
+                      <td key={g} className="px-4 py-2 text-right">
+                        {row.cells[g] ? (
+                          <button onClick={() => navigateToTable(
+                            g === 'ERCs' ? { status: [row.status], category: ['ERC'] } : { status: [row.status] },
+                            `${row.status} ${g}`
+                          )} className="text-sm tabular-nums text-slate-400 underline decoration-slate-700 underline-offset-2 hover:text-white hover:decoration-slate-500">
+                            {row.cells[g].toLocaleString()}
+                          </button>
+                        ) : <span className="text-sm text-slate-700">—</span>}
                       </td>
                     ))}
-                    <td className="px-4 py-2 text-right text-sm tabular-nums font-medium text-slate-200">{row.total.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right">
+                      <button onClick={() => navigateToTable({ status: [row.status] }, `All ${row.status}`)}
+                        className="text-sm tabular-nums font-medium text-slate-200 underline decoration-slate-700 underline-offset-2 hover:text-white hover:decoration-slate-500">
+                        {row.total.toLocaleString()}
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 <tr className="bg-slate-800/20">
                   <td className="px-4 py-2 text-sm font-medium text-slate-400">Total</td>
                   {matrixData.groups.map((g) => {
                     const col = matrixData.rows.reduce((s, r) => s + (r.cells[g] || 0), 0);
-                    return <td key={g} className="px-4 py-2 text-right text-sm tabular-nums font-medium text-slate-300">{col.toLocaleString()}</td>;
+                    return (
+                      <td key={g} className="px-4 py-2 text-right">
+                        <button onClick={() => navigateToTable(
+                          g === 'ERCs' ? { category: ['ERC'] } : {},
+                          `All ${g}`
+                        )} className="text-sm tabular-nums font-medium text-slate-300 underline decoration-slate-700 underline-offset-2 hover:text-white hover:decoration-slate-500">
+                          {col.toLocaleString()}
+                        </button>
+                      </td>
+                    );
                   })}
                   <td className="px-4 py-2 text-right text-sm tabular-nums font-bold text-white">{matrixGrandTotal.toLocaleString()}</td>
                 </tr>
@@ -538,19 +520,19 @@ export default function EIPsHomePage() {
                 </div>
                 <div className="ml-2 space-y-px">
                   {['Core', 'Networking', 'Interface', 'ERC'].map((cat) => (
-                    <button key={cat} onClick={() => { setViewMode('type'); setActiveTab(cat.toLowerCase()); }}
+                    <button key={cat} onClick={() => navigateToTable({ category: [cat] }, cat)}
                       className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-slate-800/60">
                       <span className="text-slate-400">{cat}</span>
-                      <span className="tabular-nums text-slate-300">{getCatCount(cat).toLocaleString()}</span>
+                      <span className="tabular-nums text-slate-300 underline decoration-slate-700 underline-offset-2">{getCatCount(cat).toLocaleString()}</span>
                     </button>
                   ))}
                 </div>
               </div>
               {['Meta', 'Informational'].map((cat) => (
-                <button key={cat} onClick={() => { setViewMode('type'); setActiveTab(cat.toLowerCase()); }}
+                <button key={cat} onClick={() => navigateToTable({ category: [cat] }, cat)}
                   className="flex w-full items-center justify-between rounded-md px-1 py-1.5 text-sm transition-colors hover:bg-slate-800/60">
                   <span className="font-medium text-slate-200">{cat}</span>
-                  <span className="tabular-nums font-semibold text-slate-200">{getCatCount(cat).toLocaleString()}</span>
+                  <span className="tabular-nums font-semibold text-slate-200 underline decoration-slate-700 underline-offset-2">{getCatCount(cat).toLocaleString()}</span>
                 </button>
               ))}
               <button onClick={() => setActiveTab('rips')}
@@ -570,7 +552,8 @@ export default function EIPsHomePage() {
             {!lifecycleFunnel ? <SkeletonPulse rows={4} /> : (
               <div className="space-y-2">
                 {lifecycleFunnel.filter(f => f.count > 0).map((f) => (
-                  <div key={f.status} className="group flex items-center gap-3">
+                  <button key={f.status} onClick={() => navigateToTable({ status: [f.status] }, f.status)}
+                    className="group flex w-full items-center gap-3 rounded-lg transition-colors hover:bg-slate-800/20">
                     <span className="w-16 shrink-0 text-right text-xs text-slate-500">{f.status}</span>
                     <div className="relative flex-1 h-6 rounded bg-slate-800/50 overflow-hidden">
                       <div
@@ -581,7 +564,7 @@ export default function EIPsHomePage() {
                         {f.count.toLocaleString()}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -600,14 +583,24 @@ export default function EIPsHomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {repoDist.map((r) => (
-                    <tr key={r.repo} className="border-t border-slate-800/30">
-                      <td className="py-1.5 font-medium text-slate-300">{r.repo}</td>
-                      <td className="py-1.5 text-right tabular-nums text-slate-400">{r.proposals.toLocaleString()}</td>
-                      <td className="py-1.5 text-right tabular-nums text-amber-300">{r.activePRs.toLocaleString()}</td>
-                      <td className="py-1.5 text-right tabular-nums text-emerald-400">{r.finals.toLocaleString()}</td>
-                    </tr>
-                  ))}
+                  {repoDist.map((r) => {
+                    const isERCs = r.repo.toLowerCase().includes('ercs');
+                    const catFilter = isERCs ? { category: ['ERC'] } : {};
+                    return (
+                      <tr key={r.repo} className="border-t border-slate-800/30">
+                        <td className="py-1.5 font-medium text-slate-300">{r.repo}</td>
+                        <td className="py-1.5 text-right">
+                          <button onClick={() => navigateToTable(catFilter, `${r.repo} proposals`)}
+                            className="tabular-nums text-slate-400 underline decoration-slate-700 underline-offset-2 hover:text-white">{r.proposals.toLocaleString()}</button>
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums text-amber-300">{r.activePRs.toLocaleString()}</td>
+                        <td className="py-1.5 text-right">
+                          <button onClick={() => navigateToTable({ ...catFilter, status: ['Final'] }, `${r.repo} Final`)}
+                            className="tabular-nums text-emerald-400 underline decoration-slate-700 underline-offset-2 hover:text-white">{r.finals.toLocaleString()}</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -649,13 +642,14 @@ export default function EIPsHomePage() {
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {monthlyDelta.map((d) => (
-                  <div key={d.status} className="flex items-center gap-2 rounded-lg bg-slate-800/30 px-3 py-2">
+                  <button key={d.status} onClick={() => navigateToTable({ status: [d.status] }, `${d.status} (this month)`)}
+                    className="flex items-center gap-2 rounded-lg bg-slate-800/30 px-3 py-2 text-left transition-colors hover:bg-slate-800/50">
                     <span className={`h-2 w-2 rounded-full ${STATUS_DOT_COLORS[d.status] || 'bg-slate-500'}`} />
                     <div className="min-w-0 flex-1">
                       <div className="text-xs text-slate-500">{d.status}</div>
                       <div className="text-lg tabular-nums font-bold text-slate-200">{d.count}</div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -716,6 +710,19 @@ export default function EIPsHomePage() {
         </motion.div>
 
         {/* ─── 9. Main Table ──────────────────────────────── */}
+        <div ref={tableRef} />
+        {overlayFilters && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="mb-3 flex items-center gap-2 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-4 py-2">
+            <span className="text-xs text-slate-400">Showing:</span>
+            <span className="rounded-md bg-cyan-500/15 px-2 py-0.5 text-sm font-medium text-cyan-300">{overlayFilters.label}</span>
+            {overlayFilters.status && <span className="text-xs text-slate-600">status: {overlayFilters.status.join(', ')}</span>}
+            {overlayFilters.category && <span className="text-xs text-slate-600">category: {overlayFilters.category.join(', ')}</span>}
+            <button onClick={clearOverlay} className="ml-auto flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-slate-500 transition-colors hover:bg-slate-800 hover:text-white">
+              <X className="h-3 w-3" /> Clear filter
+            </button>
+          </motion.div>
+        )}
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.2 }}
           className="mb-8 overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/30">
           <div className="overflow-x-auto">
@@ -786,7 +793,77 @@ export default function EIPsHomePage() {
           )}
         </motion.div>
 
-        {/* ─── 10. Editors & Reviewers Snapshot ───────────── */}
+        {/* ─── Recent Governance Activity ──────────────────── */}
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.22 }} className="mb-6">
+          <SectionCard title="Recent Governance Activity" icon={<Activity className="h-3.5 w-3.5" />}>
+            {!recentChanges ? <SkeletonPulse rows={5} /> : recentChanges.length === 0 ? (
+              <p className="text-sm text-slate-600">No status changes in the last 7 days.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {recentChanges.map((e, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-slate-800/30">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_COLORS[e.to] || 'bg-slate-500'}`} />
+                    <Link href={`/${e.eip_type === 'RIP' ? 'rip' : e.eip_type === 'ERC' ? 'erc' : 'eip'}/${e.eip}`}
+                      className="shrink-0 font-mono text-sm font-semibold text-cyan-400 hover:text-cyan-300">
+                      {e.eip_type}-{e.eip}
+                    </Link>
+                    <span className="flex items-center gap-1.5 text-slate-500">
+                      {e.from ? <><span className="text-slate-500">{e.from}</span><ArrowRight className="h-3 w-3 text-slate-700" /></> : 'entered '}
+                      <span className={STATUS_TEXT_COLORS[e.to] || 'text-slate-300'}>{e.to}</span>
+                    </span>
+                    <span className="ml-auto shrink-0 text-xs tabular-nums text-slate-600">
+                      {e.days === 0 ? 'today' : e.days === 1 ? '1 day ago' : `${e.days}d ago`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        </motion.div>
+
+        {/* ─── Upgrade Impact Snapshot ─────────────────────── */}
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.24 }} className="mb-6">
+          <SectionCard title="Upgrade Impact Snapshot" icon={<TrendingUp className="h-3.5 w-3.5" />}>
+            {!upgradeImpact ? <SkeletonPulse rows={3} /> : upgradeImpact.length === 0 ? (
+              <p className="text-sm text-slate-600">No upgrade data available.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-slate-500">
+                      <th className="pb-2 text-left font-medium">Upgrade</th>
+                      <th className="pb-2 text-right font-medium">Final</th>
+                      <th className="pb-2 text-right font-medium">Review</th>
+                      <th className="pb-2 text-right font-medium">Last Call</th>
+                      <th className="pb-2 text-right font-medium">Draft</th>
+                      <th className="pb-2 text-right font-medium">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {upgradeImpact.map((u) => (
+                      <tr key={u.slug} className="border-t border-slate-800/30 transition-colors hover:bg-slate-800/20">
+                        <td className="py-1.5 font-medium text-slate-200 capitalize">{u.name}</td>
+                        {([['finalized', 'Final', 'text-emerald-400'], ['inReview', 'Review', 'text-amber-300'], ['lastCall', 'Last Call', 'text-orange-300'], ['draft', 'Draft', 'text-slate-400']] as const).map(([key, status, color]) => (
+                          <td key={key} className="py-1.5 text-right">
+                            {u[key as keyof typeof u] ? (
+                              <button onClick={() => navigateToTable({ status: [status] }, `${u.name} — ${status}`)}
+                                className={`tabular-nums ${color} underline decoration-slate-700 underline-offset-2 hover:text-white`}>
+                                {(u[key as keyof typeof u] as number).toLocaleString()}
+                              </button>
+                            ) : <span className="text-slate-700">—</span>}
+                          </td>
+                        ))}
+                        <td className="py-1.5 text-right tabular-nums font-medium text-white">{u.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+        </motion.div>
+
+        {/* ─── Editors & Reviewers Snapshot ────────────────── */}
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.22 }} className="mb-8">
           <SectionCard title="Editors & Reviewers" icon={<Users className="h-3.5 w-3.5" />}>
             {!editors ? <SkeletonPulse rows={5} /> : (

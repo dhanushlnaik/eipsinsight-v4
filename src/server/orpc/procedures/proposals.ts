@@ -261,46 +261,38 @@ export const proposalsProcedures = {
     .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
 
-      const eip = await prisma.eips.findUnique({
+      const emptyState = {
+        current_pr_state: null as string | null,
+        waiting_on: null as string | null,
+        days_since_last_action: null as number | null,
+        review_velocity: null as number | null,
+      };
+
+      // Find the most recent PR linked to this proposal number
+      const linkedPRs = await prisma.pull_request_eips.findMany({
         where: { eip_number: input.number },
-      });
-
-      if (!eip) {
-        return {
-          current_pr_state: null,
-          waiting_on: null,
-          days_since_last_action: null,
-          review_velocity: null,
-        };
-      }
-
-      // Query pull request eips separately
-      const pullRequestEips = await prisma.pull_request_eips.findMany({
-        where: { eip_id: eip.id },
-        include: {
-          pull_requests: {
-            include: {
-              repositories: true,
-            },
-          },
-        },
+        orderBy: { pr_number: 'desc' },
         take: 1,
-        orderBy: { pr_id: 'desc' },
+        select: {
+          pr_number: true,
+          repository_id: true,
+        },
       });
 
-      if (!pullRequestEips.length) {
-        return {
-          current_pr_state: null,
-          waiting_on: null,
-          days_since_last_action: null,
-          review_velocity: null,
-        };
-      }
+      if (!linkedPRs.length) return emptyState;
 
-      const pr = pullRequestEips[0].pull_requests;
-      
-      // Query pr_governance_state separately using pr_number and repository_id
-      const governanceState = pr.repository_id && pr.pr_number
+      const { pr_number, repository_id } = linkedPRs[0];
+
+      // Fetch the actual PR data
+      const pr = await prisma.pull_requests.findFirst({
+        where: { pr_number, repository_id },
+        select: { state: true, updated_at: true, pr_number: true, repository_id: true },
+      });
+
+      if (!pr) return emptyState;
+
+      // Fetch governance state
+      const governanceState = pr.repository_id
         ? await prisma.pr_governance_state.findUnique({
             where: {
               repository_id_pr_number: {
@@ -315,7 +307,7 @@ export const proposalsProcedures = {
         return {
           current_pr_state: pr.state || null,
           waiting_on: null,
-          days_since_last_action: pr.updated_at 
+          days_since_last_action: pr.updated_at
             ? Math.floor((Date.now() - new Date(pr.updated_at).getTime()) / (1000 * 60 * 60 * 24))
             : null,
           review_velocity: null,
@@ -328,7 +320,7 @@ export const proposalsProcedures = {
         days_since_last_action: governanceState.waiting_since
           ? Math.floor((Date.now() - new Date(governanceState.waiting_since).getTime()) / (1000 * 60 * 60 * 24))
           : null,
-        review_velocity: null, // TODO: Calculate from events
+        review_velocity: null,
       };
     }),
 }

@@ -11,6 +11,17 @@ async function getRepoIds(repo?: string): Promise<number[] | null> {
   return rows.map((r) => r.id);
 }
 
+/* SQL fragment: classify open PRs by process type */
+const PROCESS_TYPE_SQL = `CASE
+  WHEN LOWER(COALESCE(p.title, '')) ~ 'typo|spelling|grammar|editorial' THEN 'Typo'
+  WHEN p.labels @> ARRAY['c-new']::text[] THEN 'NEW EIP'
+  WHEN LOWER(COALESCE(p.title, '')) ~ 'website|jekyll|_config' THEN 'Website'
+  WHEN LOWER(COALESCE(p.title, '')) ~ 'update eip-1[: ]' OR LOWER(COALESCE(p.title, '')) = 'update eip-1' THEN 'EIP-1'
+  WHEN p.labels && ARRAY['dependencies']::text[] OR LOWER(COALESCE(p.title, '')) ~ '^bump ' THEN 'Tooling'
+  WHEN p.labels && ARRAY['c-status', 'c-update']::text[] THEN 'Status Change'
+  ELSE 'Other'
+END`;
+
 export const toolsProcedures = {
   // ──── Board: EIPs grouped by status (Kanban data) ────
   getBoardData: os
@@ -334,6 +345,168 @@ export const toolsProcedures = {
       return {
         types: types.map((t) => t.val),
         categories: categories.map((c) => c.val),
+      };
+    }),
+
+  // ──── Open PRs Board: paginated list with governance state & classification ────
+  getOpenPRBoard: os
+    .$context<Ctx>()
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      govState: z.string().optional(),
+      processType: z.string().optional(),
+      search: z.string().optional(),
+      page: z.number().default(1),
+      pageSize: z.number().default(10),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const { repo, govState, processType, search, page, pageSize } = input;
+      const offset = (page - 1) * pageSize;
+
+      const results = await prisma.$queryRawUnsafe<Array<{
+        pr_number: number;
+        title: string | null;
+        author: string | null;
+        created_at: string;
+        labels: string[];
+        repo_name: string;
+        repo_short: string;
+        gov_state: string;
+        wait_days: number;
+        process_type: string;
+        total_count: bigint;
+      }>>(`
+        WITH base AS (
+          SELECT
+            p.pr_number,
+            p.title,
+            p.author,
+            TO_CHAR(p.created_at, 'YYYY-MM-DD') AS created_at,
+            p.labels,
+            r.name AS repo_name,
+            LOWER(SPLIT_PART(r.name, '/', 2)) AS repo_short,
+            COALESCE(gs.current_state, 'NO_STATE') AS gov_state,
+            GREATEST(EXTRACT(DAY FROM (NOW() - COALESCE(gs.waiting_since, p.created_at, NOW())))::int, 0) AS wait_days,
+            ${PROCESS_TYPE_SQL} AS process_type
+          FROM pull_requests p
+          JOIN repositories r ON p.repository_id = r.id
+          LEFT JOIN pr_governance_state gs
+            ON p.pr_number = gs.pr_number AND p.repository_id = gs.repository_id
+          WHERE p.state = 'open'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ),
+        filtered AS (
+          SELECT * FROM base
+          WHERE ($2::text IS NULL OR gov_state = $2)
+            AND ($3::text IS NULL OR process_type = $3)
+            AND ($4::text IS NULL OR (
+              pr_number::text LIKE '%' || $4 || '%'
+              OR LOWER(COALESCE(title, '')) LIKE '%' || LOWER($4) || '%'
+              OR LOWER(COALESCE(author, '')) LIKE '%' || LOWER($4) || '%'
+            ))
+        )
+        SELECT f.*, (SELECT COUNT(*) FROM filtered)::bigint AS total_count
+        FROM filtered f
+        ORDER BY f.wait_days DESC
+        LIMIT $5 OFFSET $6
+      `, repo || null, govState || null, processType || null, search || null, pageSize, offset);
+
+      const total = results.length > 0 ? Number(results[0].total_count) : 0;
+
+      return {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize) || 1,
+        rows: results.map(r => ({
+          prNumber: r.pr_number,
+          title: r.title,
+          author: r.author,
+          createdAt: r.created_at,
+          labels: Array.isArray(r.labels) ? r.labels : [],
+          repo: r.repo_name,
+          repoShort: r.repo_short,
+          govState: r.gov_state,
+          waitDays: r.wait_days,
+          processType: r.process_type,
+        })),
+      };
+    }),
+
+  // ──── Open PRs Board Stats: process type + governance state counts ────
+  getOpenPRBoardStats: os
+    .$context<Ctx>()
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      govState: z.string().optional(),
+      search: z.string().optional(),
+    }))
+    .handler(async ({ context, input }) => {
+      await checkAPIToken(context.headers);
+      const { repo, govState, search } = input;
+
+      // Process type counts (filtered by govState + search, NOT by processType)
+      const ptResults = await prisma.$queryRawUnsafe<Array<{
+        process_type: string; count: bigint;
+      }>>(`
+        WITH base AS (
+          SELECT
+            p.pr_number, p.title, p.author,
+            COALESCE(gs.current_state, 'NO_STATE') AS gov_state,
+            ${PROCESS_TYPE_SQL} AS process_type
+          FROM pull_requests p
+          JOIN repositories r ON p.repository_id = r.id
+          LEFT JOIN pr_governance_state gs
+            ON p.pr_number = gs.pr_number AND p.repository_id = gs.repository_id
+          WHERE p.state = 'open'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        )
+        SELECT process_type, COUNT(*)::bigint AS count
+        FROM base
+        WHERE ($2::text IS NULL OR gov_state = $2)
+          AND ($3::text IS NULL OR (
+            pr_number::text LIKE '%' || $3 || '%'
+            OR LOWER(COALESCE(title, '')) LIKE '%' || LOWER($3) || '%'
+            OR LOWER(COALESCE(author, '')) LIKE '%' || LOWER($3) || '%'
+          ))
+        GROUP BY process_type
+        ORDER BY count DESC
+      `, repo || null, govState || null, search || null);
+
+      // Governance state counts (NOT filtered by govState—so user sees all state counts)
+      const gsResults = await prisma.$queryRawUnsafe<Array<{
+        state: string; label: string; count: bigint;
+      }>>(`
+        SELECT
+          COALESCE(gs.current_state, 'NO_STATE') AS state,
+          CASE COALESCE(gs.current_state, 'NO_STATE')
+            WHEN 'WAITING_ON_EDITOR' THEN 'Awaiting Editor'
+            WHEN 'WAITING_ON_AUTHOR' THEN 'Waiting on Author'
+            WHEN 'STALLED' THEN 'Stalled'
+            WHEN 'DRAFT' THEN 'Draft PR'
+            ELSE 'Uncategorized'
+          END AS label,
+          COUNT(*)::bigint AS count
+        FROM pull_requests p
+        JOIN repositories r ON p.repository_id = r.id
+        LEFT JOIN pr_governance_state gs
+          ON p.pr_number = gs.pr_number AND p.repository_id = gs.repository_id
+        WHERE p.state = 'open'
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+          AND ($2::text IS NULL OR (
+            p.pr_number::text LIKE '%' || $2 || '%'
+            OR LOWER(COALESCE(p.title, '')) LIKE '%' || LOWER($2) || '%'
+            OR LOWER(COALESCE(p.author, '')) LIKE '%' || LOWER($2) || '%'
+          ))
+        GROUP BY gs.current_state
+        ORDER BY count DESC
+      `, repo || null, search || null);
+
+      return {
+        processTypes: ptResults.map(r => ({ type: r.process_type, count: Number(r.count) })),
+        govStates: gsResults.map(r => ({ state: r.state, label: r.label, count: Number(r.count) })),
+        totalOpen: gsResults.reduce((sum, r) => sum + Number(r.count), 0),
       };
     }),
 };
