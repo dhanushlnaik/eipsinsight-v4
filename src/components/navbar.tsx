@@ -40,7 +40,7 @@ import {
 // Mobile navigation items (same as sidebar)
 const mobileNavItems = [
   { title: "Home", href: "/", icon: Home },
-  { title: "Standards", href: "/all", icon: Layers },
+  { title: "Standards", href: "/standards", icon: Layers },
   { title: "Upgrades", href: "/upgrade", icon: Package },
   { title: "Analytics", href: "/analytics/prs", icon: LineChart },
   { title: "Resources", href: "/resources", icon: BookOpen },

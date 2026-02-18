@@ -87,7 +87,7 @@ export const PERSONAS: Record<Persona, PersonaMeta> = {
 // Default landing pages for each persona
 export const PERSONA_DEFAULTS: Record<Persona, string> = {
   developer: "/upgrade",           // Network Upgrades - What's shipping, when, and how it affects clients
-  editor: "/all",                   // Search + Analytics - PR flow, reviews, backlog, coordination
+  editor: "/standards",                  // Search + Analytics - PR flow, reviews, backlog, coordination
   researcher: "/analytics/prs",    // Analytics - Trends, data, correlations, governance signals
   builder: "/erc",                  // Tools/Standards - Writing, validating, and shipping standards
   enterprise: "/upgrade",          // Insights → Upgrades - What's changing and why it matters
