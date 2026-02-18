@@ -41,6 +41,7 @@
 
 | Task | Where | Notes |
 |------|-------|-------|
+| **Move repo to Avarch org** | GitHub/GitLab | Transfer repo to Avarch organisation with full commit history preserved |
 | **API documentation** | `/api-docs` or OpenAPI | Public docs for token-based access; examples, rate limits, tiers |
 | **CORS for API** | RPC / API routes | Allow credentialed cross-origin requests for external clients |
 
