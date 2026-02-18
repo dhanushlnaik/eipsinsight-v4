@@ -34,7 +34,7 @@
 
 | No. | Task | Hours | Where | Notes |
 |------|------|-------|-------|-------|
-| 3.1 | **News** | 6hrs | `/resources/news` | Placeholder → full timeline of EIP ecosystem updates |
+| 3.1 | **News** | 6hrs | `/resources/news` | Placeholder → full timeline. **See [News + Ghost integration](news-ghost-integration.md)** |
 | 3.2 | **Videos** | 4hrs | `/resources/videos` | Placeholder → video library/embeds |
 | 3.3 | **Featured resources links** | 1hr | `featured.ts` | Links to `/resources/blogs/eip-governance`, `dencun-upgrade` — create those posts or update links |
 | 3.4 | **Social & Community Updates** | 4hrs | Home | Not clearly implemented |

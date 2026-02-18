@@ -25,6 +25,13 @@ export const env = createEnv({
     EMAIL_FROM: z.string().email(),
     CLOUDINARY_URL: z.string().url(),
     CLOUDINARY_UPLOAD_PRESET: z.string().min(1).optional(),
+    // Ghost CMS (optional)
+    GHOST_CONTENT_API_KEY: z.string().optional(),
+    GHOST_ADMIN_API_KEY: z.string().optional(),
+    GHOST_API_URL: z.string().url().optional(),
+    // Cloudflare (optional — note: .env may have CLOUDFARE typo)
+    CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
+    CLOUDFLARE_API_TOKEN: z.string().optional(),
   },
 
   /**
@@ -33,7 +40,24 @@ export const env = createEnv({
    */
   clientPrefix: "PUBLIC_",
 
-  client: {},
+  client: {
+    NEXT_PUBLIC_FEATURE_PERSONA_ONBOARDING: z
+      .enum(["true", "false"])
+      .optional()
+      .default("false"),
+    NEXT_PUBLIC_FEATURE_PERSONA_SWITCHER: z
+      .enum(["true", "false"])
+      .optional()
+      .default("false"),
+    NEXT_PUBLIC_FEATURE_PERSONA_NAV_REORDER: z
+      .enum(["true", "false"])
+      .optional()
+      .default("false"),
+    NEXT_PUBLIC_FEATURE_PERSONA_CONTEXT_HEADERS: z
+      .enum(["true", "false"])
+      .optional()
+      .default("false"),
+  },
 
   /**
    * What object holds the environment variables at runtime. This is usually

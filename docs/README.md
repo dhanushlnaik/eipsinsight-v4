@@ -13,6 +13,7 @@
 | [Architecture](./architecture.md) | Routing, URLs, implementation status |
 | [Branding](./branding.md) | Tone, design cues, naming |
 | [UI Reference](./ui-reference.md) | Colors, fonts, spacing, component patterns |
+| [News + Ghost](./news-ghost-integration.md) | How to power News from Ghost CMS |
 | [Tasks](./TASKS.md) | Remaining work, estimates |
 
 ---
