@@ -1,10 +1,16 @@
 # EIPsInsight — Remaining Tasks
 
-> Full audit: [Site Map](README.md). Hours are rough estimates (single developer).
+> Full audit: [Site Map](sitemap.md) · [Architecture](architecture.md). Hours are rough estimates (single developer).
 
 ---
 
 ## 🔴 Remaining (Top Priority)
+
+### Routing & Docs
+
+| Task | Hours | Where | Notes |
+|------|-------|-------|-------|
+| **Fix /all route** | ~0.5h | `next.config.ts`, `persona.ts`, `navbar.tsx` | `/all` used by editor persona + navbar "Standards" but no route exists. Add `{ source: "/all", destination: "/standards", permanent: false }` or change persona/navbar to `/standards` |
 
 ### API & Access Control
 
@@ -64,3 +70,5 @@
 - **FAQ** — `/resources/faq`
 - **Dashboard, Explore, Search, Analytics, Standards, Tools, Insights, Network Upgrades** — implemented
 - **Auth & Admin** — `requireAdmin`, role checks, admin layout
+- **Personas** — `PERSONA_DEFAULTS`, `PERSONA_NAV_ORDER`, persona store, client-side redirects
+- **Docs** — [sitemap](sitemap.md), [personas](personas.md), [architecture](architecture.md), [branding](branding.md)
