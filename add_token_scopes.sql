@@ -1,0 +1,2 @@
+ALTER TABLE "api_token"
+ADD COLUMN "scopes" TEXT[] DEFAULT ARRAY[]::TEXT[];

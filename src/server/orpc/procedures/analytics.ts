@@ -1,4 +1,7 @@
-import { os, checkAPIToken, type Ctx } from './types'
+
+import { requireScope } from "./types"
+import { API_SCOPES } from "@/lib/apiScopes"
+import { os, checkAPIToken, requireAuth,protectedProcedure, type Ctx } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 import { unstable_cache } from 'next/cache'
@@ -839,11 +842,12 @@ const getReviewersRepoDistributionCached = unstable_cache(
 );
 
 export const analyticsProcedures = {
-  getActiveProposals: os
-    .$context<Ctx>()
+  getActiveProposals: protectedProcedure
     .input(repoFilterSchema)
     .handler(async ({ context, input }) => {
-      await checkAPIToken(context.headers);
+     
+requireScope(context, API_SCOPES.ANALYTICS_READ)
+
 
       const result = await prisma.$queryRawUnsafe<Array<{
         draft: bigint;

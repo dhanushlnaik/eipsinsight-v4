@@ -103,6 +103,7 @@ model ApiToken {
   userId    String
   name      String
   token     String    @unique
+  scopes    String[]  @default([])  
   lastUsed  DateTime?
   expiresAt DateTime?
   createdAt DateTime  @default(now())
