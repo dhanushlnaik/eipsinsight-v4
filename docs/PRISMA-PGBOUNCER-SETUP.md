@@ -97,16 +97,21 @@ listen_port = 6432
 listen_addr = 0.0.0.0
 auth_type = plain
 auth_file = /etc/pgbouncer/userlist.txt
-pool_mode = session
+# Transaction mode required for Prisma (releases connections after each transaction)
+pool_mode = transaction
 max_client_conn = 100
-default_pool_size = 5
-reserve_pool_size = 2
+default_pool_size = 10
+reserve_pool_size = 5
+# Increase if clients often hit query_wait_timeout (default ~120s)
+query_wait_timeout = 120
 server_tls_sslmode = require
 ignore_startup_parameters = extra_float_digits
 logfile = /var/log/postgresql/pgbouncer.log
 pidfile = /var/run/postgresql/pgbouncer.pid
 unix_socket_dir = /var/run/postgresql
 ```
+
+**Note:** `default_pool_size` is limited by Aiven's connection limit (e.g. ~20–25 on Developer plan). Set it to match or stay below that.
 
 ### Auth File: `/etc/pgbouncer/userlist.txt`
 
@@ -203,6 +208,15 @@ If direct works but PgBouncer fails, the issue is in PgBouncer config.
   sudo chown postgres:postgres /var/log/postgresql/pgbouncer.log
   ```
 
+### `query_wait_timeout` (Prisma error 08P01)
+
+- **Cause:** Too many clients are waiting for a connection from the pool. PgBouncer has only `default_pool_size` connections to PostgreSQL; when all are in use, new queries wait. If they wait longer than `query_wait_timeout`, the client is disconnected.
+- **Fixes:**
+  1. **Increase `default_pool_size`** in PgBouncer (up to Aiven's connection limit).
+  2. **Increase `query_wait_timeout`** in PgBouncer (e.g. `query_wait_timeout = 180`).
+  3. **Reduce Prisma pool size** in `src/lib/prisma.ts` — set `max: 2` or `max: 3` in the PrismaPg adapter so each Vercel serverless instance uses fewer connections.
+  4. **Use `pool_mode = transaction`** — session mode holds connections for the whole session; transaction mode releases them after each query, so the pool can serve more clients.
+
 ---
 
 ## 5. Summary
@@ -220,6 +234,9 @@ If direct works but PgBouncer fails, the issue is in PgBouncer config.
 | PgBouncer config | Purpose |
 |------------------|---------|
 | `* = host=... port=...` | Route all DBs to Aiven |
+| `pool_mode = transaction` | Required for Prisma; releases connections after each transaction |
+| `default_pool_size` | Connections to PostgreSQL (≤ Aiven limit) |
+| `query_wait_timeout` | Max seconds a client waits for a pool slot before disconnect |
 | `server_tls_sslmode = require` | Use SSL for backend connections |
 | `auth_type = plain` | Match plain password in `userlist.txt` |
 

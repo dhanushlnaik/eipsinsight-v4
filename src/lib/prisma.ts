@@ -10,12 +10,14 @@ function createPrisma() {
   if (!connectionString) {
     throw new Error("DATABASE_URL is required");
   }
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg({
+    connectionString,
+    // Limit connections per serverless instance to avoid exhausting PgBouncer pool.
+    // Default 10 × many Vercel instances = query_wait_timeout. Use 2–3 per instance.
+    max: 3,
+  });
   return new PrismaClient({ adapter, log: ["error"] });
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrisma();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.prisma = prisma;
