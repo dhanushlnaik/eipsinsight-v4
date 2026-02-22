@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAnalytics } from "../layout";
 import { client } from "@/lib/orpc";
 import {
@@ -29,7 +29,6 @@ import {
   YAxis,
   CartesianGrid,
   Cell,
-  Tooltip,
   Legend,
   ReferenceLine,
 } from "recharts";
@@ -370,9 +369,10 @@ export default function PRsAnalyticsPage() {
               <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
               <YAxis stroke="#64748b" fontSize={11} />
               <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
-              <ChartTooltip content={<ChartTooltipContent formatter={(value: number, name: string) => {
-                const abs = Math.abs(value);
-                return <span className="text-foreground">{name}: {abs.toLocaleString()}</span>;
+              <ChartTooltip content={<ChartTooltipContent formatter={(value: unknown, name?: unknown) => {
+                const v = typeof value === "number" ? value : Number(value) || 0;
+                const abs = Math.abs(v);
+                return <span className="text-foreground">{String(name ?? "")}: {abs.toLocaleString()}</span>;
               }} />} />
               <Legend />
               <Bar dataKey="created" name="Created" fill="#60a5fa" fillOpacity={0.7} radius={[4, 4, 0, 0]} stackId="pos" />

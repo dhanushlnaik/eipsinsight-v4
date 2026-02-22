@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/chart";
 import {
   BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, LabelList, Tooltip, Legend, Brush,
+  XAxis, YAxis, CartesianGrid, LabelList, Legend, Brush,
 } from "recharts";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -133,17 +133,20 @@ export default function EIPsAnalyticsPage() {
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
 
   const [loading, setLoading] = useState(true);
-  const [kpis, setKpis] = useState<any>(null);
-  const [ripKpis, setRipKpis] = useState<any>(null);
+  const [kpis, setKpis] = useState<{ total?: number } | null>(null);
+  const [ripKpis, setRipKpis] = useState<{ total?: number } | null>(null);
   const [crossTab, setCrossTab] = useState<Array<{ category: string; status: string; repo: string; count: number }>>([]);
   const [statusDist, setStatusDist] = useState<Array<{ status: string; count: number }>>([]);
   const [catBreakdown, setCatBreakdown] = useState<Array<{ category: string; count: number }>>([]);
   const [transitions, setTransitions] = useState<Array<{ from: string; to: string; value: number }>>([]);
-  const [throughput, setThroughput] = useState<Array<any>>([]);
+  const [throughput, setThroughput] = useState<Array<Record<string, unknown>>>([]);
   const [funnel, setFunnel] = useState<Array<{ stage: string; count: number; color: string }>>([]);
-  const [velocity, setVelocity] = useState<any>(null);
-  const [recentChanges, setRecentChanges] = useState<Array<any>>([]);
-  const [creationTrends, setCreationTrends] = useState<Array<any>>([]);
+  const [velocity, setVelocity] = useState<{
+    transitions?: Array<{ from: string; to: string; medianDays?: number | null; count?: number }>;
+    draftToFinalMedian?: number;
+  } | null>(null);
+  const [recentChanges, setRecentChanges] = useState<Array<Record<string, unknown>>>([]);
+  const [creationTrends, setCreationTrends] = useState<Array<{ year?: number; repo?: string; count?: number }>>([]);
   const [ripCreationTrends, setRipCreationTrends] = useState<Array<{ year: number; repo: string; count: number }>>([]);
   const [monthlyDelta, setMonthlyDelta] = useState<Array<{ status: string; count: number }>>([]);
   const [selectedCat, setSelectedCat] = useState<string>("Core");
@@ -162,7 +165,7 @@ export default function EIPsAnalyticsPage() {
         ]);
         setKpis(kRes); setRipKpis(ripRes); setCrossTab(ctRes);
         const sMap = new Map<string, number>();
-        sdRes.forEach((r: any) => sMap.set(r.status, (sMap.get(r.status) || 0) + r.count));
+        sdRes.forEach((r: { status: string; count: number }) => sMap.set(r.status, (sMap.get(r.status) || 0) + r.count));
         setStatusDist(Array.from(sMap.entries()).map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count));
         setCatBreakdown(cbRes);
 
@@ -233,13 +236,14 @@ export default function EIPsAnalyticsPage() {
   const pivotedTrends = useMemo(() => {
     const yearMap: Record<number, { year: number; eips: number; ercs: number; rips: number }> = {};
     for (const t of creationTrends) {
-      const yr = (t as any).year;
+      const yr = t.year ?? 0;
       if (!yearMap[yr]) yearMap[yr] = { year: yr, eips: 0, ercs: 0, rips: 0 };
-      const repo = String((t as any).repo || "").toLowerCase();
-      if (repo === "eips") yearMap[yr].eips += (t as any).count || 0;
-      else if (repo === "ercs") yearMap[yr].ercs += (t as any).count || 0;
-      else if (repo === "rips") yearMap[yr].rips += (t as any).count || 0;
-      else yearMap[yr].eips += (t as any).count || 0;
+      const repo = String(t.repo || "").toLowerCase();
+      const cnt = t.count ?? 0;
+      if (repo === "eips") yearMap[yr].eips += cnt;
+      else if (repo === "ercs") yearMap[yr].ercs += cnt;
+      else if (repo === "rips") yearMap[yr].rips += cnt;
+      else yearMap[yr].eips += cnt;
     }
     for (const t of ripCreationTrends) {
       const yr = t.year;
@@ -399,7 +403,7 @@ export default function EIPsAnalyticsPage() {
                 <Pie data={catPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={40} strokeWidth={0}>
                   {catPieData.map((e, i) => <Cell key={i} fill={e.fill} fillOpacity={0.75} />)}
                 </Pie>
-                <ChartTooltip content={<ChartTooltipContent formatter={(v: number, n: string) => <span className="text-foreground">{n}: {v.toLocaleString()} ({total > 0 ? (v / total * 100).toFixed(1) : 0}%)</span>} />} />
+                <ChartTooltip content={<ChartTooltipContent formatter={(value) => { const v = typeof value === "number" ? value : Number(value) || 0; return <span className="text-foreground">{v.toLocaleString()} ({total > 0 ? (v / total * 100).toFixed(1) : 0}%)</span>; }} />} />
               </PieChart>
             </ChartContainer>
             <div className="flex-1 space-y-1 w-full">
@@ -422,7 +426,7 @@ export default function EIPsAnalyticsPage() {
                 <Pie data={statusPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={40} strokeWidth={0}>
                   {statusPieData.map((e, i) => <Cell key={i} fill={e.fill} fillOpacity={0.75} />)}
                 </Pie>
-                <ChartTooltip content={<ChartTooltipContent formatter={(v: number, n: string) => <span className="text-foreground">{n}: {v.toLocaleString()} ({total > 0 ? (v / total * 100).toFixed(1) : 0}%)</span>} />} />
+                <ChartTooltip content={<ChartTooltipContent formatter={(value) => { const v = typeof value === "number" ? value : Number(value) || 0; return <span className="text-foreground">{v.toLocaleString()} ({total > 0 ? (v / total * 100).toFixed(1) : 0}%)</span>; }} />} />
               </PieChart>
             </ChartContainer>
             <div className="flex-1 space-y-1 w-full">
@@ -495,7 +499,7 @@ export default function EIPsAnalyticsPage() {
             <div className="space-y-2 py-4">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-4 rounded bg-slate-200 dark:bg-slate-800/30 animate-pulse" style={{ width: `${60 + ((i * 17) % 35)}%` }} />)}</div>
           ) : (
             <div className="space-y-1.5">
-              {velocity.transitions?.map((t: any) => {
+              {velocity.transitions?.map((t: { from: string; to: string; medianDays?: number | null; count?: number }) => {
                 const color = STATUS_COLORS[t.to] || "#60a5fa";
                 return (
                   <div key={`${t.from}-${t.to}`} className="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-800/15 transition-colors">
@@ -513,7 +517,7 @@ export default function EIPsAnalyticsPage() {
                   </div>
                 );
               })}
-              {velocity.draftToFinalMedian > 0 && (
+              {(velocity.draftToFinalMedian ?? 0) > 0 && (
                 <div className="mt-3 rounded-lg border border-emerald-500/15 bg-emerald-500/10 dark:bg-emerald-500/5 px-4 py-3 flex items-center justify-between">
                   <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300/80">Draft → Final (end-to-end)</span>
                   <span className="text-sm tabular-nums font-bold text-emerald-600 dark:text-emerald-400">{velocity.draftToFinalMedian}d median</span>
@@ -697,25 +701,27 @@ export default function EIPsAnalyticsPage() {
                 </tr>
               </thead>
               <tbody>
-                {recentChanges.slice(0, 15).map((c: any, i: number) => {
-                  const color = STATUS_COLORS[c.to] || "#64748b";
-                  const repoPath = c.repository?.toLowerCase().includes("ercs") ? "ercs" : c.repository?.toLowerCase().includes("rips") ? "rips" : "eips";
+                {recentChanges.slice(0, 15).map((c, i) => {
+                  const item = c as { to?: string; from?: string; eip?: string; eip_type?: string; title?: string; days?: number; repository?: string };
+                  const color = STATUS_COLORS[item.to ?? ""] || "#64748b";
+                  const repo = String(item.repository ?? "").toLowerCase();
+                  const repoPath = repo.includes("ercs") ? "ercs" : repo.includes("rips") ? "rips" : "eips";
                   return (
                     <tr key={i} className="border-b border-slate-100 dark:border-slate-800/10 hover:bg-slate-50 dark:hover:bg-slate-800/10 transition-colors">
                       <td className="px-3 py-2.5">
-                        <Link href={`/standards/${repoPath}/${c.eip}`} className="text-cyan-600 dark:text-cyan-400/80 hover:text-cyan-700 dark:hover:text-cyan-300 font-medium transition-colors">
-                          {c.eip_type}-{c.eip}
+                        <Link href={`/standards/${repoPath}/${item.eip}`} className="text-cyan-600 dark:text-cyan-400/80 hover:text-cyan-700 dark:hover:text-cyan-300 font-medium transition-colors">
+                          {item.eip_type}-{item.eip}
                         </Link>
                       </td>
-                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300 max-w-xs truncate">{c.title}</td>
+                      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300 max-w-xs truncate">{item.title}</td>
                       <td className="px-3 py-2.5">
                         <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium border"
                           style={{ background: `${color}10`, color, borderColor: `${color}20` }}>
-                          {c.from} → {c.to}
+                          {item.from} → {item.to}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right text-slate-500 tabular-nums">
-                        {c.days === 0 ? "today" : c.days === 1 ? "1d ago" : `${c.days}d ago`}
+                        {item.days === 0 ? "today" : item.days === 1 ? "1d ago" : `${item.days ?? 0}d ago`}
                       </td>
                     </tr>
                   );

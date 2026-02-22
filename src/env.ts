@@ -33,6 +33,8 @@ export const env = createEnv({
     // Cloudflare (optional — note: .env may have CLOUDFARE typo)
     CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
     CLOUDFLARE_API_TOKEN: z.string().optional(),
+
+    REDIS_URL: z.string().url(),
   },
 
   /**
