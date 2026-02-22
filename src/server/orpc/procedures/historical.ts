@@ -1,9 +1,9 @@
-import { protectedProcedure, type Ctx } from './types'
+import { optionalAuthProcedure, type Ctx } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 
 export const historicalProcedures = {
-  getHistoricalGrowth: protectedProcedure
+  getHistoricalGrowth: optionalAuthProcedure
     .input(z.object({
       mode: z.enum(['category', 'status']).default('category'),
       includeRIPs: z.boolean().optional().default(true)

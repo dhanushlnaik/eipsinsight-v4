@@ -90,6 +90,32 @@ export function requireAuth(ctx: Ctx) {
 
 export const publicProcedure = os.$context<Ctx>()
 
+/** Populates user/apiToken when available but does NOT require auth. Use for public read operations. */
+export const optionalAuthProcedure = os
+  .$context<Ctx>()
+  .use(async ({ context, next }) => {
+    // 1. Try API token first
+    try {
+      const tokenAuth = await checkAPIToken(context.headers)
+      if (tokenAuth) {
+        context.user = tokenAuth.user
+        context.apiToken = tokenAuth.apiToken
+      }
+    } catch {
+      // Invalid/expired token — leave context unauthenticated
+    }
+
+    // 2. Fall back to better-auth session
+    if (!context.user) {
+      const sessionUser = await checkSession(context.headers)
+      if (sessionUser) {
+        context.user = sessionUser
+      }
+    }
+
+    return next({ context })
+  })
+
 export const protectedProcedure = os
   .$context<Ctx>()
   .use(async ({ context, next }) => {

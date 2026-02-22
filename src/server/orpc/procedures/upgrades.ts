@@ -1,10 +1,10 @@
-import { protectedProcedure, type Ctx, ORPCError } from './types'
+import { optionalAuthProcedure, type Ctx, ORPCError } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 
 export const upgradesProcedures = {
   // List all upgrades with statistics
-  listUpgrades: protectedProcedure
+  listUpgrades: optionalAuthProcedure
     .input(z.object({}))
     .handler(async ({ context }) => {
 
@@ -60,7 +60,7 @@ export const upgradesProcedures = {
     }),
 
   // Get aggregate statistics across all upgrades
-  getUpgradeStats: protectedProcedure
+  getUpgradeStats: optionalAuthProcedure
     .input(z.object({}))
     .handler(async ({ context }) => {
 
@@ -95,7 +95,7 @@ export const upgradesProcedures = {
     }),
 
   // Get upgrade by slug
-  getUpgrade: protectedProcedure
+  getUpgrade: optionalAuthProcedure
     .input(z.object({
       slug: z.string(),
     }))
@@ -119,7 +119,7 @@ export const upgradesProcedures = {
     }),
 
   // Get current EIP composition for an upgrade
-  getUpgradeCompositionCurrent: protectedProcedure
+  getUpgradeCompositionCurrent: optionalAuthProcedure
     .input(z.object({
       slug: z.string(),
     }))
@@ -170,7 +170,7 @@ export const upgradesProcedures = {
     }),
 
   // Get upgrade composition events (activity feed)
-  getUpgradeCompositionEvents: protectedProcedure
+  getUpgradeCompositionEvents: optionalAuthProcedure
     .input(z.object({
       slug: z.string(),
       limit: z.number().optional().default(50),
@@ -209,7 +209,7 @@ export const upgradesProcedures = {
     }),
 
   // Get timeline data for upgrade (grouped by date with bucket statuses)
-  getUpgradeTimeline: protectedProcedure
+  getUpgradeTimeline: optionalAuthProcedure
     .input(z.object({
       slug: z.string(),
     }))

@@ -1,9 +1,9 @@
-import { protectedProcedure, type Ctx } from './types'
+import { optionalAuthProcedure, type Ctx } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 
 export const governanceTimelineProcedures = {
-  getTimelineByCategory: protectedProcedure
+  getTimelineByCategory: optionalAuthProcedure
     .input(z.object({
       includeRIPs: z.boolean().optional().default(true)
     }))
@@ -68,7 +68,7 @@ const sql = `
       return final;
     }),
 
-  getTimelineByStatus: protectedProcedure
+  getTimelineByStatus: optionalAuthProcedure
     .input(z.object({
       includeRIPs: z.boolean().optional().default(true)
     }))
@@ -128,7 +128,7 @@ const sql = `
       return final;
     }),
 
-  getDetailedDataByYear: protectedProcedure
+  getDetailedDataByYear: optionalAuthProcedure
     .input(z.object({
       year: z.number(),
       includeRIPs: z.boolean().optional().default(true)
@@ -203,7 +203,7 @@ const sql = `
       }));
     }),
 
-  getTrendingProposals: protectedProcedure
+  getTrendingProposals: optionalAuthProcedure
     .input(z.object({
       limit: z.number().optional().default(6)
     }))

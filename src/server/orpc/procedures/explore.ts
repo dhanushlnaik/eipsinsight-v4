@@ -1,4 +1,4 @@
-import { protectedProcedure, publicProcedure, checkAPIToken } from './types'
+import { optionalAuthProcedure, publicProcedure, checkAPIToken } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 import { unstable_cache } from 'next/cache'
@@ -187,7 +187,7 @@ export const exploreProcedures = {
     }),
 
   // Get monthly activity sparkline for a year
-  getYearSparkline: protectedProcedure
+  getYearSparkline: optionalAuthProcedure
     .input(z.object({
       year: z.number().min(2015).max(2030),
     }))
@@ -231,7 +231,7 @@ export const exploreProcedures = {
     }),
 
   // Get EIPs created in a specific year
-  getEIPsByYear: protectedProcedure
+  getEIPsByYear: optionalAuthProcedure
     .input(z.object({
       year: z.number().min(2015).max(2030),
       limit: z.number().min(1).max(100).default(50),
@@ -303,7 +303,7 @@ export const exploreProcedures = {
     }),
 
   // Get EIPs by status with filters
-  getEIPsByStatus: protectedProcedure
+  getEIPsByStatus: optionalAuthProcedure
     .input(z.object({
       status: z.string().optional(),
       category: z.string().optional(),
@@ -382,7 +382,7 @@ export const exploreProcedures = {
   // ============================================
 
   // Get role leaderboard
-  getRoleLeaderboard: protectedProcedure
+  getRoleLeaderboard: optionalAuthProcedure
     .input(z.object({
       role: z.enum(['EDITOR', 'REVIEWER', 'CONTRIBUTOR']).optional(),
       limit: z.number().min(1).max(50).default(20),
@@ -465,7 +465,7 @@ export const exploreProcedures = {
     }),
 
   // Get top actors by role
-  getTopActorsByRole: protectedProcedure
+  getTopActorsByRole: optionalAuthProcedure
     .input(z.object({
       role: z.enum(['EDITOR', 'REVIEWER', 'CONTRIBUTOR']),
       limit: z.number().min(1).max(10).default(3),
@@ -497,7 +497,7 @@ export const exploreProcedures = {
     }),
 
   // Get recent activity timeline for a role
-  getRoleActivityTimeline: protectedProcedure
+  getRoleActivityTimeline: optionalAuthProcedure
     .input(z.object({
       role: z.enum(['EDITOR', 'REVIEWER', 'CONTRIBUTOR']).optional(),
       limit: z.number().min(1).max(50).default(20),
@@ -536,7 +536,7 @@ export const exploreProcedures = {
     }),
 
   // Get role activity sparkline (last 6 months)
-  getRoleActivitySparkline: protectedProcedure
+  getRoleActivitySparkline: optionalAuthProcedure
     .input(z.object({
       role: z.enum(['EDITOR', 'REVIEWER', 'CONTRIBUTOR']).optional(),
     }))
@@ -580,7 +580,7 @@ export const exploreProcedures = {
   // ============================================
 
   // Get trending proposals
-  getTrendingProposals: protectedProcedure
+  getTrendingProposals: optionalAuthProcedure
     .input(z.object({
       limit: z.number().min(1).max(50).default(20),
     }))
@@ -673,7 +673,7 @@ export const exploreProcedures = {
     }),
 
   // Get trending heatmap data (last 30 days)
-  getTrendingHeatmap: protectedProcedure
+  getTrendingHeatmap: optionalAuthProcedure
     .input(z.object({
       topN: z.number().min(5).max(20).default(10),
     }))

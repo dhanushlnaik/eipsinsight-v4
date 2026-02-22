@@ -1,4 +1,4 @@
-import { protectedProcedure } from './types'
+import { optionalAuthProcedure } from './types'
 
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
@@ -869,7 +869,7 @@ const getRecentChangesCached = unstable_cache(
 );
 
 export const analyticsProcedures = {
-  getActiveProposals: protectedProcedure
+  getActiveProposals: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
       const result = await prisma.$queryRawUnsafe<Array<{
@@ -902,7 +902,7 @@ export const analyticsProcedures = {
       };
     }),
 
-  getActiveProposalsDetailed: protectedProcedure
+  getActiveProposalsDetailed: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
 
@@ -937,13 +937,13 @@ export const analyticsProcedures = {
       return results;
     }),
 
-  getLifecycleData: protectedProcedure
+  getLifecycleData: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
       return getLifecycleDataCached(input.repo ?? null);
     }),
 
-  getLifecycleDetailed: protectedProcedure
+  getLifecycleDetailed: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
 
@@ -977,13 +977,13 @@ export const analyticsProcedures = {
       return results;
     }),
 
-  getStandardsComposition: protectedProcedure
+  getStandardsComposition: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
       return getStandardsCompositionCached(input.repo ?? null);
     }),
 
-  getStandardsCompositionDetailed: protectedProcedure
+  getStandardsCompositionDetailed: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
 
@@ -1030,7 +1030,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  getRecentChanges: protectedProcedure
+  getRecentChanges: optionalAuthProcedure
     .input(z.object({
       limit: z.number().optional().default(5),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -1039,7 +1039,7 @@ export const analyticsProcedures = {
       return getRecentChangesCached(input.repo ?? null, input.limit);
     }),
 
-  getDecisionVelocity: protectedProcedure
+  getDecisionVelocity: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
 
@@ -1129,7 +1129,7 @@ export const analyticsProcedures = {
       };
     }),
 
-  getMomentumData: protectedProcedure
+  getMomentumData: optionalAuthProcedure
     .input(z.object({
       months: z.number().optional().default(12),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -1157,7 +1157,7 @@ export const analyticsProcedures = {
       return results.map(r => Number(r.count));
     }),
 
-  getRecentPRs: protectedProcedure
+  getRecentPRs: optionalAuthProcedure
     .input(z.object({
       limit: z.number().optional().default(5),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -1194,7 +1194,7 @@ export const analyticsProcedures = {
       return results;
     }),
 
-  getLastCallWatchlist: protectedProcedure
+  getLastCallWatchlist: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
 
@@ -1234,7 +1234,7 @@ export const analyticsProcedures = {
     }),
 
   // PR Analytics Procedures
-  getPRMonthlyActivity: protectedProcedure
+  getPRMonthlyActivity: optionalAuthProcedure
     .input(z.object({
       from: z.string().optional(),
       to: z.string().optional(),
@@ -1249,7 +1249,7 @@ export const analyticsProcedures = {
       );
     }),
 
-  getPROpenState: protectedProcedure
+  getPROpenState: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -1303,7 +1303,7 @@ export const analyticsProcedures = {
       };
     }),
 
-  getPRGovernanceStates: protectedProcedure
+  getPRGovernanceStates: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -1311,7 +1311,7 @@ export const analyticsProcedures = {
       return getPRGovernanceStatesCached(input.repo ?? null);
     }),
 
-  getPRLabels: protectedProcedure
+  getPRLabels: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -1362,7 +1362,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  getPRLifecycleFunnel: protectedProcedure
+  getPRLifecycleFunnel: optionalAuthProcedure
     .input(z.object({}))
     .handler(async () => {
 
@@ -1409,7 +1409,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  getPRTimeToOutcome: protectedProcedure
+  getPRTimeToOutcome: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -1417,7 +1417,7 @@ export const analyticsProcedures = {
       return getPRTimeToOutcomeCached(input.repo ?? null);
     }),
 
-  getPRStaleness: protectedProcedure
+  getPRStaleness: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -1425,7 +1425,7 @@ export const analyticsProcedures = {
       return getPRStalenessCached(input.repo ?? null);
     }),
 
-  getPRStaleHighRisk: protectedProcedure
+  getPRStaleHighRisk: optionalAuthProcedure
     .input(z.object({
       days: z.number().optional().default(30),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -1490,7 +1490,7 @@ export const analyticsProcedures = {
     }),
 
   // Month-scoped hero KPIs (end-of-period snapshot)
-  getPRMonthHeroKPIs: protectedProcedure
+  getPRMonthHeroKPIs: optionalAuthProcedure
     .input(z.object({
       year: z.number(),
       month: z.number(),
@@ -1565,7 +1565,7 @@ export const analyticsProcedures = {
     }),
 
   // Open PR classification (DRAFT, TYPO, NEW_EIP, STATUS_CHANGE, OTHER) — one bucket per PR
-  getPROpenClassification: protectedProcedure
+  getPROpenClassification: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -1616,7 +1616,7 @@ export const analyticsProcedures = {
     }),
 
   // Governance waiting state with median wait and oldest PR per bucket
-  getPRGovernanceWaitingState: protectedProcedure
+  getPRGovernanceWaitingState: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -1680,7 +1680,7 @@ export const analyticsProcedures = {
     }),
 
   // Export: open PRs with governance state (for CSV/JSON download)
-  getPROpenExport: protectedProcedure
+  getPROpenExport: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -1726,13 +1726,13 @@ export const analyticsProcedures = {
     }),
 
   // ——— Contributors Analytics ———
-  getContributorKPIs: protectedProcedure
+  getContributorKPIs: optionalAuthProcedure
     .input(z.object({}))
     .handler(async () => {
       return getContributorKPIsCached();
     }),
 
-  getContributorActivityByType: protectedProcedure
+  getContributorActivityByType: optionalAuthProcedure
     .input(z.object({
       from: z.string().optional(),
       to: z.string().optional(),
@@ -1746,7 +1746,7 @@ export const analyticsProcedures = {
       );
     }),
 
-  getContributorActivityByRepo: protectedProcedure
+  getContributorActivityByRepo: optionalAuthProcedure
     .input(z.object({
       from: z.string().optional(),
       to: z.string().optional(),
@@ -1758,7 +1758,7 @@ export const analyticsProcedures = {
       );
     }),
 
-  getContributorRankings: protectedProcedure
+  getContributorRankings: optionalAuthProcedure
     .input(z.object({
       sortBy: z.enum(['total', 'reviews', 'status_changes', 'prs_authored', 'prs_reviewed']).optional().default('total'),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -1816,7 +1816,7 @@ export const analyticsProcedures = {
       return rows;
     }),
 
-  getContributorProfile: protectedProcedure
+  getContributorProfile: optionalAuthProcedure
     .input(z.object({ actor: z.string(), limit: z.number().optional().default(100) }))
     .handler(async ({ input }) => {
       const activities = await prisma.contributor_activity.findMany({
@@ -1846,7 +1846,7 @@ export const analyticsProcedures = {
       };
     }),
 
-  getContributorLiveFeed: protectedProcedure
+  getContributorLiveFeed: optionalAuthProcedure
     .input(z.object({ hours: z.number().optional().default(48), limit: z.number().optional().default(50) }))
     .handler(async ({ input }) => {
       const since = new Date(Date.now() - input.hours * 60 * 60 * 1000);
@@ -1866,7 +1866,7 @@ export const analyticsProcedures = {
     }),
 
   // ——— Authors Analytics ———
-  getAuthorKPIs: protectedProcedure
+  getAuthorKPIs: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       from: z.string().optional(),
@@ -1934,7 +1934,7 @@ export const analyticsProcedures = {
       };
     }),
 
-  getAuthorActivityTimeline: protectedProcedure
+  getAuthorActivityTimeline: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       months: z.number().optional().default(12),
@@ -1966,7 +1966,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  getAuthorSuccessRates: protectedProcedure
+  getAuthorSuccessRates: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       limit: z.number().optional().default(20),
@@ -2027,7 +2027,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  getTopAuthors: protectedProcedure
+  getTopAuthors: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       from: z.string().optional(),
@@ -2078,7 +2078,7 @@ export const analyticsProcedures = {
     }),
 
   // ——— Editors & Reviewers Analytics (cached) ———
-  getEditorsLeaderboard: protectedProcedure
+  getEditorsLeaderboard: optionalAuthProcedure
     .input(z.object({
       limit: z.number().optional().default(30),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -2094,7 +2094,7 @@ export const analyticsProcedures = {
       );
     }),
 
-  getEditorsLeaderboardExport: protectedProcedure
+  getEditorsLeaderboardExport: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       from: z.string().optional(),
@@ -2156,7 +2156,7 @@ export const analyticsProcedures = {
       return { csv, filename };
     }),
 
-  getReviewersLeaderboard: protectedProcedure
+  getReviewersLeaderboard: optionalAuthProcedure
     .input(z.object({
       limit: z.number().optional().default(30),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -2172,13 +2172,13 @@ export const analyticsProcedures = {
       );
     }),
 
-  getEditorsByCategory: protectedProcedure
+  getEditorsByCategory: optionalAuthProcedure
     .input(z.object({ repo: z.enum(['eips', 'ercs', 'rips']).optional() }))
     .handler(async ({ input }) => {
       return getEditorsByCategoryCached(input.repo ?? null);
     }),
 
-  getEditorsRepoDistribution: protectedProcedure
+  getEditorsRepoDistribution: optionalAuthProcedure
     .input(z.object({
       actor: z.string().optional(),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -2194,7 +2194,7 @@ export const analyticsProcedures = {
       );
     }),
 
-  getReviewersRepoDistribution: protectedProcedure
+  getReviewersRepoDistribution: optionalAuthProcedure
     .input(z.object({
       actor: z.string().optional(),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -2210,7 +2210,7 @@ export const analyticsProcedures = {
       );
     }),
 
-  getEditorsMonthlyTrend: protectedProcedure
+  getEditorsMonthlyTrend: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       months: z.number().optional().default(12),
@@ -2261,7 +2261,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  getReviewersMonthlyTrend: protectedProcedure
+  getReviewersMonthlyTrend: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       months: z.number().optional().default(12),
@@ -2312,7 +2312,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  getReviewerCyclesPerPR: protectedProcedure
+  getReviewerCyclesPerPR: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -2350,7 +2350,7 @@ export const analyticsProcedures = {
       }));
     }),
 
-  getMonthlyReviewTrend: protectedProcedure
+  getMonthlyReviewTrend: optionalAuthProcedure
     .input(z.object({
       actor: z.string().optional(),
       from: z.string().optional(),
@@ -2380,7 +2380,7 @@ export const analyticsProcedures = {
     }),
 
   // EIP Analytics Procedures
-  getEIPStatusTransitions: protectedProcedure
+  getEIPStatusTransitions: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       from: z.string().optional(),
@@ -2394,7 +2394,7 @@ export const analyticsProcedures = {
       );
     }),
 
-  getEIPThroughput: protectedProcedure
+  getEIPThroughput: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       months: z.number().optional().default(12),
@@ -2404,7 +2404,7 @@ export const analyticsProcedures = {
       return getEIPThroughputCached(input.repo ?? null, monthsParam);
     }),
 
-  getEIPHeroKPIs: protectedProcedure
+  getEIPHeroKPIs: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       from: z.string().optional(),
@@ -2424,7 +2424,7 @@ export const analyticsProcedures = {
   // ——— Monthly Editor Leaderboard ———
   // PRs where an official editor was last_actor (governance state) AND the PR was updated this month.
   // Conservative metric: only counts PRs that had governance-state-changing editor action this month.
-  getMonthlyEditorLeaderboard: protectedProcedure
+  getMonthlyEditorLeaderboard: optionalAuthProcedure
     .input(z.object({ limit: z.number().optional().default(10) }))
     .handler(async ({ input }) => {
       const now = new Date();
