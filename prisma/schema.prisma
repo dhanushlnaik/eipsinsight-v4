@@ -20,6 +20,11 @@ model User {
   membershipExpiresAt   DateTime?
   membershipTier        String?
   role                  String                @default("user")
+  // Stripe fields
+  stripeCustomerId      String?               @unique
+  stripeSubscriptionId  String?               @unique
+  stripePriceId         String?
+  stripeCurrentPeriodEnd DateTime?
   accounts              Account[]
   apiTokens             ApiToken[]
   blogs                 Blog[]
@@ -110,16 +115,20 @@ model Verification {
 }
 
 model MembershipTier {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  slug         String   @unique
-  description  String?
-  priceMonthly Float
-  priceYearly  Float?
-  features     String[]
-  requestLimit Int      @default(10000)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  name                String   @unique
+  slug                String   @unique
+  description         String?
+  priceMonthly        Float
+  priceYearly         Float?
+  features            String[]
+  requestLimit        Int      @default(10000)
+  // Stripe fields
+  stripeProductId     String?  @unique
+  stripePriceIdMonthly String? @unique
+  stripePriceIdYearly String?  @unique
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   @@map("membership_tier")
 }

@@ -33,6 +33,9 @@ export const env = createEnv({
     // Cloudflare (optional — note: .env may have CLOUDFARE typo)
     CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
     CLOUDFLARE_API_TOKEN: z.string().optional(),
+    // Stripe
+    STRIPE_SECRET_KEY: z.string().min(1),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1),
   },
 
   /**
@@ -57,8 +60,7 @@ export const env = createEnv({
     NEXT_PUBLIC_FEATURE_PERSONA_CONTEXT_HEADERS: z
       .enum(["true", "false"])
       .optional()
-      .default("false"),
-  },
+      .default("false"),    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1),  },
 
   /**
    * What object holds the environment variables at runtime. This is usually

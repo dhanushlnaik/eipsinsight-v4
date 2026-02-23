@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSession } from "@/hooks/useSession";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import {
   Key,
   Mail,
   Shield,
-  Sparkles,
   Crown,
   CheckCircle2,
   XCircle,
@@ -18,8 +18,22 @@ import {
 
 export default function ProfilePage() {
   const { data: session, loading: isLoading } = useSession();
+  const [membershipTier, setMembershipTier] = useState<string>("free");
+  const [tierLoading, setTierLoading] = useState(true);
 
-  if (isLoading) {
+  useEffect(() => {
+    if (session?.user) {
+      fetch("/api/stripe/subscription")
+        .then((res) => res.json())
+        .then((data) => setMembershipTier(data?.tier || "free"))
+        .catch(() => setMembershipTier("free"))
+        .finally(() => setTierLoading(false));
+    } else if (!isLoading) {
+      setTierLoading(false);
+    }
+  }, [session?.user, isLoading]);
+
+  if (isLoading || tierLoading) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10">
         <div className="animate-pulse space-y-6">
@@ -59,7 +73,7 @@ export default function ProfilePage() {
 
   const user = session.user;
   const isVerified = user.emailVerified ?? false;
-  const membershipTier = ((user as unknown) as { membershipTier?: string }).membershipTier ?? "free";
+  const isPaid = membershipTier !== "free";
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
@@ -75,13 +89,12 @@ export default function ProfilePage() {
         {/* Profile Header Card */}
         <div className="relative overflow-hidden rounded-2xl border border-cyan-400/20 bg-slate-950/60 p-6 shadow-[0_20px_70px_rgba(6,182,212,0.12)]">
           <div className="absolute right-4 top-4">
-            {membershipTier === "premium" && (
+            {isPaid ? (
               <div className="flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200">
                 <Crown className="h-3.5 w-3.5" />
-                Premium
+                {membershipTier.charAt(0).toUpperCase() + membershipTier.slice(1)}
               </div>
-            )}
-            {membershipTier === "free" && (
+            ) : (
               <div className="flex items-center gap-1.5 rounded-full border border-slate-400/30 bg-slate-500/10 px-3 py-1 text-xs font-medium text-slate-300">
                 Free
               </div>
@@ -168,11 +181,11 @@ export default function ProfilePage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Features</span>
-                <span className="text-slate-300">{membershipTier === "premium" ? "Unlimited" : "Standard"}</span>
+                <span className="text-slate-300">{isPaid ? "Unlimited" : "Standard"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Support</span>
-                <span className="text-slate-300">{membershipTier === "premium" ? "Priority" : "Community"}</span>
+                <span className="text-slate-300">{isPaid ? "Priority" : "Community"}</span>
               </div>
             </div>
           </div>

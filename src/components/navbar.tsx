@@ -18,6 +18,7 @@ import {
   LineChart,
   BookOpen,
   ChevronDown,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -51,11 +52,22 @@ export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [membershipTier, setMembershipTier] = useState<string>("free");
   const { data: session } = useSession();
   const { persona, setPersona, isHydrated } = usePersonaStore();
   const { syncPersonaToServer, isAuthenticated } = usePersonaSyncOnChange();
 
   const userName = session?.user?.name ?? session?.user?.email;
+
+  // Fetch membership tier
+  useEffect(() => {
+    if (session?.user) {
+      fetch("/api/stripe/subscription")
+        .then((res) => res.json())
+        .then((data) => setMembershipTier(data?.tier || "free"))
+        .catch(() => setMembershipTier("free"));
+    }
+  }, [session?.user]);
 
   // Handle persona change - sync to server then redirect
   const handlePersonaChange = async (newPersona: Persona) => {
@@ -335,6 +347,17 @@ export default function Navbar() {
                 );
               })}
             </nav>
+
+            {/* Mobile Upgrade Button */}
+            {session?.user && membershipTier === "free" && (
+              <Link
+                href="/premium"
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-sm font-semibold py-2.5 px-3 transition hover:opacity-90 hover:shadow-lg"
+              >
+                <Crown className="h-4 w-4" />
+                Upgrade to Pro
+              </Link>
+            )}
 
             {/* Mobile Persona + Auth Row */}
             <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-700/50">
