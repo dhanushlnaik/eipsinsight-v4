@@ -1,9 +1,9 @@
-import { protectedProcedure, type Ctx } from './types'
+import { optionalAuthProcedure, type Ctx } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 
 export const governanceProcedures = {
-  getWaitingStates: protectedProcedure
+  getWaitingStates: optionalAuthProcedure
     .input(z.object({}))
     .handler(async ({ context }) => {
 
@@ -29,7 +29,7 @@ export const governanceProcedures = {
       }));
     }),
 
-  getResponsibilityMetrics: protectedProcedure
+  getResponsibilityMetrics: optionalAuthProcedure
     .input(z.object({}))
     .handler(async ({ context }) => {
 
@@ -80,7 +80,7 @@ export const governanceProcedures = {
       };
     }),
 
-  getWaitingTimeline: protectedProcedure
+  getWaitingTimeline: optionalAuthProcedure
     .input(z.object({}))
     .handler(async ({ context }) => {
 
@@ -124,7 +124,7 @@ export const governanceProcedures = {
       });
     }),
 
-  getNeedsAttention: protectedProcedure
+  getNeedsAttention: optionalAuthProcedure
     .input(z.object({
       minDays: z.number().optional(),
       state: z.enum(['WAITING_AUTHOR', 'WAITING_EDITOR', 'WAITING_COMMUNITY', 'IDLE']).optional()
@@ -182,7 +182,7 @@ export const governanceProcedures = {
       }));
     }),
 
-  getLongestWaitingPR: protectedProcedure
+  getLongestWaitingPR: optionalAuthProcedure
     .input(z.object({
       state: z.enum(['WAITING_AUTHOR', 'WAITING_EDITOR']).optional()
     }))

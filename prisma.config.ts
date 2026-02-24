@@ -7,9 +7,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // Runtime: PgBouncer pooled connection (DATABASE_URL)
-    // Migrations: Direct Aiven connection (DIRECT_DATABASE_URL)
-    url: process.env.DATABASE_URL!,
-    directUrl: process.env.DIRECT_DATABASE_URL,
+    // CLI (migrate, etc.): Use direct URL when available (bypasses PgBouncer).
+    // Runtime uses DATABASE_URL via adapter in src/lib/prisma.ts
+    url: process.env.DIRECT_DATABASE_URL ?? process.env.DATABASE_URL!,
   },
 });

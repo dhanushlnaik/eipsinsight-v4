@@ -2,26 +2,64 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { emailOTP } from "better-auth/plugins";
 import { env } from "@/env";
-import { prisma } from "@/lib/prisma";
+import { prismaAuth } from "@/lib/prisma-auth";
 import { sendEmail } from "@/lib/email";
+// The published @better-auth/core package may not expose the `SocialProviders`
+// type at its top-level exports across versions. Define a narrow local type
+// that matches the fields we use (github & google) and allow other providers.
+type SocialProviders = {
+  github?: { clientId: string; clientSecret: string; enabled?: boolean };
+  google?: {
+    clientId: string;
+    clientSecret: string;
+    accessType?: "offline" | "online";
+    prompt?: "select_account consent" | "select_account" | "consent" | "login" | "none";
+    enabled?: boolean;
+  };
+  [key: string]: unknown;
+};
+
+const githubClientId = env.GITHUB_CLIENT_ID.trim();
+const githubClientSecret = env.GITHUB_CLIENT_SECRET.trim();
+const googleClientId = env.GOOGLE_CLIENT_ID.trim();
+const googleClientSecret = env.GOOGLE_CLIENT_SECRET.trim();
+
+const socialProviders: SocialProviders = {
+  ...(githubClientId && githubClientSecret
+    ? {
+        github: {
+          clientId: githubClientId,
+          clientSecret: githubClientSecret,
+        },
+      }
+    : {}),
+  ...(googleClientId && googleClientSecret
+      ? {
+        google: {
+          clientId: googleClientId,
+          clientSecret: googleClientSecret,
+          accessType: "offline" as const,
+          prompt: "select_account consent" as const,
+        },
+      }
+    : {}),
+};
 
 export const auth = betterAuth({
-  database: prismaAdapter(prisma, {
+  database: prismaAdapter(prismaAuth, {
     provider: "postgresql",
   }),
+  secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
-  socialProviders: {
-    github: {
-      clientId: env.GITHUB_CLIENT_ID,
-      clientSecret: env.GITHUB_CLIENT_SECRET,
-    },
-    google: {
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
-      accessType: "offline",
-      prompt: "select_account consent",
-    },
+  trustedOrigins: [
+    env.BETTER_AUTH_URL,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ],
+  logger: {
+    level: process.env.NODE_ENV === "production" ? "error" : "debug",
   },
+  socialProviders,
   plugins: [
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {

@@ -1,4 +1,4 @@
-import { protectedProcedure, type Ctx } from './types'
+import { optionalAuthProcedure, type Ctx } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 
@@ -19,7 +19,7 @@ async function getRepoIds(repo?: string): Promise<number[] | null> {
 export const insightsProcedures = {
   // ──── 1) Monthly Status Snapshot ────
   // Uses eip_snapshots (current state — fast) + monthly transition counts for delta
-  getMonthlyStatusSnapshot: protectedProcedure
+  getMonthlyStatusSnapshot: optionalAuthProcedure
     .input(z.object({
       month: z.string().regex(/^\d{4}-\d{2}$/),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -92,7 +92,7 @@ export const insightsProcedures = {
 
   // ──── 2) Status Flow Over Time (stacked area) ────
   // Counts transition events per month (last 24 months for speed)
-  getStatusFlowOverTime: protectedProcedure
+  getStatusFlowOverTime: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ context, input }) => {const repoIds = await getRepoIds(input.repo);
 
@@ -121,7 +121,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 3) Deadline Volatility ────
-  getDeadlineVolatility: protectedProcedure
+  getDeadlineVolatility: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ context, input }) => {const repoIds = await getRepoIds(input.repo);
 
@@ -146,7 +146,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 4) Editors Leaderboard ────
-  getEditorsLeaderboard: protectedProcedure
+  getEditorsLeaderboard: optionalAuthProcedure
     .input(z.object({
       month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -192,7 +192,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 5) Open PRs ────
-  getOpenPRs: protectedProcedure
+  getOpenPRs: optionalAuthProcedure
     .input(z.object({
       month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
@@ -246,7 +246,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 6) PR Lifecycle Funnel ────
-  getPRLifecycleFunnel: protectedProcedure
+  getPRLifecycleFunnel: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ context, input }) => {const repoIds = await getRepoIds(input.repo);
 
@@ -276,7 +276,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 7) Governance State Distribution ────
-  getGovernanceStatesOverTime: protectedProcedure
+  getGovernanceStatesOverTime: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ context, input }) => {const repoIds = await getRepoIds(input.repo);
 
@@ -301,7 +301,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 8) Time-to-Decision ────
-  getTimeToDecision: protectedProcedure
+  getTimeToDecision: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ context, input }) => {const repoIds = await getRepoIds(input.repo);
 
@@ -340,7 +340,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 9) Bottleneck Heatmap ────
-  getBottleneckHeatmap: protectedProcedure
+  getBottleneckHeatmap: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ context, input }) => {const repoIds = await getRepoIds(input.repo);
 
@@ -370,7 +370,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 10) Upgrade Timeline ────
-  getUpgradeTimeline: protectedProcedure
+  getUpgradeTimeline: optionalAuthProcedure
     .handler(async ({ context }) => {const results = await prisma.$queryRawUnsafe<Array<{
         id: number;
         slug: string;
@@ -401,7 +401,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 11) Upgrade Composition Changes ────
-  getUpgradeCompositionChanges: protectedProcedure
+  getUpgradeCompositionChanges: optionalAuthProcedure
     .input(z.object({
       upgradeId: z.number().optional(),
     }))
@@ -434,7 +434,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 12) EIP Progress Timeline (editorial) ────
-  getEIPTimeline: protectedProcedure
+  getEIPTimeline: optionalAuthProcedure
     .input(z.object({
       eipNumber: z.number(),
     }))
@@ -568,7 +568,7 @@ export const insightsProcedures = {
     }),
 
   // ──── 13) Available months ────
-  getAvailableMonths: protectedProcedure
+  getAvailableMonths: optionalAuthProcedure
     .handler(async ({ context }) => {// Use eip_snapshots updated_at for speed instead of scanning eip_status_events
       const results = await prisma.$queryRawUnsafe<Array<{ month: string }>>(
         `SELECT DISTINCT TO_CHAR(date_trunc('month', s.updated_at), 'YYYY-MM') AS month

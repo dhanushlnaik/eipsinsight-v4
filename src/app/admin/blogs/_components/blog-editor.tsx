@@ -51,7 +51,7 @@ type AuthorProfile = {
   facebook: string | null;
   telegram: string | null;
   bio: string | null;
-} | null;
+};
 
 function useMarkdownToolbar(textareaRef: React.RefObject<HTMLTextAreaElement | null>, content: string, setContent: (v: string) => void) {
   const wrapSelection = useCallback(
@@ -130,7 +130,7 @@ function useMarkdownToolbar(textareaRef: React.RefObject<HTMLTextAreaElement | n
     codeBlock: () => insertAtCursor("\n```\n\n```\n", 5),
     hr: () => insertAtCursor("\n\n---\n\n"),
     link: () => wrapSelection("[", "](url)", "link text"),
-    image: () => insertAtCursor("![", "](url)", "alt text"),
+    image: () => wrapSelection("![", "](url)", "alt text"),
   };
 }
 
@@ -150,9 +150,8 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; slug: string; name: string }>>([]);
-  const [authorProfile, setAuthorProfile] = useState<AuthorProfile>(null);
+  const [authorProfile, setAuthorProfile] = useState<AuthorProfile | null>(null);
   const [profileForm, setProfileForm] = useState<Partial<AuthorProfile>>({});
-  const [profileExpanded, setProfileExpanded] = useState(true);
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
   const toolbar = useMarkdownToolbar(contentRef, content, setContent);
@@ -212,13 +211,14 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
     setSaving(true);
     setError(null);
     try {
-      if (Object.keys(profileForm).length > 0) {
+      const form = profileForm ?? {};
+      if (Object.keys(form).length > 0) {
         await client.blog.updateMyEditorProfile({
-          linkedin: profileForm.linkedin ?? undefined,
-          x: profileForm.x ?? undefined,
-          facebook: profileForm.facebook ?? undefined,
-          telegram: profileForm.telegram ?? undefined,
-          bio: profileForm.bio ?? undefined,
+          linkedin: form.linkedin ?? undefined,
+          x: form.x ?? undefined,
+          facebook: form.facebook ?? undefined,
+          telegram: form.telegram ?? undefined,
+          bio: form.bio ?? undefined,
         });
       }
       if (mode === "create") {
@@ -450,7 +450,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                     <label className="block text-xs font-medium text-slate-500 mb-1">LinkedIn URL</label>
                     <input
                       type="url"
-                      value={profileForm.linkedin ?? ""}
+                      value={profileForm?.linkedin ?? ""}
                       onChange={(e) => setProfileForm((p) => ({ ...p, linkedin: e.target.value || null }))}
                       placeholder="https://linkedin.com/in/username"
                       className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
@@ -462,7 +462,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                     <label className="block text-xs font-medium text-slate-500 mb-1">X (Twitter) URL</label>
                     <input
                       type="url"
-                      value={profileForm.x ?? ""}
+                      value={profileForm?.x ?? ""}
                       onChange={(e) => setProfileForm((p) => ({ ...p, x: e.target.value || null }))}
                       placeholder="https://x.com/username"
                       className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
@@ -474,7 +474,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                     <label className="block text-xs font-medium text-slate-500 mb-1">Facebook URL</label>
                     <input
                       type="url"
-                      value={profileForm.facebook ?? ""}
+                      value={profileForm?.facebook ?? ""}
                       onChange={(e) => setProfileForm((p) => ({ ...p, facebook: e.target.value || null }))}
                       placeholder="https://facebook.com/username"
                       className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
@@ -486,7 +486,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                     <label className="block text-xs font-medium text-slate-500 mb-1">Telegram</label>
                     <input
                       type="text"
-                      value={profileForm.telegram ?? ""}
+                      value={profileForm?.telegram ?? ""}
                       onChange={(e) => setProfileForm((p) => ({ ...p, telegram: e.target.value || null }))}
                       placeholder="@username or username"
                       className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
@@ -496,7 +496,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Bio (optional)</label>
                   <textarea
-                    value={profileForm.bio ?? ""}
+                    value={profileForm?.bio ?? ""}
                     onChange={(e) => setProfileForm((p) => ({ ...p, bio: e.target.value || null }))}
                     placeholder="Short author bio"
                     rows={2}

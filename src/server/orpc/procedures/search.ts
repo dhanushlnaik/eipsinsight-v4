@@ -1,10 +1,10 @@
-import { protectedProcedure, type Ctx, ORPCError } from './types'
+import { optionalAuthProcedure, type Ctx, ORPCError } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 
 export const searchProcedures = {
   // Search proposals (EIPs, ERCs, RIPs)
-  searchProposals: protectedProcedure
+  searchProposals: optionalAuthProcedure
     .input(z.object({
       query: z.string().min(1),
       limit: z.number().optional().default(50),
@@ -108,7 +108,7 @@ const searchTerm = `%${input.query}%`;
     }),
 
   // Search authors/people (from EIPs, PRs, Issues, and contributor_activity)
-  searchAuthors: protectedProcedure
+  searchAuthors: optionalAuthProcedure
     .input(z.object({
       query: z.string().min(1),
       limit: z.number().optional().default(50),
@@ -208,7 +208,7 @@ const searchTerm = `%${input.query}%`;
     }),
 
   // Search pull requests
-  searchPRs: protectedProcedure
+  searchPRs: optionalAuthProcedure
     .input(z.object({
       query: z.string().min(1),
       limit: z.number().optional().default(50),
@@ -271,7 +271,7 @@ const searchTerm = `%${input.query}%`;
     }),
 
   // Search issues
-  searchIssues: protectedProcedure
+  searchIssues: optionalAuthProcedure
     .input(z.object({
       query: z.string().min(1),
       limit: z.number().optional().default(50),

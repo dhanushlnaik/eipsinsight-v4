@@ -36,6 +36,9 @@ export const env = createEnv({
     // Stripe
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
+    COHERE_API_KEY: z.string().min(1).optional(),
+
+    REDIS_URL: z.string().url(),
   },
 
   /**

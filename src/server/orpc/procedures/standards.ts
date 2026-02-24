@@ -1,4 +1,4 @@
-import { protectedProcedure, publicProcedure, checkAPIToken } from './types'
+import { optionalAuthProcedure, publicProcedure, checkAPIToken } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 import { unstable_cache } from 'next/cache'
@@ -117,7 +117,7 @@ const tableInputSchema = z.object({
 
 export const standardsProcedures = {
   // ——— KPIs ———
-  getKPIs: protectedProcedure
+  getKPIs: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
 const results = await prisma.$queryRawUnsafe<Array<{
@@ -165,7 +165,7 @@ getStatusDistribution: publicProcedure
   }),
 
   // ——— Trends Over Time (standards created per year, by repo) ———
-  getCreationTrends: protectedProcedure
+  getCreationTrends: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
 const results = await prisma.$queryRawUnsafe<Array<{
@@ -205,7 +205,7 @@ getCategoryBreakdown: publicProcedure
   }),
 
   // ——— Filter Options (for populating multi-selects) ———
-  getFilterOptions: protectedProcedure
+  getFilterOptions: optionalAuthProcedure
     .input(repoFilterSchema)
     .handler(async ({ input }) => {
 const [statuses, types, categories] = await Promise.all([
@@ -243,7 +243,7 @@ const [statuses, types, categories] = await Promise.all([
     }),
 
   // ——— Main Table (EIPs/ERCs) ———
-  getTable: protectedProcedure
+  getTable: optionalAuthProcedure
     .input(tableInputSchema)
     .handler(async ({ input }) => {
 const {
@@ -398,7 +398,7 @@ const {
     }),
 
   // ——— RIPs Table ———
-  getRIPsTable: protectedProcedure
+  getRIPsTable: optionalAuthProcedure
     .input(z.object({
       search: z.string().optional(),
       sortBy: z.enum(['number', 'title', 'status', 'author', 'created_at', 'last_commit', 'commits']).optional().default('number'),
@@ -494,7 +494,7 @@ const { search, sortBy, sortDir, page, pageSize } = input;
     }),
 
   // ——— RIP Creation Trends (by year, for analytics charts) ———
-   getRIPCreationTrends: protectedProcedure
+   getRIPCreationTrends: optionalAuthProcedure
     .handler(async () => {
       const results = await prisma.$queryRawUnsafe<Array<{
         year: number;
@@ -518,7 +518,7 @@ const { search, sortBy, sortDir, page, pageSize } = input;
 
 
   // ——— RIP Activity Over Time ———
-  getRIPActivity: protectedProcedure
+  getRIPActivity: optionalAuthProcedure
     .handler(async () => {
 const results = await prisma.$queryRawUnsafe<Array<{
         month: string;
@@ -540,14 +540,14 @@ const results = await prisma.$queryRawUnsafe<Array<{
     }),
 
 // ——— Status × Group Matrix (for homepage) ———
-getStatusMatrix: protectedProcedure
+getStatusMatrix: optionalAuthProcedure
   .handler(async ({ context }) => {
     await checkAPIToken(context.headers);
     return getStatusMatrixCached();
   }),
 
   // ——— Upgrade Impact Snapshot (for homepage) ———
-  getUpgradeImpact: protectedProcedure
+  getUpgradeImpact: optionalAuthProcedure
     .handler(async () => {
 const results = await prisma.$queryRawUnsafe<Array<{
         upgrade_name: string;
@@ -587,7 +587,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
     }),
 
   // ——— Monthly Governance Delta (for homepage) ———
-  getMonthlyDelta: protectedProcedure
+  getMonthlyDelta: optionalAuthProcedure
     .handler(async () => {
 const results = await prisma.$queryRawUnsafe<Array<{
         to_status: string;
@@ -610,7 +610,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
 
   // ——— Repo Distribution (for homepage) ———
   // Aligns with Category Breakdown: ethereum/EIPs = by repo, ethereum/ERCs = by category (ERC), ethereum/RIPs = rips table
-  getRepoDistribution: protectedProcedure
+  getRepoDistribution: optionalAuthProcedure
     .handler(async () => {
 // ethereum/EIPs: count by repository (EIPs repo only)
       const eipsResults = await prisma.$queryRawUnsafe<Array<{
@@ -694,7 +694,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
     }),
 
   // ——— CSV Export (EIPs/ERCs) ———
-  exportCSV: protectedProcedure
+  exportCSV: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       status: z.array(z.string()).optional(),
@@ -798,7 +798,7 @@ if (input.repo === 'rips') {
     }),
 
   // ——— Category × Status cross-tab (for dashboard) ———
-  getCategoryStatusCrosstab: protectedProcedure
+  getCategoryStatusCrosstab: optionalAuthProcedure
     .handler(async () => {
 const results = await prisma.$queryRawUnsafe<Array<{
         category: string; status: string; repo_group: string; count: bigint;

@@ -1,4 +1,4 @@
-import { protectedProcedure, type Ctx } from './types'
+import { optionalAuthProcedure, type Ctx } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 
@@ -24,7 +24,7 @@ END`;
 
 export const toolsProcedures = {
   // ──── Board: EIPs grouped by status (Kanban data) ────
-  getBoardData: protectedProcedure
+  getBoardData: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       search: z.string().optional(),
@@ -100,7 +100,7 @@ export const toolsProcedures = {
     }),
 
   // ──── Dependencies: EIP requires graph ────
-  getDependencyGraph: protectedProcedure
+  getDependencyGraph: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       eipNumber: z.number().optional(),
@@ -170,7 +170,7 @@ export const toolsProcedures = {
     }),
 
   // ──── Timeline: Status events + commits for an EIP ────
-  getEIPFullTimeline: protectedProcedure
+  getEIPFullTimeline: optionalAuthProcedure
     .input(z.object({
       eipNumber: z.number(),
     }))
@@ -312,7 +312,7 @@ export const toolsProcedures = {
     }),
 
   // ──── Board filter options ────
-  getBoardFilterOptions: protectedProcedure
+  getBoardFilterOptions: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
@@ -340,7 +340,7 @@ const repoIds = await getRepoIds(input.repo);
     }),
 
   // ──── Open PRs Board: paginated list with governance state & classification ────
-  getOpenPRBoard: protectedProcedure
+  getOpenPRBoard: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       govState: z.string().optional(),
@@ -424,7 +424,7 @@ const { repo, govState, processType, search, page, pageSize } = input;
     }),
 
   // ──── Open PRs Board Stats: process type + governance state counts ────
-  getOpenPRBoardStats: protectedProcedure
+  getOpenPRBoardStats: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       govState: z.string().optional(),

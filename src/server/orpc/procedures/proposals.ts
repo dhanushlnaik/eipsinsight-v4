@@ -1,10 +1,10 @@
-import { protectedProcedure, publicProcedure, checkAPIToken, ORPCError } from './types'
+import { optionalAuthProcedure, publicProcedure, checkAPIToken, ORPCError } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 
 export const proposalsProcedures = {
   // A. Proposal Overview
-  getProposal: protectedProcedure
+  getProposal: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eip', 'erc', 'rip', 'eips', 'ercs', 'rips']),
       number: z.number(),
@@ -71,7 +71,7 @@ export const proposalsProcedures = {
     }),
 
   // B. Status Timeline
-  getStatusEvents: protectedProcedure
+  getStatusEvents: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eip', 'erc', 'rip', 'eips', 'ercs', 'rips']),
       number: z.number(),
@@ -107,7 +107,7 @@ const eip = await prisma.eips.findUnique({
     }),
 
   // C. Type Timeline
-  getTypeEvents: protectedProcedure
+  getTypeEvents: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eip', 'erc', 'rip', 'eips', 'ercs', 'rips']),
       number: z.number(),
@@ -141,7 +141,7 @@ const eip = await prisma.eips.findUnique({
     }),
 
   // D. Upgrade Inclusion
-  getUpgrades: protectedProcedure
+  getUpgrades: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eip', 'erc', 'rip', 'eips', 'ercs', 'rips']),
       number: z.number(),
@@ -270,7 +270,7 @@ const eip = await prisma.eips.findUnique({
     }),
 
   // Governance Signals
-  getGovernanceState: protectedProcedure
+  getGovernanceState: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eip', 'erc', 'rip', 'eips', 'ercs', 'rips']),
       number: z.number(),
