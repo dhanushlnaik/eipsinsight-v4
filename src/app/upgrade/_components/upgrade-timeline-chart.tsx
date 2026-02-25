@@ -193,22 +193,22 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
   };
 
   return (
-    <div className="relative w-full rounded-lg border border-cyan-400/20 bg-slate-950/50 backdrop-blur-sm overflow-hidden">
+    <div className="relative w-full rounded-lg border border-cyan-400/20 bg-white/90 dark:bg-slate-950/50 backdrop-blur-sm overflow-hidden">
       {/* Header */}
-      <div className="p-3 sm:p-4 border-b border-cyan-400/10 bg-slate-900/30">
+      <div className="p-3 sm:p-4 border-b border-cyan-400/10 bg-slate-100/80 dark:bg-slate-900/30">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div className="flex-1">
-            <h3 className="text-sm sm:text-base font-bold text-white mb-1">EIP Composition Timeline</h3>
-            <p className="text-xs text-slate-400 leading-relaxed">Track EIP status changes over time for <span className="text-cyan-300 font-medium">{upgradeName}</span></p>
+            <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white mb-1">EIP Composition Timeline</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">Track EIP status changes over time for <span className="text-cyan-700 dark:text-cyan-300 font-medium">{upgradeName}</span></p>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Zoom Controls */}
-            <div className="flex gap-0.5 rounded-lg bg-slate-950/80 backdrop-blur-sm border border-cyan-400/20 p-1">
+            <div className="flex gap-0.5 rounded-lg bg-white/90 dark:bg-slate-950/80 backdrop-blur-sm border border-cyan-400/20 p-1">
               <button
                 onClick={() => setZoomLevel((z) => Math.min(z * 1.2, 3))}
                 disabled={zoomLevel >= 3}
                 className={cn(
-                  'p-1.5 rounded transition-all text-cyan-400 hover:text-cyan-200 hover:bg-cyan-500/15',
+                  'p-1.5 rounded transition-all text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-200 hover:bg-cyan-500/15',
                   'disabled:opacity-30 disabled:cursor-not-allowed'
                 )}
                 aria-label="Zoom in"
@@ -219,7 +219,7 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
                 onClick={() => setZoomLevel((z) => Math.max(z / 1.2, 0.5))}
                 disabled={zoomLevel <= 0.5}
                 className={cn(
-                  'p-1.5 rounded transition-all text-cyan-400 hover:text-cyan-200 hover:bg-cyan-500/15',
+                  'p-1.5 rounded transition-all text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-200 hover:bg-cyan-500/15',
                   'disabled:opacity-30 disabled:cursor-not-allowed'
                 )}
                 aria-label="Zoom out"
@@ -230,7 +230,7 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
                 onClick={resetZoom}
                 disabled={zoomLevel === 1 && offset.x === 0 && offset.y === 0}
                 className={cn(
-                  'p-1.5 rounded transition-all text-cyan-400 hover:text-cyan-200 hover:bg-cyan-500/15',
+                  'p-1.5 rounded transition-all text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-200 hover:bg-cyan-500/15',
                   'disabled:opacity-30 disabled:cursor-not-allowed'
                 )}
                 aria-label="Reset"
@@ -241,7 +241,7 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
             {/* Export Button */}
             <button
               onClick={downloadReport}
-              className="px-3 py-1.5 rounded-lg bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 border border-cyan-400/25 transition-all text-xs font-medium flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/25 border border-cyan-400/25 transition-all text-xs font-medium flex items-center gap-1.5"
             >
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Export</span>
@@ -257,7 +257,7 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
                 className="h-2 w-2 rounded-full border border-white/10"
                 style={{ backgroundColor: color }}
               />
-              <span className="text-xs font-medium text-slate-300">{LEGEND_LABELS[status]}</span>
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{LEGEND_LABELS[status]}</span>
             </div>
           ))}
         </div>
@@ -266,7 +266,7 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
       {/* Chart Container */}
       <div
         ref={chartContainerRef}
-        className="relative overflow-auto bg-slate-900/30"
+        className="relative overflow-auto bg-slate-100/70 dark:bg-slate-900/30"
         style={{ height: `${chartHeight + 10}px`, minHeight: '400px' }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -277,8 +277,8 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
         }}
       >
         {zoomLevel > 1 && (
-          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-lg bg-slate-900/95 backdrop-blur-md border border-cyan-400/20 px-2.5 py-1.5">
-            <span className="text-xs text-cyan-300 font-medium">Drag to pan</span>
+          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-cyan-400/20 px-2.5 py-1.5">
+            <span className="text-xs text-cyan-700 dark:text-cyan-300 font-medium">Drag to pan</span>
           </div>
         )}
 
@@ -419,7 +419,7 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
           
           return (
             <div
-              className="fixed z-50 bg-slate-950/98 backdrop-blur-md border border-cyan-400/30 rounded-lg shadow-xl pointer-events-none"
+              className="fixed z-50 bg-white/98 dark:bg-slate-950/98 backdrop-blur-md border border-cyan-400/30 rounded-lg shadow-xl pointer-events-none"
               style={{
                 left: `${left}px`,
                 top: `${top}px`,
@@ -435,39 +435,39 @@ export function UpgradeTimelineChart({ data, upgradeName }: UpgradeTimelineChart
                   >
                     EIP-{hoveredEip.eip.replace(/EIP-/, '')}
                   </span>
-                  <span className="text-xs font-semibold text-slate-300">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     {changeStatus(hoveredEip.type)}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 font-medium">
+                <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
                   {new Date(hoveredEip.date).toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
                     year: 'numeric',
                   })}
                 </p>
-                <div className="pt-2 border-t border-slate-700/40">
-                  <p className="text-xs font-semibold text-slate-300 mb-2">Status counts:</p>
+                <div className="pt-2 border-t border-slate-300/70 dark:border-slate-700/40">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Status counts:</p>
                   <div className="grid grid-cols-2 gap-1.5 text-xs">
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                      <span className="text-emerald-300">INCLUDED: {hoveredEip.statusCounts.included}</span>
+                      <span className="text-emerald-700 dark:text-emerald-300">INCLUDED: {hoveredEip.statusCounts.included}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-full bg-cyan-500" />
-                      <span className="text-cyan-300">SFI: {hoveredEip.statusCounts.scheduled}</span>
+                      <span className="text-cyan-700 dark:text-cyan-300">SFI: {hoveredEip.statusCounts.scheduled}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-full bg-amber-500" />
-                      <span className="text-amber-300">CFI: {hoveredEip.statusCounts.considered}</span>
+                      <span className="text-amber-700 dark:text-amber-300">CFI: {hoveredEip.statusCounts.considered}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-full bg-red-500" />
-                      <span className="text-red-300">DFI: {hoveredEip.statusCounts.declined}</span>
+                      <span className="text-red-700 dark:text-red-300">DFI: {hoveredEip.statusCounts.declined}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-full bg-violet-500" />
-                      <span className="text-violet-300">PFI: {hoveredEip.statusCounts.proposed}</span>
+                      <span className="text-violet-700 dark:text-violet-300">PFI: {hoveredEip.statusCounts.proposed}</span>
                     </div>
                   </div>
                 </div>

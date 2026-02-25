@@ -119,6 +119,10 @@ export const usePersonaStore = create<PersonaState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
+          // If a previously saved persona is no longer active, force re-selection.
+          if (state.persona && !isValidPersona(state.persona)) {
+            state.reset();
+          }
           state.setHydrated(true);
         }
       },

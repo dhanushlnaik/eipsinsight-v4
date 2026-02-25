@@ -23,6 +23,10 @@ export function buildMetadata({
 }: BuildMetadataInput): Metadata {
   const canonicalPath = path.startsWith("/") ? path : `/${path}`;
   const url = `${SITE_URL}${canonicalPath}`;
+  const imageUrl =
+    image.startsWith("http://") || image.startsWith("https://")
+      ? image
+      : `${SITE_URL}${image.startsWith("/") ? image : `/${image}`}`;
 
   return {
     title,
@@ -39,7 +43,7 @@ export function buildMetadata({
       url,
       images: [
         {
-          url: image,
+          url: imageUrl,
           width: 1200,
           height: 630,
           alt: title,
@@ -50,7 +54,7 @@ export function buildMetadata({
       card: "summary_large_image",
       title,
       description,
-      images: [image],
+        images: [imageUrl],
       creator: "@EIPsInsight",
     },
     robots: noIndex

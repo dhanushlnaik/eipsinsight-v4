@@ -3,9 +3,9 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { usePersonaStore } from "@/stores/personaStore";
+import { ThemedLogoGif } from "@/components/themed-logo-gif";
 import {
   PERSONAS,
   PERSONA_LIST,
@@ -41,11 +41,11 @@ export default function PersonaOnboardingPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-pulse">
-          <Image
-            src="/brand/logo/EIPsInsights.gif"
+          <ThemedLogoGif
             alt="Loading"
             width={64}
             height={64}
+            unoptimized
           />
         </div>
       </div>
@@ -71,11 +71,11 @@ export default function PersonaOnboardingPage() {
           <div className="flex justify-center mb-6">
             <div className="relative">
               <div className="absolute inset-0 animate-pulse rounded-full bg-cyan-400/20 blur-xl" />
-              <Image
-                src="/brand/logo/EIPsInsights.gif"
+              <ThemedLogoGif
                 alt="EIPsInsight"
                 width={72}
                 height={72}
+                unoptimized
                 className="relative z-10"
               />
             </div>

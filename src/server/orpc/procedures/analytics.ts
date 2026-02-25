@@ -1919,31 +1919,749 @@ export const analyticsProcedures = {
     }),
 
   getContributorProfile: optionalAuthProcedure
-    .input(z.object({ actor: z.string(), limit: z.number().optional().default(100) }))
+    .input(z.object({
+      actor: z.string(),
+      limit: z.number().optional().default(300),
+      months: z.number().optional().default(24),
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+    }))
     .handler(async ({ input }) => {
-      const activities = await prisma.contributor_activity.findMany({
-        where: { actor: input.actor },
-        orderBy: { occurred_at: 'desc' },
-        take: input.limit,
-        include: { repositories: true },
-      });
-      const byRepo = activities.reduce(
-        (acc, a) => {
-          const name = a.repositories?.name ?? 'Unknown';
-          acc[name] = (acc[name] ?? 0) + 1;
-          return acc;
-        },
-        {} as Record<string, number>
+      const repo = input.repo ?? null;
+      const from = input.from ?? null;
+      const to = input.to ?? null;
+
+      const actorLookup = await prisma.$queryRawUnsafe<Array<{ actor: string }>>(
+        `
+        SELECT ca.actor
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE LOWER(ca.actor) = LOWER($1)
+          AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+        GROUP BY ca.actor
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+      `,
+        input.actor,
+        repo
       );
+
+      const actor = actorLookup[0]?.actor ?? input.actor;
+
+      const [
+        summaryRows,
+        actionRows,
+        repoRows,
+        monthlyRows,
+        timelineRows,
+        detailedTimelineRows,
+        involvedPRRows,
+        topMonthRows,
+        topActionRows,
+        toppedMonthsRows,
+        allTimeRankRows,
+        monthRankRows,
+        editorRankRows,
+        reviewerRankRows,
+        authoredRows,
+        prDetailsRows,
+        issueDetailsRows,
+      ] = await Promise.all([
+        prisma.$queryRawUnsafe<Array<{
+          total_activities: bigint;
+          prs_touched: bigint;
+          first_activity: Date | null;
+          last_activity: Date | null;
+          reviews: bigint;
+          comments: bigint;
+          commits: bigint;
+          opened: bigint;
+          status_changes: bigint;
+        }>>(
+          `
+          SELECT
+            COUNT(*)::bigint AS total_activities,
+            COUNT(DISTINCT ca.pr_number)::bigint AS prs_touched,
+            MIN(ca.occurred_at) AS first_activity,
+            MAX(ca.occurred_at) AS last_activity,
+            COUNT(*) FILTER (WHERE ca.action_type = 'reviewed')::bigint AS reviews,
+            COUNT(*) FILTER (WHERE ca.action_type IN ('commented', 'issue_comment'))::bigint AS comments,
+            COUNT(*) FILTER (WHERE ca.action_type = 'committed')::bigint AS commits,
+            COUNT(*) FILTER (WHERE ca.action_type = 'opened')::bigint AS opened,
+            COUNT(*) FILTER (WHERE ca.action_type = 'status_change')::bigint AS status_changes
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          WHERE LOWER(ca.actor) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+        `,
+          actor,
+          repo,
+          from,
+          to
+        ),
+        prisma.$queryRawUnsafe<Array<{ action_type: string; count: bigint }>>(
+          `
+          SELECT ca.action_type, COUNT(*)::bigint AS count
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          WHERE LOWER(ca.actor) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+          GROUP BY ca.action_type
+          ORDER BY count DESC
+        `,
+          actor,
+          repo,
+          from,
+          to
+        ),
+        prisma.$queryRawUnsafe<Array<{ repo: string; count: bigint }>>(
+          `
+          SELECT COALESCE(r.name, 'Unknown') AS repo, COUNT(*)::bigint AS count
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          WHERE LOWER(ca.actor) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+          GROUP BY r.name
+          ORDER BY count DESC
+        `,
+          actor,
+          repo,
+          from,
+          to
+        ),
+        prisma.$queryRawUnsafe<Array<{ month: string; action_type: string; count: bigint }>>(
+          `
+          SELECT
+            TO_CHAR(date_trunc('month', ca.occurred_at), 'YYYY-MM') AS month,
+            ca.action_type,
+            COUNT(*)::bigint AS count
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          WHERE LOWER(ca.actor) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+            AND ($3::text IS NOT NULL OR ca.occurred_at >= date_trunc('month', NOW() - INTERVAL '1 month' * $5))
+          GROUP BY date_trunc('month', ca.occurred_at), ca.action_type
+          ORDER BY month ASC, ca.action_type ASC
+        `,
+          actor,
+          repo,
+          from,
+          to,
+          (input.months || 24) - 1
+        ),
+        prisma.$queryRawUnsafe<Array<{
+          action_type: string;
+          role: string | null;
+          pr_number: number;
+          repo: string | null;
+          occurred_at: Date;
+        }>>(
+          `
+          SELECT
+            ca.action_type,
+            ca.role,
+            ca.pr_number,
+            r.name AS repo,
+            ca.occurred_at
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          WHERE LOWER(ca.actor) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+          ORDER BY ca.occurred_at DESC
+          LIMIT $5
+        `,
+          actor,
+          repo,
+          from,
+          to,
+          input.limit
+        ),
+        prisma.$queryRawUnsafe<Array<{
+          action_type: string;
+          role: string | null;
+          pr_number: number;
+          repo: string | null;
+          occurred_at: Date;
+          pr_title: string | null;
+          pr_state: string | null;
+          governance_state: string | null;
+          pr_labels: string[] | null;
+          event_type: string | null;
+          github_id: string | null;
+          commit_sha: string | null;
+        }>>(
+          `
+          SELECT
+            ca.action_type,
+            ca.role,
+            ca.pr_number,
+            r.name AS repo,
+            ca.occurred_at,
+            pr.title AS pr_title,
+            pr.state AS pr_state,
+            gs.current_state AS governance_state,
+            pr.labels AS pr_labels,
+            pe.event_type,
+            pe.github_id,
+            pe.commit_sha
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          LEFT JOIN pull_requests pr ON pr.pr_number = ca.pr_number AND pr.repository_id = ca.repository_id
+          LEFT JOIN pr_governance_state gs ON gs.pr_number = ca.pr_number AND gs.repository_id = ca.repository_id
+          LEFT JOIN LATERAL (
+            SELECT
+              e.event_type,
+              e.github_id,
+              e.commit_sha,
+              e.created_at
+            FROM pr_events e
+            WHERE e.pr_number = ca.pr_number
+              AND e.repository_id = ca.repository_id
+              AND LOWER(e.actor) = LOWER(ca.actor)
+              AND e.created_at BETWEEN ca.occurred_at - INTERVAL '12 hours' AND ca.occurred_at + INTERVAL '12 hours'
+            ORDER BY ABS(EXTRACT(EPOCH FROM (e.created_at - ca.occurred_at))) ASC
+            LIMIT 1
+          ) pe ON TRUE
+          WHERE LOWER(ca.actor) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+          ORDER BY ca.occurred_at DESC
+          LIMIT $5
+        `,
+          actor,
+          repo,
+          from,
+          to,
+          input.limit
+        ),
+        prisma.$queryRawUnsafe<Array<{
+          pr_number: number;
+          repo: string | null;
+          title: string | null;
+          state: string | null;
+          governance_state: string | null;
+          created_at: Date | null;
+          updated_at: Date | null;
+          merged_at: Date | null;
+          closed_at: Date | null;
+          total_actions: bigint;
+          actions_breakdown: string[];
+          last_occurred_at: Date;
+        }>>(
+          `
+          WITH activity_by_pr AS (
+            SELECT
+              ca.pr_number,
+              ca.repository_id,
+              COUNT(*)::bigint AS total_actions,
+              MAX(ca.occurred_at) AS last_occurred_at,
+              ARRAY(
+                SELECT (x.action_type || ':' || x.cnt::text)
+                FROM (
+                  SELECT action_type, COUNT(*)::bigint AS cnt
+                  FROM contributor_activity ca2
+                  WHERE ca2.pr_number = ca.pr_number
+                    AND ca2.repository_id = ca.repository_id
+                    AND LOWER(ca2.actor) = LOWER($1)
+                    AND ($2::text IS NULL OR ca2.occurred_at >= $2::timestamp)
+                    AND ($3::text IS NULL OR ca2.occurred_at <= $3::timestamp)
+                  GROUP BY action_type
+                  ORDER BY cnt DESC, action_type ASC
+                ) x
+              ) AS actions_breakdown
+            FROM contributor_activity ca
+            LEFT JOIN repositories r ON r.id = ca.repository_id
+            WHERE LOWER(ca.actor) = LOWER($1)
+              AND ($4::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($4))
+              AND ($2::text IS NULL OR ca.occurred_at >= $2::timestamp)
+              AND ($3::text IS NULL OR ca.occurred_at <= $3::timestamp)
+            GROUP BY ca.pr_number, ca.repository_id
+          )
+          SELECT
+            abp.pr_number,
+            r.name AS repo,
+            pr.title,
+            pr.state,
+            gs.current_state AS governance_state,
+            pr.created_at,
+            pr.updated_at,
+            pr.merged_at,
+            pr.closed_at,
+            abp.total_actions,
+            abp.actions_breakdown,
+            abp.last_occurred_at
+          FROM activity_by_pr abp
+          LEFT JOIN repositories r ON r.id = abp.repository_id
+          LEFT JOIN pull_requests pr ON pr.pr_number = abp.pr_number AND pr.repository_id = abp.repository_id
+          LEFT JOIN pr_governance_state gs ON gs.pr_number = abp.pr_number AND gs.repository_id = abp.repository_id
+          ORDER BY abp.last_occurred_at DESC
+          LIMIT 300
+        `,
+          actor,
+          from,
+          to,
+          repo
+        ),
+        prisma.$queryRawUnsafe<Array<{ month: string; count: bigint }>>(
+          `
+          SELECT
+            TO_CHAR(date_trunc('month', ca.occurred_at), 'YYYY-MM') AS month,
+            COUNT(*)::bigint AS count
+          FROM contributor_activity ca
+          LEFT JOIN repositories r ON r.id = ca.repository_id
+          WHERE LOWER(ca.actor) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+            AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+          GROUP BY date_trunc('month', ca.occurred_at)
+          ORDER BY count DESC, month DESC
+          LIMIT 1
+        `,
+          actor,
+          repo,
+          from,
+          to
+        ),
+        prisma.$queryRawUnsafe<Array<{ action_type: string; month: string; count: bigint }>>(
+          `
+          WITH per_month AS (
+            SELECT
+              ca.action_type,
+              TO_CHAR(date_trunc('month', ca.occurred_at), 'YYYY-MM') AS month,
+              COUNT(*)::bigint AS count
+            FROM contributor_activity ca
+            LEFT JOIN repositories r ON r.id = ca.repository_id
+            WHERE LOWER(ca.actor) = LOWER($1)
+              AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+              AND ($3::text IS NULL OR ca.occurred_at >= $3::timestamp)
+              AND ($4::text IS NULL OR ca.occurred_at <= $4::timestamp)
+            GROUP BY ca.action_type, date_trunc('month', ca.occurred_at)
+          ),
+          ranked AS (
+            SELECT
+              action_type,
+              month,
+              count,
+              ROW_NUMBER() OVER (PARTITION BY action_type ORDER BY count DESC, month DESC) AS rn
+            FROM per_month
+          )
+          SELECT action_type, month, count
+          FROM ranked
+          WHERE rn = 1
+          ORDER BY count DESC
+        `,
+          actor,
+          repo,
+          from,
+          to
+        ),
+        prisma.$queryRawUnsafe<Array<{ topped_months: bigint }>>(
+          `
+          WITH monthly_actor AS (
+            SELECT
+              TO_CHAR(date_trunc('month', ca.occurred_at), 'YYYY-MM') AS month,
+              ca.actor,
+              COUNT(*)::bigint AS total
+            FROM contributor_activity ca
+            LEFT JOIN repositories r ON r.id = ca.repository_id
+            WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            GROUP BY date_trunc('month', ca.occurred_at), ca.actor
+          ),
+          ranked AS (
+            SELECT
+              month,
+              actor,
+              RANK() OVER (PARTITION BY month ORDER BY total DESC) AS rank_in_month
+            FROM monthly_actor
+          )
+          SELECT COUNT(*)::bigint AS topped_months
+          FROM ranked
+          WHERE LOWER(actor) = LOWER($2) AND rank_in_month = 1
+        `,
+          repo,
+          actor
+        ),
+        prisma.$queryRawUnsafe<Array<{ total_rank: number; reviews_rank: number; participants: bigint }>>(
+          `
+          WITH agg AS (
+            SELECT
+              ca.actor,
+              COUNT(*)::bigint AS total,
+              COUNT(*) FILTER (WHERE ca.action_type = 'reviewed')::bigint AS reviews
+            FROM contributor_activity ca
+            LEFT JOIN repositories r ON r.id = ca.repository_id
+            WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            GROUP BY ca.actor
+          ),
+          ranked AS (
+            SELECT
+              actor,
+              RANK() OVER (ORDER BY total DESC) AS total_rank,
+              RANK() OVER (ORDER BY reviews DESC) AS reviews_rank,
+              COUNT(*) OVER ()::bigint AS participants
+            FROM agg
+          )
+          SELECT total_rank, reviews_rank, participants
+          FROM ranked
+          WHERE LOWER(actor) = LOWER($2)
+          LIMIT 1
+        `,
+          repo,
+          actor
+        ),
+        prisma.$queryRawUnsafe<Array<{ total_rank: number; reviews_rank: number; participants: bigint }>>(
+          `
+          WITH agg AS (
+            SELECT
+              ca.actor,
+              COUNT(*)::bigint AS total,
+              COUNT(*) FILTER (WHERE ca.action_type = 'reviewed')::bigint AS reviews
+            FROM contributor_activity ca
+            LEFT JOIN repositories r ON r.id = ca.repository_id
+            WHERE ca.occurred_at >= date_trunc('month', NOW())
+              AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            GROUP BY ca.actor
+          ),
+          ranked AS (
+            SELECT
+              actor,
+              RANK() OVER (ORDER BY total DESC) AS total_rank,
+              RANK() OVER (ORDER BY reviews DESC) AS reviews_rank,
+              COUNT(*) OVER ()::bigint AS participants
+            FROM agg
+          )
+          SELECT total_rank, reviews_rank, participants
+          FROM ranked
+          WHERE LOWER(actor) = LOWER($2)
+          LIMIT 1
+        `,
+          repo,
+          actor
+        ),
+        prisma.$queryRawUnsafe<Array<{ role_rank: number; participants: bigint }>>(
+          `
+          WITH agg AS (
+            SELECT
+              ca.actor,
+              COUNT(*)::bigint AS total
+            FROM contributor_activity ca
+            LEFT JOIN repositories r ON r.id = ca.repository_id
+            WHERE UPPER(ca.role) = 'EDITOR'
+              AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            GROUP BY ca.actor
+          ),
+          ranked AS (
+            SELECT
+              actor,
+              RANK() OVER (ORDER BY total DESC) AS role_rank,
+              COUNT(*) OVER ()::bigint AS participants
+            FROM agg
+          )
+          SELECT role_rank, participants
+          FROM ranked
+          WHERE LOWER(actor) = LOWER($2)
+          LIMIT 1
+        `,
+          repo,
+          actor
+        ),
+        prisma.$queryRawUnsafe<Array<{ role_rank: number; participants: bigint }>>(
+          `
+          WITH agg AS (
+            SELECT
+              ca.actor,
+              COUNT(*)::bigint AS total
+            FROM contributor_activity ca
+            LEFT JOIN repositories r ON r.id = ca.repository_id
+            WHERE (UPPER(ca.role) = 'REVIEWER' OR (ca.action_type = 'reviewed' AND (ca.role IS NULL OR UPPER(ca.role) != 'EDITOR')))
+              AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            GROUP BY ca.actor
+          ),
+          ranked AS (
+            SELECT
+              actor,
+              RANK() OVER (ORDER BY total DESC) AS role_rank,
+              COUNT(*) OVER ()::bigint AS participants
+            FROM agg
+          )
+          SELECT role_rank, participants
+          FROM ranked
+          WHERE LOWER(actor) = LOWER($2)
+          LIMIT 1
+        `,
+          repo,
+          actor
+        ),
+        prisma.$queryRawUnsafe<Array<{
+          prs_authored: bigint;
+          prs_merged: bigint;
+          issues_authored: bigint;
+          eips_authored: bigint;
+        }>>(
+          `
+          SELECT
+            (
+              SELECT COUNT(*)::bigint
+              FROM pull_requests pr
+              LEFT JOIN repositories r ON r.id = pr.repository_id
+              WHERE LOWER(COALESCE(pr.author, '')) = LOWER($1)
+                AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            ) AS prs_authored,
+            (
+              SELECT COUNT(*)::bigint
+              FROM pull_requests pr
+              LEFT JOIN repositories r ON r.id = pr.repository_id
+              WHERE LOWER(COALESCE(pr.author, '')) = LOWER($1)
+                AND pr.merged_at IS NOT NULL
+                AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            ) AS prs_merged,
+            (
+              SELECT COUNT(*)::bigint
+              FROM issues i
+              LEFT JOIN repositories r ON r.id = i.repository_id
+              WHERE LOWER(COALESCE(i.author, '')) = LOWER($1)
+                AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+            ) AS issues_authored,
+            (
+              SELECT COUNT(*)::bigint
+              FROM eips e
+              WHERE COALESCE(e.author, '') ILIKE '%' || $1 || '%'
+            ) AS eips_authored
+        `,
+          actor,
+          repo
+        ),
+        prisma.$queryRawUnsafe<Array<{
+          pr_number: number;
+          repo: string | null;
+          title: string | null;
+          state: string | null;
+          created_at: Date | null;
+          merged_at: Date | null;
+          closed_at: Date | null;
+          updated_at: Date | null;
+          labels: string[] | null;
+          governance_state: string | null;
+        }>>(
+          `
+          SELECT
+            pr.pr_number,
+            r.name AS repo,
+            pr.title,
+            pr.state,
+            pr.created_at,
+            pr.merged_at,
+            pr.closed_at,
+            pr.updated_at,
+            pr.labels,
+            gs.current_state AS governance_state
+          FROM pull_requests pr
+          LEFT JOIN repositories r ON r.id = pr.repository_id
+          LEFT JOIN pr_governance_state gs ON gs.pr_number = pr.pr_number AND gs.repository_id = pr.repository_id
+          WHERE LOWER(COALESCE(pr.author, '')) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+          ORDER BY COALESCE(pr.updated_at, pr.created_at) DESC
+          LIMIT 200
+        `,
+          actor,
+          repo
+        ),
+        prisma.$queryRawUnsafe<Array<{
+          issue_number: number;
+          repo: string | null;
+          title: string | null;
+          state: string | null;
+          created_at: Date | null;
+          updated_at: Date | null;
+          closed_at: Date | null;
+          labels: string[] | null;
+        }>>(
+          `
+          SELECT
+            i.issue_number,
+            r.name AS repo,
+            i.title,
+            i.state,
+            i.created_at,
+            i.updated_at,
+            i.closed_at,
+            i.labels
+          FROM issues i
+          LEFT JOIN repositories r ON r.id = i.repository_id
+          WHERE LOWER(COALESCE(i.author, '')) = LOWER($1)
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
+          ORDER BY COALESCE(i.updated_at, i.created_at) DESC
+          LIMIT 200
+        `,
+          actor,
+          repo
+        ),
+      ]);
+
+      const summary = summaryRows[0] || {
+        total_activities: BigInt(0),
+        prs_touched: BigInt(0),
+        first_activity: null,
+        last_activity: null,
+        reviews: BigInt(0),
+        comments: BigInt(0),
+        commits: BigInt(0),
+        opened: BigInt(0),
+        status_changes: BigInt(0),
+      };
+
+      const authored = authoredRows[0] || {
+        prs_authored: BigInt(0),
+        prs_merged: BigInt(0),
+        issues_authored: BigInt(0),
+        eips_authored: BigInt(0),
+      };
+
+      const monthlyMap = new Map<string, Map<string, number>>();
+      for (const row of monthlyRows) {
+        if (!monthlyMap.has(row.month)) {
+          monthlyMap.set(row.month, new Map<string, number>());
+        }
+        monthlyMap.get(row.month)!.set(row.action_type, Number(row.count));
+      }
+
+      const monthlyActivity = Array.from(monthlyMap.entries()).map(([month, actions]) => {
+        const actionCounts = Array.from(actions.entries()).map(([actionType, count]) => ({
+          actionType,
+          count,
+        }));
+        const total = actionCounts.reduce((acc, item) => acc + item.count, 0);
+        return { month, total, actionCounts };
+      });
+
       return {
-        actor: input.actor,
-        totalActivities: activities.length,
-        byRepo: Object.entries(byRepo).map(([repo, count]) => ({ repo, count })),
-        recentActivities: activities.map((a) => ({
-          actionType: a.action_type,
-          prNumber: a.pr_number,
-          repo: a.repositories?.name ?? null,
-          occurredAt: a.occurred_at.toISOString(),
+        actor,
+        summary: {
+          totalActivities: Number(summary.total_activities),
+          prsTouched: Number(summary.prs_touched),
+          firstActivity: summary.first_activity?.toISOString() ?? null,
+          lastActivity: summary.last_activity?.toISOString() ?? null,
+          reviews: Number(summary.reviews),
+          comments: Number(summary.comments),
+          commits: Number(summary.commits),
+          opened: Number(summary.opened),
+          statusChanges: Number(summary.status_changes),
+          prsAuthored: Number(authored.prs_authored),
+          prsMerged: Number(authored.prs_merged),
+          issuesAuthored: Number(authored.issues_authored),
+          eipsAuthored: Number(authored.eips_authored),
+        },
+        actionBreakdown: actionRows.map((r) => ({
+          actionType: r.action_type,
+          count: Number(r.count),
+        })),
+        repoBreakdown: repoRows.map((r) => ({
+          repo: r.repo,
+          count: Number(r.count),
+        })),
+        monthlyActivity,
+        timeline: timelineRows.map((r) => ({
+          actionType: r.action_type,
+          role: r.role,
+          prNumber: r.pr_number,
+          repo: r.repo,
+          occurredAt: r.occurred_at.toISOString(),
+        })),
+        activityDetails: detailedTimelineRows.map((r) => ({
+          actionType: r.action_type,
+          role: r.role,
+          prNumber: r.pr_number,
+          repo: r.repo,
+          occurredAt: r.occurred_at.toISOString(),
+          prTitle: r.pr_title,
+          prState: r.pr_state,
+          governanceState: r.governance_state,
+          prLabels: r.pr_labels ?? [],
+          eventType: r.event_type,
+          githubId: r.github_id,
+          commitSha: r.commit_sha,
+        })),
+        involvedPRs: involvedPRRows.map((r) => ({
+          prNumber: r.pr_number,
+          repo: r.repo,
+          title: r.title,
+          state: r.state,
+          governanceState: r.governance_state,
+          createdAt: r.created_at?.toISOString() ?? null,
+          updatedAt: r.updated_at?.toISOString() ?? null,
+          mergedAt: r.merged_at?.toISOString() ?? null,
+          closedAt: r.closed_at?.toISOString() ?? null,
+          totalActions: Number(r.total_actions),
+          actionsBreakdown: r.actions_breakdown ?? [],
+          lastOccurredAt: r.last_occurred_at.toISOString(),
+        })),
+        peaks: {
+          topMonth: topMonthRows[0]
+            ? {
+                month: topMonthRows[0].month,
+                count: Number(topMonthRows[0].count),
+              }
+            : null,
+          topActionMonths: topActionRows.map((r) => ({
+            actionType: r.action_type,
+            month: r.month,
+            count: Number(r.count),
+          })),
+          toppedMonths: Number(toppedMonthsRows[0]?.topped_months ?? 0),
+        },
+        leaderboard: {
+          allTime: {
+            totalRank: allTimeRankRows[0]?.total_rank ?? null,
+            reviewsRank: allTimeRankRows[0]?.reviews_rank ?? null,
+            participants: Number(allTimeRankRows[0]?.participants ?? 0),
+          },
+          thisMonth: {
+            totalRank: monthRankRows[0]?.total_rank ?? null,
+            reviewsRank: monthRankRows[0]?.reviews_rank ?? null,
+            participants: Number(monthRankRows[0]?.participants ?? 0),
+          },
+          editor: {
+            rank: editorRankRows[0]?.role_rank ?? null,
+            participants: Number(editorRankRows[0]?.participants ?? 0),
+          },
+          reviewer: {
+            rank: reviewerRankRows[0]?.role_rank ?? null,
+            participants: Number(reviewerRankRows[0]?.participants ?? 0),
+          },
+        },
+        authoredPRs: prDetailsRows.map((r) => ({
+          prNumber: r.pr_number,
+          repo: r.repo,
+          title: r.title,
+          state: r.state,
+          createdAt: r.created_at?.toISOString() ?? null,
+          mergedAt: r.merged_at?.toISOString() ?? null,
+          closedAt: r.closed_at?.toISOString() ?? null,
+          updatedAt: r.updated_at?.toISOString() ?? null,
+          labels: r.labels ?? [],
+          governanceState: r.governance_state,
+        })),
+        authoredIssues: issueDetailsRows.map((r) => ({
+          issueNumber: r.issue_number,
+          repo: r.repo,
+          title: r.title,
+          state: r.state,
+          createdAt: r.created_at?.toISOString() ?? null,
+          updatedAt: r.updated_at?.toISOString() ?? null,
+          closedAt: r.closed_at?.toISOString() ?? null,
+          labels: r.labels ?? [],
         })),
       };
     }),

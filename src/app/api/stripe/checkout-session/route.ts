@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { stripe } from "@/lib/stripe";
+import { retrieveCheckoutSession, retrieveSubscription } from "@/lib/stripe";
 
 /**
  * POST /api/stripe/checkout-session
@@ -26,9 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Retrieve the checkout session from Stripe
-    const checkoutSession = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["subscription", "line_items.data.price"],
-    });
+    const checkoutSession = await retrieveCheckoutSession(sessionId, ["subscription", "line_items.data.price"]);
 
     // Get subscription ID
     const subscriptionId =
@@ -44,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch the full subscription from Stripe
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = await retrieveSubscription(subscriptionId);
 
     // Get the price ID from the subscription
     const priceId = subscription.items.data[0]?.price?.id;

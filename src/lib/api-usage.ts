@@ -17,6 +17,8 @@ export interface LogApiUsageParams {
  */
 export async function logApiUsage(params: LogApiUsageParams) {
   try {
+    // Attempt to write using the generated `apiUsage` client.
+    // If the model/table isn't present at runtime the operation will throw and be caught.
     await prisma.apiUsage.create({
       data: {
         userId: params.userId,
@@ -41,33 +43,39 @@ export async function getUserUsageStats(userId: string, hoursBack: number = 3) {
   const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000)
 
   const [totalRequests, byEndpoint, byStatusCode] = await Promise.all([
-    prisma.apiUsage.count({
-      where: {
-        userId,
-        createdAt: { gte: since },
-      },
-    }),
-    prisma.apiUsage.groupBy({
-      by: ['endpoint'],
-      where: {
-        userId,
-        createdAt: { gte: since },
-      },
-      _count: true,
-      orderBy: {
-        _count: {
-          id: 'desc',
-        },
-      },
-    }),
-    prisma.apiUsage.groupBy({
-      by: ['statusCode'],
-      where: {
-        userId,
-        createdAt: { gte: since },
-      },
-      _count: true,
-    }),
+    prisma.apiUsage?.count
+      ? prisma.apiUsage.count({
+          where: {
+            userId,
+            createdAt: { gte: since },
+          },
+        })
+      : 0,
+    prisma.apiUsage?.groupBy
+      ? prisma.apiUsage.groupBy({
+          by: ['endpoint'],
+          where: {
+            userId,
+            createdAt: { gte: since },
+          },
+          _count: true,
+          orderBy: {
+            _count: {
+              id: 'desc',
+            },
+          },
+        })
+      : [],
+    prisma.apiUsage?.groupBy
+      ? prisma.apiUsage.groupBy({
+          by: ['statusCode'],
+          where: {
+            userId,
+            createdAt: { gte: since },
+          },
+          _count: true,
+        })
+      : [],
   ])
 
   return {
@@ -85,33 +93,39 @@ export async function getTokenUsageStats(apiTokenId: string, hoursBack: number =
   const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000)
 
   const [totalRequests, byEndpoint, byStatusCode] = await Promise.all([
-    prisma.apiUsage.count({
-      where: {
-        apiTokenId,
-        createdAt: { gte: since },
-      },
-    }),
-    prisma.apiUsage.groupBy({
-      by: ['endpoint'],
-      where: {
-        apiTokenId,
-        createdAt: { gte: since },
-      },
-      _count: true,
-      orderBy: {
-        _count: {
-          id: 'desc',
-        },
-      },
-    }),
-    prisma.apiUsage.groupBy({
-      by: ['statusCode'],
-      where: {
-        apiTokenId,
-        createdAt: { gte: since },
-      },
-      _count: true,
-    }),
+    prisma.apiUsage?.count
+      ? prisma.apiUsage.count({
+          where: {
+            apiTokenId,
+            createdAt: { gte: since },
+          },
+        })
+      : 0,
+    prisma.apiUsage?.groupBy
+      ? prisma.apiUsage.groupBy({
+          by: ['endpoint'],
+          where: {
+            apiTokenId,
+            createdAt: { gte: since },
+          },
+          _count: true,
+          orderBy: {
+            _count: {
+              id: 'desc',
+            },
+          },
+        })
+      : [],
+    prisma.apiUsage?.groupBy
+      ? prisma.apiUsage.groupBy({
+          by: ['statusCode'],
+          where: {
+            apiTokenId,
+            createdAt: { gte: since },
+          },
+          _count: true,
+        })
+      : [],
   ])
 
   return {

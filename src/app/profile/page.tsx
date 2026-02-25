@@ -89,7 +89,7 @@ export default function ProfilePage() {
         {/* Profile Header Card */}
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/80 dark:border-cyan-400/20 dark:bg-slate-950/60 p-6 shadow-[0_20px_70px_rgba(6,182,212,0.12)]">
           <div className="absolute right-4 top-4">
-            {isPaid ? (
+            {isPaid && (
               <div className="flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200">
                 <Crown className="h-3.5 w-3.5" />
                 {membershipTier.charAt(0).toUpperCase() + membershipTier.slice(1)}

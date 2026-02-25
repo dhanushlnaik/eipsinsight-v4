@@ -185,9 +185,7 @@ export const PERSONA_NAV_ORDER: Record<Persona, string[]> = {
 export const PERSONA_LIST: Persona[] = [
   "developer",
   "editor",
-  "researcher",
   "builder",
-  "enterprise",
   "newcomer",
 ];
 

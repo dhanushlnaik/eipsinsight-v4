@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Minus, RotateCcw, Download, Info, ChevronDown, ChevronUp, Move } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -32,7 +32,7 @@ const processUpgradeData = () => {
     forkEpoch?: number;
   }> = [];
 
-  rawData.forEach((item: { upgrade: any; eips: any; date?: string; isMeta?: boolean; layer?: "execution" | "consensus" | undefined; blockNumber?: number | undefined; forkEpoch?: number | undefined; }) => {
+  rawData.forEach((item: UpgradeData) => {
     const metaEIP = upgradeMetaEIPs[item.upgrade];
     const processedEips = item.eips.map((eip: string) =>
       eip === 'NO-EIP' || eip === 'CONSENSUS' ? eip : eip.replace('EIP-', '')
@@ -247,23 +247,23 @@ export function NetworkUpgradesChart() {
   return (
     <div
       ref={containerRef}
-      className="relative w-full rounded-lg border border-cyan-400/20 bg-slate-950/50 backdrop-blur-sm overflow-hidden"
+      className="relative w-full rounded-lg border border-cyan-400/20 bg-white/90 dark:bg-slate-950/50 backdrop-blur-sm overflow-hidden"
     >
       {/* Header */}
       <div className="p-3 border-b border-cyan-400/10">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
           <div className="flex-1">
-            <h3 className="text-md font-bold text-white mb-1">Comprehensive timeline of Ethereum network upgrades and their associated EIP implementations</h3>
+            <h3 className="text-md font-bold text-slate-900 dark:text-white mb-1">Comprehensive timeline of Ethereum network upgrades and their associated EIP implementations</h3>
 
           </div>
           <div className="flex items-center gap-2">
             {/* Zoom Controls */}
-            <div className="flex gap-1 rounded-lg bg-slate-900/95 backdrop-blur-md border border-cyan-400/20 p-1">
+            <div className="flex gap-1 rounded-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-cyan-400/20 p-1">
               <button
                 onClick={() => setZoomLevel((z) => Math.min(z * 1.2, 3))}
                 disabled={zoomLevel >= 3}
                 className={cn(
-                  'p-2 rounded-md transition-all text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10',
+                  'p-2 rounded-md transition-all text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 hover:bg-cyan-500/10',
                   'disabled:opacity-30 disabled:cursor-not-allowed'
                 )}
                 aria-label="Zoom in"
@@ -274,7 +274,7 @@ export function NetworkUpgradesChart() {
                 onClick={() => setZoomLevel((z) => Math.max(z / 1.2, 0.5))}
                 disabled={zoomLevel <= 0.5}
                 className={cn(
-                  'p-2 rounded-md transition-all text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10',
+                  'p-2 rounded-md transition-all text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 hover:bg-cyan-500/10',
                   'disabled:opacity-30 disabled:cursor-not-allowed'
                 )}
                 aria-label="Zoom out"
@@ -285,7 +285,7 @@ export function NetworkUpgradesChart() {
                 onClick={resetZoom}
                 disabled={zoomLevel === 1 && offset.x === 0 && offset.y === 0}
                 className={cn(
-                  'p-2 rounded-md transition-all text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10',
+                  'p-2 rounded-md transition-all text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 hover:bg-cyan-500/10',
                   'disabled:opacity-30 disabled:cursor-not-allowed'
                 )}
                 aria-label="Reset"
@@ -296,7 +296,7 @@ export function NetworkUpgradesChart() {
             {/* Export Button */}
             <button
               onClick={downloadCSV}
-              className="px-4 py-2 rounded-lg bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-400/30 transition-all text-sm font-medium"
+              className="px-4 py-2 rounded-lg bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/30 border border-cyan-400/30 transition-all text-sm font-medium"
             >
               <Download className="h-4 w-4 inline mr-2" />
               Export
@@ -307,7 +307,7 @@ export function NetworkUpgradesChart() {
         {/* Layer Info Toggle */}
         <button
           onClick={() => setShowLayerInfo(!showLayerInfo)}
-          className="mt-3 flex items-center gap-2 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+          className="mt-3 flex items-center gap-2 text-xs text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 transition-colors"
         >
           <Info className="h-3.5 w-3.5" />
           <span>{showLayerInfo ? 'Hide' : 'Show'} Layer Information</span>
@@ -323,11 +323,11 @@ export function NetworkUpgradesChart() {
               exit={{ opacity: 0, height: 0 }}
               className="mt-3 overflow-hidden"
             >
-              <div className="p-3 rounded-lg border border-cyan-400/20 bg-slate-900/50 backdrop-blur-sm">
+              <div className="p-3 rounded-lg border border-cyan-400/20 bg-slate-100/80 dark:bg-slate-900/50 backdrop-blur-sm">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-white mb-2">Understanding Layer Badges</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Understanding Layer Badges</h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                       Network upgrades are categorized by the layer of the Ethereum protocol they modify:
                     </p>
                   </div>
@@ -338,7 +338,7 @@ export function NetworkUpgradesChart() {
                           ⚙️ Execution Layer
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                         Protocol changes implemented through EIPs. These affect transaction execution, gas mechanics, smart contracts, and the EVM.
                       </p>
                     </div>
@@ -348,7 +348,7 @@ export function NetworkUpgradesChart() {
                           ⛓️ Consensus Layer
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                         Beacon Chain upgrades that affect proof-of-stake consensus, validators, attestations, and the beacon chain protocol.
                       </p>
                     </div>
@@ -362,7 +362,7 @@ export function NetworkUpgradesChart() {
 
       {/* Chart Container */}
       <div
-        className="relative overflow-auto bg-slate-900/30"
+        className="relative overflow-auto bg-slate-100/70 dark:bg-slate-900/30"
         style={{ height: `${height + 10}px`, minHeight: '400px' }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -370,9 +370,9 @@ export function NetworkUpgradesChart() {
         onMouseLeave={handleMouseUp}
       >
         {zoomLevel > 1 && (
-          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-lg bg-slate-900/95 backdrop-blur-md border border-cyan-400/20 px-2.5 py-1.5">
+          <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 rounded-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-cyan-400/20 px-2.5 py-1.5">
             <Move className="h-3.5 w-3.5 text-cyan-400" />
-            <span className="text-xs text-cyan-300 font-medium">Drag to pan</span>
+            <span className="text-xs text-cyan-700 dark:text-cyan-300 font-medium">Drag to pan</span>
           </div>
         )}
 
@@ -615,8 +615,8 @@ export function NetworkUpgradesChart() {
           const offsetX = 15;
           const offsetY = 15;
           const padding = 10;
-          const containerWidth = containerRef.current?.clientWidth || width;
-          const containerHeight = containerRef.current?.clientHeight || height;
+          const containerWidth = width;
+          const containerHeight = height;
 
           let tooltipX = mousePos.x + offsetX;
           let tooltipY = mousePos.y + offsetY;
@@ -639,7 +639,7 @@ export function NetworkUpgradesChart() {
 
           return (
             <div
-              className="absolute z-20 bg-slate-900/95 backdrop-blur-md border-2 border-cyan-400/40 rounded-lg p-4 shadow-2xl pointer-events-none"
+              className="absolute z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-2 border-cyan-400/40 rounded-lg p-4 shadow-2xl pointer-events-none"
               style={{
                 top: `${tooltipY}px`,
                 left: `${tooltipX}px`,
@@ -685,21 +685,21 @@ export function NetworkUpgradesChart() {
 
                 {eipInfo && (
                   <div className="p-2 rounded-md bg-cyan-500/10 border border-cyan-400/20">
-                    <p className="text-xs font-semibold text-white leading-tight">{eipInfo.title}</p>
+                    <p className="text-xs font-semibold text-slate-900 dark:text-white leading-tight">{eipInfo.title}</p>
                   </div>
                 )}
 
                 <div>
-                  <p className="text-sm font-bold text-white">{hoveredData.upgrade}</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{hoveredData.upgrade}</p>
                   {upgradeDescriptions[hoveredData.upgrade] && (
-                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">
                       {upgradeDescriptions[hoveredData.upgrade]}
                     </p>
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-slate-700/50 space-y-1">
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
+                <div className="pt-2 border-t border-slate-300/70 dark:border-slate-700/50 space-y-1">
+                  <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
                     <span>
                       📅{' '}
                       {new Date(hoveredData.date).toLocaleDateString('en-US', {
@@ -717,8 +717,8 @@ export function NetworkUpgradesChart() {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-700/50">
-                  <p className="text-[10px] text-cyan-400 font-medium">
+                <div className="pt-2 border-t border-slate-300/70 dark:border-slate-700/50">
+                  <p className="text-[10px] text-cyan-700 dark:text-cyan-400 font-medium">
                     {hoveredData.eip === 'CONSENSUS' || hoveredData.eip === 'NO-EIP'
                       ? '💡 Click for GitHub specs'
                       : '💡 Click for full details'}

@@ -2,13 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Search,
   Menu,
   X,
-  User,
   Settings2,
   LogOut,
   Home,
@@ -37,6 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ThemedLogoGif } from "@/components/themed-logo-gif";
 
 // Mobile navigation items (same as sidebar)
 const mobileNavItems = [
@@ -95,7 +94,7 @@ export default function Navbar() {
   return (
     <nav
       className={cn(
-        "w-full transition-all duration-300",
+        "relative z-50 w-full transition-all duration-300",
         "border-b backdrop-blur-xl",
         "dark:border-cyan-300/20 dark:bg-slate-950/90",
         "border-slate-200/80 bg-white/95",
@@ -112,8 +111,7 @@ export default function Navbar() {
             className="hidden md:flex items-center gap-2 shrink-0 group"
           >
             <div className="relative">
-              <Image
-                src="/brand/logo/EIPsInsights.gif"
+              <ThemedLogoGif
                 alt="EIPsInsight"
                 width={28}
                 height={28}
@@ -218,17 +216,18 @@ export default function Navbar() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
-                  className="w-64 overflow-hidden border-slate-200 dark:border-cyan-400/30 bg-white dark:bg-slate-950/95 p-0 shadow-xl dark:shadow-[0_15px_60px_rgba(6,182,212,0.18)] backdrop-blur-xl"
+                  className="w-64 overflow-hidden rounded-xl border border-slate-200 dark:border-cyan-400/30 bg-white/95 dark:bg-slate-950/95 p-0 shadow-xl dark:shadow-[0_15px_60px_rgba(6,182,212,0.18)] backdrop-blur-xl"
                 >
                   {/* Header */}
-                  <div className="relative border-b border-slate-200 dark:border-cyan-300/20 bg-slate-50 dark:bg-[linear-gradient(to_right,rgba(16,185,129,0.1),rgba(34,211,238,0.1),rgba(16,185,129,0.1))] px-4 py-3">
+                  <div className="relative border-b border-slate-200 dark:border-cyan-300/20 bg-slate-50 dark:bg-slate-900/70 px-4 py-3">
+                    <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-cyan-400/40 to-transparent" />
                     <div className="flex items-center gap-3">
                       <ProfileAvatar user={session.user} size="md" />
                       <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">
+                        <span className="text-sm font-medium text-slate-900 dark:text-white truncate">
                           {userName}
                         </span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
                           Signed in
                         </span>
                       </div>
@@ -238,15 +237,9 @@ export default function Navbar() {
                   {/* Menu Items */}
                   <div className="py-1">
                     <DropdownMenuItem asChild>
-                      <Link href="/profile" className="flex items-center gap-2 px-4 py-2 text-slate-700 dark:text-slate-100">
-                        <User className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-                        <span className="text-sm">Profile</span>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
                       <Link href="/settings" className="flex items-center gap-2 px-4 py-2 text-slate-700 dark:text-slate-100">
                         <Settings2 className="h-4 w-4 text-cyan-600 dark:text-cyan-300" />
-                        <span className="text-sm">Settings</span>
+                        <span className="text-sm">Account</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="mx-2 my-1 border-slate-200 dark:border-cyan-300/20" />
@@ -270,8 +263,7 @@ export default function Navbar() {
           <div className="flex md:hidden items-center justify-between w-full">
             {/* Mobile Logo */}
             <Link href="/" className="flex items-center gap-2">
-              <Image
-                src="/brand/logo/EIPsInsights.gif"
+              <ThemedLogoGif
                 alt="EIPsInsight"
                 width={24}
                 height={24}
@@ -409,9 +401,9 @@ export default function Navbar() {
                 </Button>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Link href="/profile" className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+                  <Link href="/settings" className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
                     <ProfileAvatar user={session.user} size="sm" />
-                    <span className="truncate max-w-[80px]">{session.user.name || "Profile"}</span>
+                    <span className="truncate max-w-[80px]">{session.user.name || "Account"}</span>
                   </Link>
                   <Button
                     variant="ghost"
