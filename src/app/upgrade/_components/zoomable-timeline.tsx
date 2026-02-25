@@ -30,20 +30,20 @@ export function ZoomableTimeline({ imagePath, alt = 'Timeline' }: ZoomableTimeli
         ref={containerRef}
         className={cn(
           "relative w-full overflow-hidden rounded-xl border border-cyan-400/20",
-          "bg-slate-950/50 backdrop-blur-sm",
+          "bg-white/90 dark:bg-slate-950/50 backdrop-blur-sm",
           "transition-all duration-200",
           "hover:border-cyan-400/30 hover:shadow-lg hover:shadow-cyan-500/10"
         )}
         style={{ height: '500px' }}
       >
         {/* Zoom Controls */}
-        <div className="absolute top-3 right-3 z-10 flex gap-1.5 rounded-lg bg-slate-900/95 backdrop-blur-md border border-cyan-400/20 p-1.5 shadow-xl">
+        <div className="absolute top-3 right-3 z-10 flex gap-1.5 rounded-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-cyan-400/20 p-1.5 shadow-xl">
           <button
             onClick={handleZoomIn}
             disabled={scale >= 3}
             className={cn(
               "p-2 rounded-md transition-all",
-              "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10",
+              "text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 hover:bg-cyan-500/10",
               "disabled:opacity-30 disabled:cursor-not-allowed",
               "border border-cyan-400/20 hover:border-cyan-400/40"
             )}
@@ -56,7 +56,7 @@ export function ZoomableTimeline({ imagePath, alt = 'Timeline' }: ZoomableTimeli
             disabled={scale <= 0.5}
             className={cn(
               "p-2 rounded-md transition-all",
-              "text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10",
+              "text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 hover:bg-cyan-500/10",
               "disabled:opacity-30 disabled:cursor-not-allowed",
               "border border-cyan-400/20 hover:border-cyan-400/40"
             )}

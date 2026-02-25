@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { motion, AnimatePresence } from 'motion/react';
+import { ThemedLogoGif } from '@/components/themed-logo-gif';
 
 export function ThemeLoading() {
   const [isLoading, setIsLoading] = useState(true);
@@ -41,8 +41,7 @@ export function ThemeLoading() {
               transition={{ duration: 0.5 }}
               className="relative"
             >
-              <Image
-                src="/brand/logo/EIPsInsights.gif"
+              <ThemedLogoGif
                 alt="EIPsInsight"
                 width={80}
                 height={80}

@@ -75,6 +75,10 @@ interface AuthorSearchResult {
   lastActivity: string | null;
 }
 
+function normalizePersonQuery(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 const statusColorConfig: ChartConfig = {
   draft: { label: "Draft", color: "#22d3ee" },
   review: { label: "Review", color: "#60a5fa" },
@@ -131,6 +135,7 @@ function useQueryState() {
 }
 
 function SearchPageContent() {
+  const router = useRouter();
   const { q, scope, tab, setQuery, setScope, setTab } = useQueryState();
   const [inputValue, setInputValue] = useState(q);
   const [loading, setLoading] = useState(false);
@@ -320,6 +325,18 @@ function SearchPageContent() {
       cancelled = true;
     };
   }, [q, tab]);
+
+  useEffect(() => {
+    if (tab !== "people" || !q || loading || authorResults.length !== 1) {
+      return;
+    }
+
+    const queryNormalized = normalizePersonQuery(q);
+    const onlyMatch = authorResults[0];
+    if (queryNormalized && normalizePersonQuery(onlyMatch.name) === queryNormalized) {
+      router.replace(`/people/${encodeURIComponent(onlyMatch.name)}`);
+    }
+  }, [tab, q, loading, authorResults, router]);
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1090,7 +1107,7 @@ function SearchPageContent() {
                           if (r.reviewCount > 0) {
                             roleBadges.push("Reviewer");
                           }
-                          const authorHref = `/search?q=${encodeURIComponent(r.name)}&tab=people`;
+                          const authorHref = `/people/${encodeURIComponent(r.name)}`;
                           return (
                             <li key={r.name}>
                               <Link
@@ -1192,4 +1209,3 @@ export default function SearchPage() {
     </Suspense>
   );
 }
-

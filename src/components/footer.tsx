@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { Github, Twitter, Mail, BookOpen } from "lucide-react";
+import { ThemedLogoGif } from "@/components/themed-logo-gif";
 
 export default function Footer() {
   const footerLinks = {
@@ -27,11 +27,11 @@ export default function Footer() {
           {/* Branding */}
           <div className="lg:col-span-5">
             <Link href="/" className="group inline-flex items-center gap-2.5">
-              <Image
-                src="/brand/logo/EIPsInsights.gif"
+              <ThemedLogoGif
                 alt="EIPsInsight"
                 width={36}
                 height={36}
+                unoptimized
                 className="transition-transform duration-200 group-hover:scale-105"
               />
               <span className="dec-title text-lg font-semibold tracking-tight text-slate-800 dark:text-slate-200 sm:text-xl">

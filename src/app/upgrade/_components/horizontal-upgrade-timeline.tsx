@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useTheme } from 'next-themes';
 
 type UpgradeKey = 'pectra' | 'fusaka' | 'glamsterdam' | 'hegota';
 
@@ -66,6 +67,8 @@ export function HorizontalUpgradeTimeline({
   onUpgradeClick,
   className,
 }: HorizontalUpgradeTimelineProps) {
+  const { resolvedTheme } = useTheme();
+  const isDarkTheme = resolvedTheme === 'dark';
   const currentIndex = upgrades.findIndex((u) => u.key === 'fusaka');
   // We are between Fusaka (index 2) and Glamsterdam (index 3)
   const transitionIndex = 2; // Index of the line between Fusaka and Glamsterdam
@@ -73,14 +76,13 @@ export function HorizontalUpgradeTimeline({
   return (
     <div
       className={cn(
-        'relative overflow-x-auto rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-slate-950/70 via-slate-950/90 to-slate-950 p-4 shadow-[0_18px_40px_rgba(8,47,73,0.5)] sm:p-5 md:p-6',
+        'relative overflow-x-auto rounded-2xl border border-slate-200 dark:border-cyan-400/20 bg-gradient-to-br from-white via-slate-50 to-cyan-50/40 dark:from-slate-950/70 dark:via-slate-950/90 dark:to-slate-950 p-4 shadow-[0_14px_28px_rgba(15,23,42,0.12)] dark:shadow-[0_18px_40px_rgba(8,47,73,0.5)] sm:p-5 md:p-6',
         className,
       )}
     >
       <div className="flex min-w-max items-center justify-between gap-3 px-1 sm:gap-4 sm:px-2 md:gap-6">
         {upgrades.map((upgrade, index) => {
           const isSelected = selectedUpgrade === upgrade.key && index !== 0;
-          const isCurrent = index === currentIndex;
           const isBeforeCurrent = index < currentIndex;
           const isTransitionLine = index === transitionIndex;
 
@@ -121,30 +123,35 @@ export function HorizontalUpgradeTimeline({
                   className={cn(
                     'relative rounded-xl px-3 py-2.5 text-center text-xs font-semibold tracking-tight shadow-sm sm:px-4 sm:py-3 sm:text-sm md:px-5 md:py-3.5 md:text-base',
                     index === 0
-                      ? 'border border-slate-700/60 bg-gradient-to-br from-slate-800/80 to-slate-900/80 text-slate-300/80'
-                      : 'border border-slate-800/70 bg-gradient-to-br from-slate-900/80 to-slate-950/95 text-slate-100',
+                      ? 'border border-slate-300 dark:border-slate-700/60 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800/80 dark:to-slate-900/80 text-slate-700 dark:text-slate-300/80 shadow-[0_3px_10px_rgba(15,23,42,0.12)] dark:shadow-none'
+                      : 'border border-slate-300 dark:border-slate-800/70 bg-gradient-to-br from-white to-slate-100 dark:from-slate-900/80 dark:to-slate-950/95 text-slate-800 dark:text-slate-100 shadow-[0_4px_14px_rgba(15,23,42,0.08)] dark:shadow-none',
                     !isSelected &&
                       index !== 0 &&
-                      'hover:border-cyan-400/50 hover:bg-slate-900/95 hover:text-cyan-50',
+                      'hover:border-cyan-500/45 hover:bg-cyan-50 dark:hover:bg-slate-900/95 hover:text-cyan-800 dark:hover:text-cyan-50 hover:shadow-[0_10px_24px_rgba(8,145,178,0.18)] dark:hover:shadow-none',
                   )}
                   style={
                     isSelected
                       ? {
-                          background: `linear-gradient(135deg, ${upgrade.color}, #0f172a)`,
-                          boxShadow: `0 14px 45px ${upgrade.color}55, 0 8px 20px ${upgrade.color}40`,
+                          background: isDarkTheme
+                            ? `linear-gradient(135deg, ${upgrade.color}, #0f172a)`
+                            : `linear-gradient(135deg, ${upgrade.color}, #065f46)`,
+                          boxShadow: isDarkTheme
+                            ? `0 14px 45px ${upgrade.color}55, 0 8px 20px ${upgrade.color}40`
+                            : `0 12px 30px ${upgrade.color}45, 0 6px 16px rgba(6,95,70,0.24)`,
                           borderColor: upgrade.color,
+                          color: '#ecfeff',
                         }
                       : undefined
                   }
                 >
                   <div className="whitespace-nowrap">{upgrade.name}</div>
                   {isBeforeCurrent && index > 0 && (
-                    <div className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-slate-950 bg-emerald-400 shadow-md shadow-emerald-400/60 sm:h-3.5 sm:w-3.5" />
+                    <div className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white dark:border-slate-950 bg-emerald-500 dark:bg-emerald-400 shadow-md shadow-emerald-400/60 sm:h-3.5 sm:w-3.5" />
                   )}
                 </div>
 
                   <div className="mt-1.5 flex flex-col items-center gap-1 sm:mt-2">
-                    <div className="text-[10px] font-semibold tracking-wide text-slate-400 sm:text-xs md:text-sm">
+                    <div className="text-[10px] font-semibold tracking-wide text-slate-600 dark:text-slate-400 sm:text-xs md:text-sm">
                       {upgrade.date}
                     </div>
                   </div>
@@ -153,13 +160,13 @@ export function HorizontalUpgradeTimeline({
 
               {index < upgrades.length - 1 && (
                 <div
-                  className="relative mx-2 h-1 flex-1 rounded-full bg-slate-800/80 shadow-inner sm:mx-3 sm:h-1.5 md:mx-6 md:h-2"
+                  className="relative mx-2 h-1.5 flex-1 rounded-full bg-slate-300 dark:bg-slate-800/80 shadow-inner sm:mx-3 sm:h-1.5 md:mx-6 md:h-2"
                   style={{ minWidth: '32px', maxWidth: '220px' }}
                 >
                   {/* Completed segments (fully green) */}
                   {isBeforeCurrent && (
                     <MotionDiv
-                      className="absolute inset-y-0 left-0 rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(16,185,129,0.6)]"
+                      className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_18px_rgba(16,185,129,0.6)]"
                       initial={{ width: '0%' }}
                       animate={{ width: '100%' }}
                       transition={{ duration: 0.8, ease: 'easeOut' }}
@@ -170,7 +177,7 @@ export function HorizontalUpgradeTimeline({
                   {isTransitionLine && (
                     <>
                       <MotionDiv
-                        className="absolute inset-y-0 left-0 rounded-full bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.8)]"
+                        className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.8)]"
                         initial={{ width: '0%' }}
                         animate={{ width: '60%' }}
                         transition={{ duration: 1.2, ease: 'easeOut' }}
@@ -232,4 +239,3 @@ export function HorizontalUpgradeTimeline({
     </div>
   );
 }
-

@@ -33,9 +33,9 @@ export const env = createEnv({
     // Cloudflare (optional — note: .env may have CLOUDFARE typo)
     CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
     CLOUDFLARE_API_TOKEN: z.string().optional(),
-    // Stripe
-    STRIPE_SECRET_KEY: z.string().min(1),
-    STRIPE_WEBHOOK_SECRET: z.string().min(1),
+    // Stripe (optional for local/dev builds if not configured)
+    STRIPE_SECRET_KEY: z.string().min(1).optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
     COHERE_API_KEY: z.string().min(1).optional(),
 
     REDIS_URL: z.string().url(),
@@ -63,8 +63,9 @@ export const env = createEnv({
     NEXT_PUBLIC_FEATURE_PERSONA_CONTEXT_HEADERS: z
       .enum(["true", "false"])
       .optional()
-      .default("false"),    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1),  },
-
+      .default("false"),
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  },
   /**
    * What object holds the environment variables at runtime. This is usually
    * `process.env` or `import.meta.env`.

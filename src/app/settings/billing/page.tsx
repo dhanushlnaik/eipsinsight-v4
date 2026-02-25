@@ -263,7 +263,7 @@ export default function BillingPage() {
             {subscription.currentPeriodEnd
               ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
               : "the end of the current period"}
-            . You'll be reverted to the Free plan.
+            . You&apos;ll be reverted to the Free plan.
           </div>
         )}
 
