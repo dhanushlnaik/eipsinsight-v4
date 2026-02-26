@@ -55,6 +55,55 @@ export const proposalsProcedures = {
         ? eip.author.split(',').map(a => a.trim()).filter(Boolean)
         : [];
 
+      // Fetch discussions_to and requires from GitHub frontmatter
+      let discussions_to: string | null = null;
+      let requires: number[] = [];
+
+      try {
+        const repoPath =
+          repoName === 'eip' ? 'EIPs' :
+          repoName === 'erc' ? 'ERCs' :
+          'RIPs';
+
+        const filePath =
+          repoName === 'eip' ? 'EIPS' :
+          repoName === 'erc' ? 'ERCS' :
+          'RIPS';
+
+        const fileName = `${repoName}-${input.number}.md`;
+        const rawUrl = `https://raw.githubusercontent.com/ethereum/${repoPath}/master/${filePath}/${fileName}`;
+
+        const res = await fetch(rawUrl);
+        if (res.ok) {
+          const content = await res.text();
+
+          // Parse frontmatter
+          const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
+          if (frontmatterMatch) {
+            const fm = frontmatterMatch[1];
+
+            const discussionsMatch = fm.match(/^discussions-to:\s*(.+)$/im);
+            if (discussionsMatch) {
+              discussions_to = discussionsMatch[1]
+                .trim()
+                .replace(/^["']|["']$/g, '');
+            }
+
+            const requiresMatch = fm.match(/^requires:\s*(.+)$/im);
+            if (requiresMatch) {
+              requires = requiresMatch[1]
+                .trim()
+                .split(/[,\s\n\[\]]+/)
+                .map((s) => parseInt(s, 10))
+                .filter((n) => !Number.isNaN(n));
+            }
+          }
+        }
+      } catch (error) {
+        // Fail silently if markdown fetch fails, keep discussions_to as null
+        console.error(`Failed to fetch discussions_to for ${repoName}-${input.number}:`, error);
+      }
+
       return {
         repo: repoName,
         number: eip.eip_number,
@@ -65,8 +114,8 @@ export const proposalsProcedures = {
         category: snapshot?.category || null,
         status: snapshot?.status || 'Unknown',
         last_call_deadline: snapshot?.deadline?.toISOString().split('T')[0] || null,
-        discussions_to: null,
-        requires: [] as number[],
+        discussions_to,
+        requires,
       };
     }),
 
