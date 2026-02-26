@@ -177,7 +177,7 @@ export default function EIPsAnalyticsPage() {
           client.analytics.getRecentChanges({ repo: repoParam, limit: 20 }),
           client.standards.getCreationTrends({ repo: repoParam }),
           client.standards.getRIPCreationTrends(),
-          client.standards.getMonthlyDelta(),
+          client.standards.getMonthlyDelta({}),
         ]);
         setTransitions(trRes); setThroughput(tpRes); setFunnel(fnRes);
         setVelocity(velRes); setRecentChanges(rcRes);
