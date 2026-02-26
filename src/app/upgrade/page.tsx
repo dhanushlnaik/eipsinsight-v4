@@ -69,10 +69,10 @@ export default function UpgradePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+      <div className="min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         <div className="container mx-auto px-4 py-16">
           <div className="flex items-center justify-center min-h-[400px]">
-            <Loader2 className="h-8 w-8 text-cyan-400 animate-spin" />
+            <Loader2 className="h-8 w-8 animate-spin text-cyan-600 dark:text-cyan-400" />
           </div>
         </div>
       </div>
@@ -81,10 +81,10 @@ export default function UpgradePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+      <div className="min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
         <div className="container mx-auto px-4 py-16">
           <div className="text-center">
-            <p className="text-red-400">{error}</p>
+            <p className="text-red-600 dark:text-red-400">{error}</p>
           </div>
         </div>
       </div>
@@ -103,12 +103,12 @@ export default function UpgradePage() {
       <CollapsibleHeader />
 
       {/* Persona-specific Highlights */}
-      <PersonaHighlights className="bg-slate-950/30" />
+      <PersonaHighlights className="bg-slate-100/70 dark:bg-slate-950/30" />
 
       <SectionSeparator />
 
       {/* Stats & Flowchart Section */}
-      <section className="relative w-full bg-slate-950/30">
+      <section className="relative w-full bg-slate-100/70 dark:bg-slate-950/30">
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-6 pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Left: Stats Cards */}
@@ -125,7 +125,7 @@ export default function UpgradePage() {
               transition={{ duration: 0.5 }}
               className={cn(
                 "relative rounded-xl border border-cyan-400/20",
-                "bg-slate-950/50 backdrop-blur-sm overflow-hidden",
+                "bg-white/85 dark:bg-slate-950/50 backdrop-blur-sm overflow-hidden",
                 "hover:border-cyan-400/30 hover:shadow-lg hover:shadow-cyan-500/10",
                 "transition-all duration-200",
                 "h-full min-h-[350px] sm:min-h-[380px] lg:min-h-[420px]"
@@ -148,12 +148,12 @@ export default function UpgradePage() {
       <SectionSeparator />
 
       {/* Timeline Section */}
-      <section className="relative w-full bg-slate-950/30">
+      <section className="relative w-full bg-slate-100/70 dark:bg-slate-950/30">
         <PageHeader
           title="Ethereum Upgrade Timeline"
           description="Visual timeline of all network upgrades from Frontier to present"
           sectionId="timeline"
-          className="bg-slate-950/30"
+          className="bg-slate-100/70 dark:bg-slate-950/30"
         />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
           <ZoomableTimeline
@@ -166,12 +166,12 @@ export default function UpgradePage() {
       <SectionSeparator />
 
       {/* Network Upgrades Chart Section */}
-      <section className="relative w-full bg-slate-950/30">
+      <section className="relative w-full bg-slate-100/70 dark:bg-slate-950/30">
         <PageHeader
           title="Network Upgrade Timeline"
           description="Interactive timeline showing all Ethereum network upgrades and their EIP implementations"
           sectionId="network-upgrades-chart"
-          className="bg-slate-950/30"
+          className="bg-slate-100/70 dark:bg-slate-950/30"
         />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
           <NetworkUpgradesChart />
@@ -181,12 +181,12 @@ export default function UpgradePage() {
       <SectionSeparator />
 
       {/* Upgrades List / Roadmap Section */}
-      <section className="relative w-full bg-slate-950/30">
+      <section className="relative w-full bg-slate-100/70 dark:bg-slate-950/30">
         <PageHeader
           title="Network Upgrade Roadmap"
           description="High‑level view of recent and upcoming coordinated Ethereum network upgrades."
           sectionId="upgrades"
-          className="bg-slate-950/30"
+          className="bg-slate-100/70 dark:bg-slate-950/30"
         />
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-6">
           <div className="mb-6">

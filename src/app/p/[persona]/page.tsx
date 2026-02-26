@@ -2,12 +2,11 @@
 
 import * as React from "react";
 import { useRouter, useParams } from "next/navigation";
-import Image from "next/image";
 import { usePersonaStore } from "@/stores/personaStore";
+import { ThemedLogoGif } from "@/components/themed-logo-gif";
 import {
   isValidPersona,
   PERSONA_DEFAULTS,
-  DEFAULT_PERSONA,
   type Persona,
 } from "@/lib/persona";
 
@@ -47,11 +46,11 @@ export default function PersonaRedirectPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
         <div className="text-center">
           <div className="mb-6">
-            <Image
-              src="/brand/logo/EIPsInsights.gif"
+            <ThemedLogoGif
               alt="EIPsInsight"
               width={64}
               height={64}
+              unoptimized
             />
           </div>
           <h1 className="text-xl font-semibold text-white mb-2">
@@ -71,11 +70,11 @@ export default function PersonaRedirectPage() {
       <div className="text-center">
         <div className="relative mb-6">
           <div className="absolute inset-0 animate-pulse rounded-full bg-cyan-400/20 blur-xl" />
-          <Image
-            src="/brand/logo/EIPsInsights.gif"
+          <ThemedLogoGif
             alt="Loading"
             width={64}
             height={64}
+            unoptimized
             className="relative z-10 animate-pulse"
           />
         </div>

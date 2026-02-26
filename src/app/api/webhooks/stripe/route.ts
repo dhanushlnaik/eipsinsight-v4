@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
-import { stripe, constructWebhookEvent } from "@/lib/stripe";
+import { constructWebhookEvent, retrieveCustomer } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -15,10 +15,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No signature provided" }, { status: 400 });
   }
 
-  let event: Stripe.Event;
+  let event: any;
 
   try {
-    event = constructWebhookEvent(body, signature);
+    event = await constructWebhookEvent(body, signature);
   } catch (error) {
     console.error("Webhook signature verification failed:", error);
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
@@ -97,7 +97,7 @@ async function findUserByCustomerId(customerId: string) {
 
   // Fallback: retrieve customer from Stripe and check metadata
   try {
-    const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
+    const customer = (await retrieveCustomer(customerId)) as any;
     const userId = customer.metadata?.userId;
     if (!userId) {
       console.warn(`No userId metadata on Stripe customer ${customerId}`);

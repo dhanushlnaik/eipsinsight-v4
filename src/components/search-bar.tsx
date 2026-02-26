@@ -77,13 +77,32 @@ export function SearchBar() {
     prs: [],
   });
 
+  const openSearchPage = useCallback(
+    (rawQuery: string, params?: { tab?: 'people' | 'eips' | 'prs' }) => {
+      const trimmed = rawQuery.trim();
+      if (!trimmed) return;
+
+      const searchParams = new URLSearchParams({ q: trimmed });
+      if (params?.tab) {
+        searchParams.set('tab', params.tab);
+      }
+
+      router.push(`/search?${searchParams.toString()}`);
+    },
+    [router]
+  );
+
   // Debounced search
   useEffect(() => {
     if (!query.trim()) {
       setResults({ proposals: [], authors: [], prs: [] });
       setShowDropdown(false);
+      setLoading(false);
       return;
     }
+
+    // Always show dropdown while searching so users get immediate feedback.
+    setShowDropdown(true);
 
     const timeoutId = setTimeout(async () => {
       setLoading(true);
@@ -122,11 +141,12 @@ export function SearchBar() {
           })),
           prs,
         });
-        setShowDropdown(true);
         setSelectedIndex(0);
       } catch (err) {
         console.error('Search error:', err);
         setResults({ proposals: [], authors: [], prs: [] });
+        // Keep dropdown open to show "No results found" fallback instead of appearing broken.
+        setShowDropdown(true);
       } finally {
         setLoading(false);
       }
@@ -140,8 +160,7 @@ export function SearchBar() {
     if (result.kind === 'proposal') {
       router.push(`/${result.repo}/${result.number}`);
     } else if (result.kind === 'author') {
-      // TODO: Navigate to author page when available
-      router.push(`/search?author=${encodeURIComponent(result.name)}`);
+      router.push(`/people/${encodeURIComponent(result.name)}`);
     } else if (result.kind === 'pr') {
       // Open GitHub PR directly using the full repository name from search results,
       // e.g. "ethereum/EIPs" -> https://github.com/ethereum/EIPs/pull/11171
@@ -227,6 +246,20 @@ export function SearchBar() {
           placeholder="Search EIPs, ERCs, RIPs, authors, status…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+
+            const trimmed = query.trim();
+            if (!trimmed) return;
+
+            // If dropdown is open and has selected results, keyboard effect handles Enter.
+            // Otherwise, fall back to full search page.
+            if (!showDropdown || allResults.length === 0 || loading) {
+              e.preventDefault();
+              setShowDropdown(false);
+              openSearchPage(trimmed);
+            }
+          }}
           onFocus={() => {
             if (query.trim() || hasResults) {
               setShowDropdown(true);

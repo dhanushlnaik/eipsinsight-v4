@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Libre_Baskerville as LibreBaskervilleFont, Space_Grotesk as SpaceGroteskFont } from "next/font/google";
-import { Analytics } from "@vercel/analytics/react";
+import { Analytics } from "@vercel/analytics/next";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 import "@/lib/orpc.server";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
