@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
 import {
@@ -134,16 +136,17 @@ function getMonthWindow(range: TimeRange): { from?: string; to?: string } {
   return { from, to };
 }
 
-function Section({ title, icon, children, action, className }: {
+function Section({ title, icon, children, action, className, id }: {
   title: string; icon: React.ReactNode; children: React.ReactNode;
   action?: React.ReactNode; className?: string;
+  id?: string;
 }) {
   return (
     <div className={cn(
       "rounded-2xl border p-5",
       "border-slate-200 bg-white shadow-sm dark:border-slate-700/50 dark:bg-slate-900/60",
       className,
-    )}>
+    )} id={id}>
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="text-cyan-600 dark:text-cyan-400">{icon}</span>
@@ -182,6 +185,8 @@ const STALENESS_COLORS: Record<string, string> = {
 // ─── Main Page ────────────────────────────────────────────────────
 
 export default function PRsAnalyticsPage() {
+  const searchParams = useSearchParams();
+  const highlightedPr = Number(searchParams.get("pr") ?? NaN);
   const { timeRange, repoFilter } = useAnalytics();
   const [loading, setLoading] = useState(true);
 
@@ -636,7 +641,7 @@ export default function PRsAnalyticsPage() {
       </Section>
 
       {/* ────── Open PRs Table ────── */}
-      <Section title="Open PRs" icon={<GitPullRequest className="h-4 w-4" />}>
+      <Section id="open-prs-section" title="Open PRs" icon={<GitPullRequest className="h-4 w-4" />}>
         <p className="mb-3 text-xs text-slate-500">
           Snapshot of currently open pull requests in the selected repositories.
         </p>
@@ -657,8 +662,13 @@ export default function PRsAnalyticsPage() {
                 const [org, repoName] = pr.repo.split("/");
                 const url = `https://github.com/${org}/${repoName}/pull/${pr.prNumber}`;
                 return (
-                  <tr key={`${pr.repo}-${pr.prNumber}`}
-                    className="border-b border-slate-100 dark:border-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                  <tr
+                    key={`${pr.repo}-${pr.prNumber}`}
+                    className={cn(
+                      "border-b border-slate-100 transition-colors dark:border-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800/20",
+                      Number.isFinite(highlightedPr) && pr.prNumber === highlightedPr && "bg-cyan-50/70 dark:bg-cyan-500/12"
+                    )}
+                  >
                     <td className="py-2 pr-4">
                       <a href={url} target="_blank" rel="noreferrer"
                         className="inline-flex items-center gap-1 text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 font-medium">
@@ -733,12 +743,12 @@ export default function PRsAnalyticsPage() {
               >
                 Cancel
               </button>
-              <a
+              <Link
                 href="/pricing"
                 className="flex-1 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors text-sm font-medium text-center"
               >
                 View Plans
-              </a>
+              </Link>
             </div>
           </div>
         </div>
