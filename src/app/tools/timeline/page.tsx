@@ -105,30 +105,38 @@ function daysBetween(a: string | null | undefined, b: string | null | undefined)
 
 function TimelineContent() {
   const searchParams = useSearchParams();
-  const initialEip = searchParams.get("eip") || "";
+  const rawRepo = (searchParams.get("repo") || "eips").toLowerCase();
+  const initialRepo: "eips" | "ercs" | "rips" =
+    rawRepo === "ercs" || rawRepo === "erc" ? "ercs" : rawRepo === "rips" || rawRepo === "rip" ? "rips" : "eips";
+  const initialNumber = searchParams.get("number") || searchParams.get("eip") || "";
 
-  const [query, setQuery] = useState(initialEip);
+  const [repo, setRepo] = useState<"eips" | "ercs" | "rips">(initialRepo);
+  const [query, setQuery] = useState(initialNumber);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TimelineData | null>(null);
 
   const handleSearch = useCallback(
     async (num?: number) => {
-      const eipNum = num ?? parseInt(query.replace(/[^0-9]/g, ""), 10);
-      if (Number.isNaN(eipNum)) {
-        setError("Enter a valid EIP number.");
+      const proposalNum = num ?? parseInt(query.replace(/[^0-9]/g, ""), 10);
+      if (Number.isNaN(proposalNum)) {
+        setError("Enter a valid proposal number.");
         return;
       }
 
       setError(null);
       setLoading(true);
       try {
-        const result = await client.tools.getEIPFullTimeline({ eipNumber: eipNum });
+        const result = await client.tools.getEIPFullTimeline({ eipNumber: proposalNum });
         if (!result.title && result.statusEvents.length === 0) {
-          setError(`No timeline data found for EIP-${eipNum}.`);
+          setError(`No timeline data found for #${proposalNum}.`);
           setData(null);
         } else {
           setData(result);
+          const params = new URLSearchParams(window.location.search);
+          params.set("repo", repo);
+          params.set("number", String(proposalNum));
+          window.history.replaceState(null, "", `/tools/timeline?${params.toString()}`);
         }
       } catch (err) {
         console.error(err);
@@ -138,14 +146,16 @@ function TimelineContent() {
         setLoading(false);
       }
     },
-    [query]
+    [query, repo]
   );
 
   useEffect(() => {
-    if (!initialEip) return;
-    const num = parseInt(initialEip, 10);
+    if (!initialNumber) return;
+    const num = parseInt(initialNumber, 10);
     if (!Number.isNaN(num)) void handleSearch(num);
-  }, [initialEip, handleSearch]);
+  }, [initialNumber, handleSearch]);
+
+  const repoLabel = repo === "ercs" ? "ERC" : repo === "rips" ? "RIP" : "EIP";
 
   const timeline = useMemo<UnifiedEvent[]>(() => {
     if (!data) return [];
@@ -294,10 +304,23 @@ function TimelineContent() {
         </Link>
 
         <section className="rounded-xl border border-border bg-card/60 p-4">
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Search Proposal
-          </label>
-          <div className="flex gap-3">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Search Proposal</label>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="inline-flex rounded-lg border border-border bg-muted/50 p-1">
+              {(["eips", "ercs", "rips"] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRepo(r)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    repo === r ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {r.toUpperCase()}
+                </button>
+              ))}
+            </div>
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -305,7 +328,7 @@ function TimelineContent() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
-                placeholder="e.g. 1559, 4844, 20"
+                placeholder={`e.g. ${repo === "eips" ? "1559" : repo === "ercs" ? "20" : "1"}`}
                 className="w-full rounded-lg border border-border bg-muted/60 py-2.5 pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
             </div>
@@ -332,7 +355,7 @@ function TimelineContent() {
             <section className="rounded-xl border border-border bg-card/60 p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h2 className="dec-title text-2xl font-semibold tracking-tight text-foreground">EIP-{data.eipNumber}</h2>
+                  <h2 className="dec-title text-2xl font-semibold tracking-tight text-foreground">{repoLabel}-{data.eipNumber}</h2>
                   <p className="mt-1 text-sm text-foreground/90">{data.title ?? "Untitled"}</p>
                   <p className="mt-1 text-xs text-muted-foreground">Author: {data.author ?? "Unknown"} · Repo: {data.repo.toUpperCase()}</p>
                 </div>

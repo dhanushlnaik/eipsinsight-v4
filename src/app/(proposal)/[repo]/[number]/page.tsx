@@ -15,7 +15,6 @@ import {
   Check,
   FileCode,
   ChevronRight,
-  Sparkles,
   RefreshCw
 } from 'lucide-react';
 import { client } from '@/lib/orpc';
@@ -348,8 +347,8 @@ export default function ProposalDetailPage() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 dark:text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Failed to load proposal</h2>
-          <p className="text-slate-600 dark:text-slate-400">{error || 'Unknown error'}</p>
+          <h2 className="dec-title mb-2 text-xl font-semibold tracking-tight text-foreground">Failed to load proposal</h2>
+          <p className="text-muted-foreground">{error || 'Unknown error'}</p>
         </div>
       </div>
     );
@@ -357,47 +356,44 @@ export default function ProposalDetailPage() {
 
   const proposalId = `${repoDisplayName}-${proposal.number}`;
   const githubUrl = `https://github.com/ethereum/${repoPath}/blob/master/${filePath}/${fileName}`;
-  const currentStatusIndex = statusEvents.length - 1;
 
   // Determine urgency color for governance signals
   const getUrgencyColor = (days: number | null) => {
-    if (!days) return 'text-slate-600 dark:text-slate-300';
+    if (!days) return 'text-muted-foreground';
     if (days > 60) return 'text-red-600 dark:text-red-400';
     if (days > 30) return 'text-amber-600 dark:text-amber-400';
     return 'text-emerald-600 dark:text-emerald-300';
   };
 
   return (
-    <div className="bg-background relative w-full overflow-hidden min-h-screen">
-      {/* Seamless Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(52,211,153,0.08),_transparent_50%),_radial-gradient(ellipse_at_bottom_right,_rgba(6,182,212,0.06),_transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top,_rgba(52,211,153,0.15),_transparent_50%),_radial-gradient(ellipse_at_bottom_right,_rgba(6,182,212,0.12),_transparent_50%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(34,211,238,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(34,211,238,0.02)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(34,211,238,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(34,211,238,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem]" />
-        <div className="absolute top-0 left-1/2 h-[800px] w-[800px] -translate-x-1/2 rounded-full bg-gradient-to-br from-cyan-400/5 via-emerald-400/3 to-transparent dark:from-cyan-400/10 dark:via-emerald-400/5 dark:to-transparent blur-3xl" />
-      </div>
-
-      <div className="relative z-10">
-        {/* 1. Identity Header (Minimal) */}
-        <div className="relative w-full bg-background/80 backdrop-blur-xl border-b border-slate-200 dark:border-cyan-400/10">
-          <div className="mx-auto max-w-7xl px-4 pt-10 pb-6 sm:px-6 sm:pt-12 sm:pb-8">
+    <div className="min-h-screen bg-background">
+      <div className="w-full border-b border-border bg-card/40">
+        <div className="mx-auto max-w-7xl px-4 pb-6 pt-10 sm:px-6 sm:pb-8 sm:pt-12">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 space-y-3">
                 {/* Repo badge and copy link */}
                 <div className="flex items-center gap-3">
-                  <span className="inline-flex items-center rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-700 dark:text-cyan-300 backdrop-blur-sm">
+                  <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                     {repoDisplayName}
                   </span>
+                  <Link
+                    href={`/tools/timeline?repo=${normalizedRepo}s&number=${proposal.number}`}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-card/70 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <Activity className="h-3.5 w-3.5" />
+                    Timeline
+                  </Link>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
                           onClick={handleCopyLink}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700/40 bg-white/80 dark:bg-slate-900/50 backdrop-blur-sm transition-all hover:border-cyan-400/50 hover:bg-cyan-400/15"
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-card/70 transition-colors hover:border-primary/40 hover:bg-primary/10"
                         >
                           {linkCopied ? (
                             <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                           ) : (
-                            <Copy className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                           )}
                         </button>
                       </TooltipTrigger>
@@ -409,19 +405,19 @@ export default function ProposalDetailPage() {
                 </div>
 
                 {/* Title */}
-                <h1 className="dec-title text-balance bg-gradient-to-br from-emerald-700 via-slate-800 to-cyan-700 dark:from-emerald-300 dark:via-slate-100 dark:to-cyan-200 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl md:text-5xl">
+                <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl md:text-5xl">
                   {proposalId}: {proposal.title}
                 </h1>
 
                 {/* Description */}
-                <p className="max-w-3xl text-sm leading-relaxed text-slate-600 dark:text-slate-400 sm:text-base mt-3">
-                  Track the governance lifecycle, status changes, and upgrade participation for this proposal.
+                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                  Reference view for specification metadata, lifecycle transitions, governance signals, and linked upgrade context.
                 </p>
 
                 {/* Authors as Avatars */}
                 {proposal.authors.length > 0 && (
-                  <div className="mt-6 flex items-center gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500">Authors</p>
+                <div className="mt-6 flex items-center gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Authors</p>
                     <div className="flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:grayscale-0">
                       <TooltipProvider>
                         {proposal.authors.map((author, index) => (
@@ -437,7 +433,7 @@ export default function ProposalDetailPage() {
                                       e.currentTarget.style.display = 'none';
                                     }}
                                   />
-                                  <AvatarFallback className="bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 text-cyan-700 dark:text-cyan-300 font-semibold">
+                                  <AvatarFallback className="bg-primary/10 font-semibold text-primary">
                                     {getInitials(author)}
                                   </AvatarFallback>
                                 </Avatar>
@@ -457,26 +453,26 @@ export default function ProposalDetailPage() {
                 <div className="mt-4">
                   <button
                     onClick={() => setShowAi(s => !s)}
-                    className="text-sm font-medium text-cyan-600 dark:text-cyan-300 hover:underline focus:outline-none"
+                    className="text-sm font-medium text-primary hover:underline focus:outline-none"
                   >
                     {showAi ? 'Hide AI summary' : 'Show AI summary'}
                   </button>
                   {showAi && (
-                    <div className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+                    <div className="mt-2 text-sm text-foreground/90">
                       {aiSummaryLoading ? (
                         <div className="flex items-center gap-2">
-                          <RefreshCw className="h-4 w-4 animate-spin text-slate-600 dark:text-slate-400" />
+                          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
                           <span>Generating summary...</span>
                         </div>
                       ) : aiSummaryError ? (
-                        <div className="text-sm text-slate-600 dark:text-slate-400">{aiSummaryError}</div>
+                        <div className="text-sm text-muted-foreground">{aiSummaryError}</div>
                       ) : aiSummary ? (
                         <div
-                          className="prose prose-sm dark:prose-invert max-w-none [&_h4]:text-cyan-600 [&_h4]:dark:text-cyan-400 [&_strong]:text-cyan-600 [&_strong]:dark:text-cyan-400 [&_p]:text-slate-700 [&_p]:dark:text-slate-300"
+                          className="max-w-none text-sm [&_h4]:text-foreground [&_p]:text-foreground/90 [&_strong]:text-foreground"
                           dangerouslySetInnerHTML={{ __html: aiSummary }}
                         />
                       ) : (
-                        <div className="text-sm text-slate-500 dark:text-slate-500">AI summary will appear here.</div>
+                        <div className="text-sm text-muted-foreground">AI summary will appear here.</div>
                       )}
                     </div>
                   )}
@@ -484,68 +480,68 @@ export default function ProposalDetailPage() {
               </div>
             </div>
           </div>
-        </div>
+      </div>
 
-        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-16 mt-8">
+        <div className="mx-auto mt-8 max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
           <div className="space-y-6">
           {/* 2. Preamble Table (RFC-style, flat, authoritative) */}
           <div>
-            <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700/40 bg-white/80 dark:bg-slate-950/50">
+            <div className="overflow-hidden rounded-xl border border-border bg-card/60">
               <table className="w-full border-collapse">
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-700/30">
+                <tbody className="divide-y divide-border/70">
                   <tr>
-                    <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">EIP</td>
-                    <td className="px-6 py-4 text-sm text-slate-900 dark:text-white font-mono">{proposalId}</td>
+                    <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">EIP</td>
+                    <td className="px-6 py-4 font-mono text-sm text-foreground">{proposalId}</td>
                   </tr>
                   <tr>
-                    <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Title</td>
-                    <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{proposal.title}</td>
+                    <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Title</td>
+                    <td className="px-6 py-4 text-sm text-foreground">{proposal.title}</td>
                   </tr>
                   <tr>
-                    <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Status</td>
-                    <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{proposal.status}</td>
+                    <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</td>
+                    <td className="px-6 py-4 text-sm text-foreground">{proposal.status}</td>
                   </tr>
                   {proposal.type && (
                     <tr>
-                      <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Type</td>
-                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{proposal.type}</td>
+                      <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</td>
+                      <td className="px-6 py-4 text-sm text-foreground">{proposal.type}</td>
                     </tr>
                   )}
                   {proposal.category && (
                     <tr>
-                      <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Category</td>
-                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{proposal.category}</td>
+                      <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</td>
+                      <td className="px-6 py-4 text-sm text-foreground">{proposal.category}</td>
                     </tr>
                   )}
                   {proposal.authors.length > 0 && (
                     <tr>
-                      <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Author</td>
-                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{proposal.authors.join(', ')}</td>
+                      <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Author</td>
+                      <td className="px-6 py-4 text-sm text-foreground">{proposal.authors.join(', ')}</td>
                     </tr>
                   )}
                   {proposal.created && (
                     <tr>
-                      <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Created</td>
-                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">{proposal.created}</td>
+                      <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Created</td>
+                      <td className="px-6 py-4 text-sm text-foreground">{proposal.created}</td>
                     </tr>
                   )}
                   {proposalRequires.length > 0 && (
                     <tr>
-                      <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Requires</td>
-                      <td className="px-6 py-4 text-sm text-slate-900 dark:text-white font-mono">
+                      <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Requires</td>
+                      <td className="px-6 py-4 font-mono text-sm text-foreground">
                         {proposalRequires.map(r => `${repoDisplayName}-${r}`).join(', ')}
                       </td>
                     </tr>
                   )}
                   {(proposal.discussions_to || discussionsTo) && (
                     <tr>
-                      <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Discussions-To</td>
+                      <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Discussions-To</td>
                       <td className="px-6 py-4 text-sm">
                         <a 
                           href={proposal.discussions_to || discussionsTo || '#'} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          className="text-cyan-600 dark:text-cyan-300 hover:text-cyan-700 dark:hover:text-cyan-200 transition-colors break-all"
+                          className="break-all text-primary transition-colors hover:text-primary/80"
                         >
                           {proposal.discussions_to || discussionsTo}
                         </a>
@@ -556,8 +552,8 @@ export default function ProposalDetailPage() {
                   {upgrades.length > 0 && (
                     <>
                       <tr>
-                        <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Inclusion Status</td>
-                        <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">
+                        <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Inclusion Status</td>
+                        <td className="px-6 py-4 text-sm text-foreground">
                           {upgrades.map((upgrade, idx) => (
                             <span key={idx}>
                               {upgrade.bucket 
@@ -569,8 +565,8 @@ export default function ProposalDetailPage() {
                         </td>
                       </tr>
                       <tr>
-                        <td className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/30 w-40 align-top">Network Upgrade</td>
-                        <td className="px-6 py-4 text-sm text-slate-900 dark:text-white">
+                        <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Network Upgrade</td>
+                        <td className="px-6 py-4 text-sm text-foreground">
                           {upgrades.map((upgrade, idx) => (
                             <span key={idx}>
                               {upgrade.name || `Upgrade ${upgrade.upgrade_id}`}
@@ -594,16 +590,16 @@ export default function ProposalDetailPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="rounded-xl border border-emerald-200/20 dark:border-emerald-400/12 bg-white/80 dark:bg-slate-900/30 p-6 backdrop-blur-sm"
+                className="rounded-xl border border-border bg-card/60 p-6"
               >
                 <div className="flex items-center gap-2 mb-4">
-                  <Activity className="h-5 w-5 text-emerald-400 dark:text-emerald-300" />
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-300">Governance Signals</h3>
+                  <Activity className="h-5 w-5 text-primary" />
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Governance Signals</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {governanceState.waiting_on && (
                     <div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Waiting On</p>
+                      <p className="mb-1 text-xs text-muted-foreground">Waiting On</p>
                       {(() => {
                         const waitingStr = formatWaitingOn(governanceState.waiting_on);
                         const isClosed = /closed/i.test(waitingStr);
@@ -614,7 +610,7 @@ export default function ProposalDetailPage() {
                   )}
                   {governanceState.days_since_last_action !== null && (
                     <div>
-                      <p className="text-xs text-slate-500 mb-1">Days Since Last Action</p>
+                      <p className="mb-1 text-xs text-muted-foreground">Days Since Last Action</p>
                       <p className={cn("text-sm font-semibold", getUrgencyColor(governanceState.days_since_last_action))}>
                         {governanceState.days_since_last_action} day{governanceState.days_since_last_action !== 1 ? 's' : ''}
                       </p>
@@ -624,215 +620,93 @@ export default function ProposalDetailPage() {
               </motion.div>
             )}
 
-            {/* Lifecycle Timeline - Improved with dominant current state */}
+            {/* Lifecycle Timeline */}
             {statusEvents.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
-                className="rounded-xl border border-cyan-400/20 dark:border-cyan-400/20 bg-white/80 dark:bg-slate-900/40 p-8 backdrop-blur-sm overflow-hidden"
+                className="rounded-xl border border-border bg-card/60 p-6"
               >
-                <div className="flex items-center justify-between mb-8">
+                <div className="mb-6 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-cyan-700 dark:text-cyan-300">Lifecycle Timeline</h3>
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lifecycle Timeline</h3>
                   </div>
-                  {/* Status pill - only here, glowy */}
                   {proposal.status && (
                     <span className={cn(
-                      "inline-flex items-center rounded-full border px-4 py-1.5 text-sm font-bold shadow-lg",
+                      "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
                       statusColors[proposal.status]?.bg || 'bg-slate-500/20',
                       statusColors[proposal.status]?.text || 'text-slate-300',
-                      statusColors[proposal.status]?.border || 'border-slate-400/30',
-                      'shadow-cyan-500/20'
+                      statusColors[proposal.status]?.border || 'border-slate-400/30'
                     )}>
                       {proposal.status}
                     </span>
                   )}
                 </div>
-                
-                {/* Horizontal Timeline - State Conveyor */}
-                <div className="relative">
-                  {/* Hero Timeline Rail */}
-                  <div className="absolute top-12 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
-                  
-                  {/* Progress Overlay */}
-                  {statusEvents.length > 1 && (
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${(currentStatusIndex / (statusEvents.length - 1)) * 100}%` }}
-                      transition={{ duration: 1, ease: "easeOut" }}
-                      className="absolute top-12 left-0 h-[2px] bg-gradient-to-r from-cyan-400 via-emerald-400 to-cyan-400"
-                    />
-                  )}
-                  
-                  {/* Timeline items */}
-                  <div className="relative flex items-start gap-0 overflow-x-auto pb-6 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-cyan-500/20">
+                <div className="relative overflow-x-auto pb-2">
+                  <div className="absolute left-6 right-6 top-3 h-px bg-border/80" />
+                  <div className="relative flex min-w-max items-start gap-4 pr-4">
                     {statusEvents.map((event, index) => {
                       const prevEvent = index > 0 ? statusEvents[index - 1] : null;
                       const duration = calculateDuration(prevEvent?.changed_at || null, event.changed_at);
-                      const isCurrent = index === currentStatusIndex;
-                      const isFinal = event.to === 'Final';
-                      const isWithdrawn = event.to === 'Withdrawn';
-                      const shouldPulse = isCurrent || isFinal || isWithdrawn;
-                      
-                      const eventColor = statusColors[event.to] || statusColors['Draft'];
-                      
-                      // Build GitHub commit URL
+                      const eventColor = statusColors[event.to] || statusColors.Draft;
                       const commitUrl = event.commit_sha && event.commit_sha.trim() !== ''
                         ? `https://github.com/ethereum/${repoPath}/commit/${event.commit_sha}`
-                        : `https://github.com/ethereum/${repoPath}`;
-                      
-                      // Get pulse glow color
-                      const getPulseColor = (status: string) => {
-                        if (status === 'Final') return 'rgba(16,185,129,0.4)';
-                        if (status === 'Withdrawn') return 'rgba(239,68,68,0.4)';
-                        if (status === 'Last Call') return 'rgba(245,158,11,0.4)';
-                        if (status === 'Review') return 'rgba(59,130,246,0.4)';
-                        return 'rgba(6,182,212,0.4)';
-                      };
-                      
-                      // Get border color
-                      const getBorderColor = (status: string) => {
-                        if (status === 'Final') return 'rgba(52,211,153,0.6)';
-                        if (status === 'Withdrawn') return 'rgba(248,113,113,0.6)';
-                        if (status === 'Last Call') return 'rgba(251,191,36,0.6)';
-                        if (status === 'Review') return 'rgba(96,165,250,0.6)';
-                        return 'rgba(34,211,238,0.6)';
-                      };
-                      
-                      return (
-                        <React.Fragment key={index}>
-                          {/* Timeline item - dot on rail, card hangs from dot */}
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ 
-                              opacity: isCurrent ? 1 : 0.7, 
-                              scale: isCurrent ? 1 : 1,
-                              y: 0 
-                            }}
-                            transition={{ duration: 0.5, delay: index * 0.1, type: "spring" }}
-                            className={cn(
-                              "flex-shrink-0 flex flex-col items-center w-[260px] relative group",
-                              isCurrent && "z-10",
-                              !isCurrent && "opacity-70 grayscale-[10%]"
-                            )}
-                          >
-                            {/* Dot - snapped to rail */}
-                            <div className="absolute top-12 -translate-y-1/2 z-20">
-                              {/* Pulse animation only for current/Final/Withdrawn */}
-                              {shouldPulse && (
-                                <motion.div
-                                  animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0.7, 0.4] }}
-                                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                                  className="absolute inset-0 rounded-full blur-md -z-10"
-                                  style={{ backgroundColor: getPulseColor(event.to) }}
-                                />
-                              )}
-                              {/* Dot */}
-                              <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                transition={{ duration: 0.4, delay: index * 0.1 + 0.2, type: "spring" }}
-                                className={cn(
-                                  "h-5 w-5 rounded-full border-2 relative z-10",
-                                  isCurrent ? "shadow-lg" : "shadow-sm",
-                                  eventColor.dot,
-                                  eventColor.dotGlow
-                                )}
-                                style={{ borderColor: getBorderColor(event.to) }}
-                              />
-                            </div>
-                            
-                            {/* Event content card - hangs from dot */}
-                            <div
-                              className={cn(
-                                "mt-10 w-full rounded-lg border-l-4 p-4 transition-all backdrop-blur-sm",
-                                eventColor.leftBorder,
-                                eventColor.cardBg,
-                                eventColor.border,
-                                event.commit_sha ? "cursor-pointer hover:scale-[1.02] hover:shadow-lg" : "",
-                                isCurrent && "shadow-md"
-                              )}
-                              onClick={() => {
-                                if (event.commit_sha) {
-                                  window.open(commitUrl, '_blank', 'noopener,noreferrer');
-                                }
-                              }}
-                            >
-                              {/* Status badge - uppercase, tighter */}
-                              <div className="flex items-center justify-center gap-1.5 mb-2.5">
-                                {event.from && (
-                                  <>
-                                    <span className={cn(
-                                      "text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded", 
-                                      statusColors[event.from]?.bg || 'bg-slate-500/20',
-                                      statusColors[event.from]?.text || 'text-slate-600 dark:text-slate-400'
-                                    )}>
-                                      {event.from}
-                                    </span>
-                                    <ChevronRight className="h-2.5 w-2.5 text-slate-500 shrink-0" />
-                                  </>
-                                )}
-                                <span className={cn(
-                                  "text-[11px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded",
-                                  eventColor.bg,
-                                  eventColor.text
-                                )}>
-                                  {event.to}
-                                </span>
-                              </div>
-                              
-                              {/* Date and time */}
-                              <div className="space-y-0.5 mb-2.5">
-                                <p className="text-xs font-medium text-slate-900 dark:text-white">
-                                  {new Date(event.changed_at).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  })}
-                                </p>
-                                <p className="text-[10px] text-slate-600 dark:text-slate-400">
-                                  {new Date(event.changed_at).toLocaleTimeString('en-US', {
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </p>
-                              </div>
-                              
-                              {/* Duration */}
-                              {duration && prevEvent && (
-                                <div className="pt-2 border-t border-slate-300/50 dark:border-white/10">
-                                  <p className="text-[10px] text-slate-600 dark:text-slate-400 italic">
-                                    {duration} in {prevEvent.to}
-                                  </p>
-                                </div>
-                              )}
-                              
-                              {/* Commit link hint */}
-                              {event.commit_sha && (
-                                <div className="mt-2 pt-2 border-t border-slate-300/50 dark:border-white/10 flex items-center justify-center gap-1">
-                                  <Github className="h-2.5 w-2.5 text-slate-500" />
-                                  <span className="text-[10px] text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-400 transition-colors">
-                                    View commit
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </motion.div>
+                        : null;
+                      const isLatest = index === statusEvents.length - 1;
 
-                          {/* Flow gap connector (replaces chevron) */}
-                          {index < statusEvents.length - 1 && (
-                            <motion.div
-                              initial={{ opacity: 0, scaleX: 0 }}
-                              animate={{ opacity: 1, scaleX: 1 }}
-                              transition={{ duration: 0.5, delay: index * 0.1 + 0.3, ease: "easeOut" }}
-                              className="flex-shrink-0 w-8 flex items-center justify-center pt-12"
-                            >
-                              <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-slate-600/40 to-transparent" />
-                            </motion.div>
-                          )}
-                        </React.Fragment>
+                      return (
+                        <div key={`${event.changed_at}-${event.to}-${index}`} className="w-[280px] shrink-0">
+                          <div className="mb-3 flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "h-3 w-3 rounded-full ring-2 ring-background",
+                                eventColor.dot,
+                                isLatest && "shadow-md shadow-primary/30"
+                              )}
+                            />
+                            {index < statusEvents.length - 1 && (
+                              <div className="h-px flex-1 bg-border/70" />
+                            )}
+                          </div>
+
+                          <div className={cn("rounded-lg border border-border/70 bg-muted/30 p-4", isLatest && "border-primary/30 bg-primary/5")}>
+                            <div className="flex items-center gap-2">
+                              {event.from && (
+                                <>
+                                  <span className={cn("rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", statusColors[event.from]?.bg || "bg-muted", statusColors[event.from]?.text || "text-foreground")}>
+                                    {event.from}
+                                  </span>
+                                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                </>
+                              )}
+                              <span className={cn("rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", eventColor.bg, eventColor.text, eventColor.border)}>
+                                {event.to}
+                              </span>
+                            </div>
+
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              {new Date(event.changed_at).toLocaleString()}
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                              {duration && prevEvent && <span>{duration} in {prevEvent.to}</span>}
+                              {event.commit_sha && <span className="font-mono">{event.commit_sha.slice(0, 8)}</span>}
+                              {commitUrl && (
+                                <a
+                                  href={commitUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-primary hover:text-primary/80"
+                                >
+                                  <Github className="h-3.5 w-3.5" />
+                                  View commit
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -847,24 +721,24 @@ export default function ProposalDetailPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="rounded-xl border border-violet-400/20 dark:border-violet-400/20 bg-white/80 dark:bg-slate-900/40 p-6 backdrop-blur-sm"
+              className="rounded-xl border border-border bg-card/60 p-6"
             >
               <div className="flex items-center gap-2 mb-4">
-                <Package className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300">Network Upgrades</h3>
+                <Package className="h-5 w-5 text-primary" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Network Upgrades</h3>
               </div>
               <div className="space-y-3">
                 {upgrades.map((upgrade, index) => (
                   <TooltipProvider key={index}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className="flex items-center justify-between p-3 rounded-lg border border-violet-400/10 dark:border-violet-400/10 bg-violet-500/5 hover:bg-violet-500/10 transition-colors cursor-help">
+                        <div className="flex cursor-help items-center justify-between rounded-lg border border-border/70 bg-muted/30 p-3 transition-colors hover:bg-muted/50">
                           <div>
-                            <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+                            <p className="text-sm font-semibold text-foreground">
                               Included in {upgrade.name} ({upgrade.bucket})
                             </p>
                             {upgrade.commit_date && (
-                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                              <p className="mt-0.5 text-xs text-muted-foreground">
                                 {new Date(upgrade.commit_date).toLocaleDateString('en-US', {
                                   year: 'numeric',
                                   month: 'long',
@@ -874,7 +748,7 @@ export default function ProposalDetailPage() {
                             )}
                           </div>
                           <Link href={`/upgrade/${upgrade.slug}`}>
-                            <Button variant="ghost" size="sm" className="text-violet-700 dark:text-violet-300 hover:text-violet-800 dark:hover:text-violet-200">
+                            <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
                               View <ArrowRight className="h-3.5 w-3.5 ml-1" />
                             </Button>
                           </Link>
@@ -895,7 +769,7 @@ export default function ProposalDetailPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="rounded-xl border border-slate-200 dark:border-slate-700/40 bg-white/80 dark:bg-slate-950/50 p-8 overflow-hidden flex flex-col"
+            className="flex flex-col overflow-hidden rounded-xl border border-border bg-card/60 p-8"
           >
             {/* Copy as Markdown button */}
             {markdownContent && (
@@ -907,7 +781,7 @@ export default function ProposalDetailPage() {
                         variant="outline"
                         size="sm"
                         onClick={handleCopyMarkdown}
-                        className="border-slate-300 dark:border-slate-600/40 bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/50 hover:border-slate-400 dark:hover:border-slate-500/50 transition-all"
+                        className="border-border bg-muted/50 text-foreground hover:bg-muted"
                       >
                         {markdownCopied ? (
                           <>
@@ -936,13 +810,13 @@ export default function ProposalDetailPage() {
               </div>
             ) : markdownError ? (
               <div className="text-center py-12">
-                <AlertCircle className="h-8 w-8 text-slate-500 mx-auto mb-2" />
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{markdownError}</p>
+                <AlertCircle className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                <p className="mb-4 text-sm text-muted-foreground">{markdownError}</p>
                 <a
                   href={githubUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-cyan-600 dark:text-cyan-300 hover:text-cyan-700 dark:hover:text-cyan-200 inline-flex items-center gap-1.5"
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
                 >
                   View on GitHub instead <ExternalLink className="h-3.5 w-3.5" />
                 </a>
@@ -961,27 +835,25 @@ export default function ProposalDetailPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="rounded-xl border border-slate-200 dark:border-slate-700/40 bg-white/80 dark:bg-slate-900/30 p-4 backdrop-blur-sm"
+            className="rounded-xl border border-border bg-card/60 p-4"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Github className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                <Github className="h-4 w-4 text-muted-foreground" />
                 <a
                   href={githubUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-medium text-cyan-600 dark:text-cyan-300 hover:text-cyan-700 dark:hover:text-cyan-200 transition-colors"
+                  className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
                 >
                   View on GitHub
                 </a>
               </div>
-              <ExternalLink className="h-3.5 w-3.5 text-slate-600 dark:text-slate-500" />
+              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
           </motion.div>
           </div>
         </div>
-      </div>
     </div>
   );
 }
-
