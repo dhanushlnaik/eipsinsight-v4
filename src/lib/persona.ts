@@ -71,7 +71,7 @@ export const PERSONAS: Record<Persona, PersonaMeta> = {
     description:
       "Get high-level summaries, understand protocol direction, and plan around upgrades",
     icon: Building2,
-    color: "cyan",
+    color: "violet",
   },
   newcomer: {
     id: "newcomer",
@@ -80,7 +80,7 @@ export const PERSONAS: Record<Persona, PersonaMeta> = {
     description:
       "Learn about Ethereum governance, EIPs, and how protocol changes happen",
     icon: GraduationCap,
-    color: "pink",
+    color: "purple",
   },
 };
 

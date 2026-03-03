@@ -59,7 +59,7 @@ import {
 interface SidebarSubItem {
   title: string;
   href: string;
-  sectionId?: string; // For scroll-spy sections (homepage only)
+  sectionId?: string; // Backward compat; prefer href hash sections (/path#section)
 }
 
 interface SidebarItem {
@@ -139,6 +139,9 @@ const sidebarSections: SidebarSection[] = [
         items: [
           { title: "Overview", href: "/upgrade" },
           { title: "Previous Upgrades", href: "/upgrade/archive" },
+          { title: "Archive · Comparison", href: "/upgrade/archive#comparison" },
+          { title: "Archive · Heatmap", href: "/upgrade/archive#heatmap" },
+          { title: "Archive · Details", href: "/upgrade/archive#details" },
           { title: "Pectra", href: "/upgrade/pectra" },
           { title: "Fusaka", href: "/upgrade/fusaka" },
           { title: "Glamsterdam", href: "/upgrade/glamsterdam" },
@@ -227,7 +230,7 @@ const sidebarSections: SidebarSection[] = [
       {
         title: "Admin",
         icon: Shield,
-        href: "/admin#blogs",
+        href: "/admin?tab=blogs",
         items: [
           { title: "Blogs", href: "/admin#blogs" },
           { title: "Editors", href: "/admin#editors" },
@@ -246,25 +249,108 @@ const sidebarSections: SidebarSection[] = [
 // ============================================================================
 
 const PERSONA_SECTION_ORDER: Record<Persona, string[]> = {
-  // Developer: protocol upgrades and standards first, then data
   developer: ["standards", "analytics", "tools", "learn"],
-  // Editor: editorial workflow — standards, then analytics to track PRs/reviews
-  editor: ["standards", "analytics", "tools", "learn"],
-  // Researcher: data and analysis first, then the underlying standards
+  editor: ["analytics", "tools", "standards", "learn"],
   researcher: ["analytics", "standards", "tools", "learn"],
-  // Builder: tools and ERCs for building, then governance context
-  builder: ["tools", "standards", "analytics", "learn"],
-  // Enterprise: high-level governance overview, then learning resources
+  builder: ["tools", "standards", "learn", "analytics"],
   enterprise: ["standards", "analytics", "learn", "tools"],
-  // Newcomer: learning first, then progressively deeper content
   newcomer: ["learn", "standards", "analytics", "tools"],
 };
 
 const DEFAULT_SECTION_ORDER = ["standards", "analytics", "tools", "learn"];
 
+const PERSONA_ITEM_PRIORITY: Record<Persona, string[]> = {
+  developer: [
+    "Upgrades",
+    "Standards",
+    "Analytics",
+    "Tools",
+    "Insights",
+    "Explore",
+    "Resources",
+    "Search",
+    "Home",
+    "Dashboard",
+  ],
+  editor: [
+    "Search",
+    "Analytics",
+    "Tools",
+    "Standards",
+    "Insights",
+    "Explore",
+    "Resources",
+    "Upgrades",
+    "Home",
+    "Dashboard",
+  ],
+  researcher: [
+    "Analytics",
+    "Insights",
+    "Standards",
+    "Explore",
+    "Search",
+    "Upgrades",
+    "Tools",
+    "Resources",
+    "Home",
+    "Dashboard",
+  ],
+  builder: [
+    "Tools",
+    "Standards",
+    "Search",
+    "Explore",
+    "Resources",
+    "Insights",
+    "Analytics",
+    "Upgrades",
+    "Home",
+    "Dashboard",
+  ],
+  enterprise: [
+    "Upgrades",
+    "Insights",
+    "Standards",
+    "Analytics",
+    "Explore",
+    "Resources",
+    "Tools",
+    "Search",
+    "Home",
+    "Dashboard",
+  ],
+  newcomer: [
+    "Resources",
+    "Explore",
+    "Home",
+    "Dashboard",
+    "Standards",
+    "Upgrades",
+    "Insights",
+    "Analytics",
+    "Tools",
+    "Search",
+  ],
+};
+
 // ============================================================================
 // Helpers
 // ============================================================================
+
+function sortItemsByPersonaPriority(
+  items: SidebarItem[],
+  persona: Persona
+): SidebarItem[] {
+  const priority = PERSONA_ITEM_PRIORITY[persona];
+  const rank = new Map(priority.map((title, idx) => [title, idx]));
+  return [...items].sort((a, b) => {
+    const ar = rank.get(a.title) ?? Number.MAX_SAFE_INTEGER;
+    const br = rank.get(b.title) ?? Number.MAX_SAFE_INTEGER;
+    if (ar !== br) return ar - br;
+    return a.title.localeCompare(b.title);
+  });
+}
 
 function getOrderedSections(persona: Persona | null): SidebarSection[] {
   const sectionMap = new Map(sidebarSections.map((s) => [s.id, s]));
@@ -272,14 +358,18 @@ function getOrderedSections(persona: Persona | null): SidebarSection[] {
   const accountSection = sectionMap.get("account")!;
 
   // Respect the feature flag — if persona nav reordering is off, use default order
+  const effectivePersona = persona || DEFAULT_PERSONA;
+
   if (!FEATURES.PERSONA_NAV_REORDER) {
     const middleSections = DEFAULT_SECTION_ORDER
       .map((id) => sectionMap.get(id))
       .filter((s): s is SidebarSection => !!s);
-    return [mainSection, ...middleSections, accountSection];
+    return [mainSection, ...middleSections, accountSection].map((section) => ({
+      ...section,
+      items: sortItemsByPersonaPriority(section.items, effectivePersona),
+    }));
   }
 
-  const effectivePersona = persona || DEFAULT_PERSONA;
   const order =
     PERSONA_SECTION_ORDER[effectivePersona] || DEFAULT_SECTION_ORDER;
 
@@ -287,7 +377,10 @@ function getOrderedSections(persona: Persona | null): SidebarSection[] {
     .map((id) => sectionMap.get(id))
     .filter((s): s is SidebarSection => !!s);
 
-  return [mainSection, ...middleSections, accountSection];
+  return [mainSection, ...middleSections, accountSection].map((section) => ({
+    ...section,
+    items: sortItemsByPersonaPriority(section.items, effectivePersona),
+  }));
 }
 
 /**
@@ -312,7 +405,7 @@ function getActiveItemTitle(pathname: string): string | null {
   if (pathname.startsWith("/tools")) return "Tools";
   if (pathname.startsWith("/insights")) return "Insights";
   if (pathname.startsWith("/resources")) return "Resources";
-  if (pathname.startsWith("/profile")) return "Profile";
+  if (pathname.startsWith("/profile")) return "Settings";
   if (pathname.startsWith("/settings")) return "Settings";
   if (pathname.startsWith("/admin")) return "Admin";
   return null;
@@ -329,12 +422,12 @@ function AppSidebarContent() {
   const { isOpen, toggleSidebar } = useSidebarStore();
   const persona = usePersonaStore((s) => s.persona);
 
-  // Which collapsible items are currently expanded
-  const [openItems, setOpenItems] = React.useState<string[]>(() => {
+  // Accordion behavior: only one parent open at a time
+  const [openItem, setOpenItem] = React.useState<string | null>(() => {
     const active = getActiveItemTitle(pathname);
-    return active ? [active] : [];
+    return active ?? null;
   });
-  const rememberedOpen = React.useRef<string[]>(openItems);
+  const rememberedOpen = React.useRef<string | null>(openItem);
 
   // Scroll spy state (kept for future use)
   const [activeSection, setActiveSection] = React.useState("");
@@ -408,9 +501,7 @@ function AppSidebarContent() {
   // ========================================================================
 
   const toggleItem = (title: string) => {
-    setOpenItems((prev) =>
-      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title]
-    );
+    setOpenItem((prev) => (prev === title ? null : title));
   };
 
   const prevState = React.useRef(state);
@@ -428,18 +519,13 @@ function AppSidebarContent() {
 
   // Collapse sections when sidebar collapses, restore on expand
   React.useEffect(() => {
-    if (state === "collapsed" && openItems.length > 0) {
-      rememberedOpen.current = openItems;
-      setOpenItems([]);
-    } else if (
-      state === "expanded" &&
-      openItems.length === 0 &&
-      rememberedOpen.current.length > 0
-    ) {
-      setOpenItems(rememberedOpen.current);
+    if (state === "collapsed" && openItem) {
+      rememberedOpen.current = openItem;
+      setOpenItem(null);
+    } else if (state === "expanded" && !openItem && rememberedOpen.current) {
+      setOpenItem(rememberedOpen.current);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
+  }, [state, openItem]);
 
   const handleToggle = React.useCallback(() => {
     toggleSidebarUI();
@@ -455,89 +541,71 @@ function AppSidebarContent() {
   // Auto-expand the correct collapsible on route change
   React.useEffect(() => {
     const activeItem = getActiveItemTitle(pathname);
-    if (activeItem && !openItems.includes(activeItem)) {
-      setOpenItems([activeItem]);
-    } else if (!activeItem) {
-      setOpenItems([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+    setOpenItem(activeItem ?? null);
+  }, [pathname, currentSearchStr, hash]);
 
   // ========================================================================
-  // Scroll spy — collects sectionId entries from all sidebar sub-items
+  // Scroll spy — active page only (hash sections for any route)
   // ========================================================================
 
-  const sectionIds = React.useMemo(() => {
-    const ids: string[] = [];
-    for (const section of orderedSections) {
-      for (const item of section.items) {
-        if (item.items) {
-          for (const sub of item.items) {
-            if (sub.sectionId) ids.push(sub.sectionId);
-          }
-        }
-      }
-    }
-    return ids;
-  }, [orderedSections]);
+  const activeParentItem = React.useMemo(() => {
+    const allItems = visibleSections.flatMap((section) => section.items);
+
+    return (
+      allItems.find((item) => {
+        if (!item.items?.length) return false;
+        return item.items.some((sub) => {
+          const url = new URL(sub.href, "http://localhost");
+          const hrefPath = url.pathname;
+          const hrefParams = new URLSearchParams(url.search);
+          hrefParams.sort();
+          return pathname === hrefPath && hrefParams.toString() === currentSearchStr;
+        });
+      }) ?? null
+    );
+  }, [visibleSections, pathname, currentSearchStr]);
+
+  const trackedSections = React.useMemo(() => {
+    if (!activeParentItem?.items?.length) return [];
+    return activeParentItem.items
+      .map((sub) => {
+        const url = new URL(sub.href, "http://localhost");
+        const id = sub.sectionId || url.hash.replace(/^#/, "");
+        const hrefPath = url.pathname;
+        return id && hrefPath === pathname ? id : null;
+      })
+      .filter((x): x is string => !!x);
+  }, [activeParentItem, pathname]);
 
   React.useEffect(() => {
-    if (pathname !== "/" || sectionIds.length === 0) {
+    if (trackedSections.length === 0) {
       setActiveSection("");
       return;
     }
 
-    let rafHandle = 0;
-
-    const updateActiveSection = () => {
-      const threshold = window.innerHeight * 0.3;
-      let currentActive = "";
-
-      for (const id of sectionIds) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        const rect = el.getBoundingClientRect();
-        if (rect.top <= threshold) {
-          currentActive = id;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]?.target?.id) {
+          setActiveSection(visible[0].target.id);
         }
+      },
+      {
+        root: null,
+        rootMargin: "-20% 0px -55% 0px",
+        threshold: [0.15, 0.4, 0.7],
       }
+    );
 
-      if (
-        window.innerHeight + window.scrollY >=
-        document.documentElement.scrollHeight - 50
-      ) {
-        currentActive = sectionIds[sectionIds.length - 1];
-      }
+    trackedSections.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
 
-      if (!currentActive) {
-        for (const id of sectionIds) {
-          const el = document.getElementById(id);
-          if (!el) continue;
-          const rect = el.getBoundingClientRect();
-          if (rect.bottom > 0 && rect.top < window.innerHeight) {
-            currentActive = id;
-            break;
-          }
-        }
-      }
-
-      setActiveSection(currentActive);
-    };
-
-    const handleScroll = () => {
-      cancelAnimationFrame(rafHandle);
-      rafHandle = requestAnimationFrame(updateActiveSection);
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    const initTimer = setTimeout(updateActiveSection, 150);
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      cancelAnimationFrame(rafHandle);
-      clearTimeout(initTimer);
-    };
-  }, [pathname, sectionIds]);
+    return () => observer.disconnect();
+  }, [trackedSections]);
 
   // ========================================================================
   // Active state helpers
@@ -554,11 +622,6 @@ function AppSidebarContent() {
    */
   const isSubItemActive = React.useCallback(
     (subItem: SidebarSubItem): boolean => {
-      // Scroll-spy items (homepage only)
-      if (subItem.sectionId) {
-        return pathname === "/" && activeSection === subItem.sectionId;
-      }
-
       // Parse the href into path + search
       const url = new URL(subItem.href, "http://localhost");
       const hrefPath = url.pathname;
@@ -571,8 +634,11 @@ function AppSidebarContent() {
       hrefParams.sort();
       if (hrefParams.toString() !== currentSearchStr) return false;
 
-      // If the href includes a hash, require it to match the current hash
-      if (url.hash) return url.hash === hash;
+      const sectionId = subItem.sectionId || url.hash.replace(/^#/, "");
+      if (sectionId) {
+        if (activeSection) return activeSection === sectionId;
+        return hash === `#${sectionId}`;
+      }
       return true;
     },
     [pathname, currentSearchStr, activeSection, hash]
@@ -587,15 +653,8 @@ function AppSidebarContent() {
     (href?: string): boolean => {
       if (!href) return false;
       
-      // Handle hash-based routing
-      if (href.includes("#")) {
-        const [basePath] = href.split("#");
-        return (
-          pathname === basePath && hash !== ""
-        );
-      }
-      
-      const basePath = href.split("?")[0].split("#")[0];
+      const parsed = new URL(href, "http://localhost");
+      const basePath = parsed.pathname;
       if (basePath === "/") return pathname === "/";
       return pathname === basePath || pathname.startsWith(basePath + "/");
     },
@@ -626,24 +685,27 @@ function AppSidebarContent() {
           asChild
           isActive={isActive}
           className={cn(
-            "rounded-md py-1.5 transition-all duration-200",
-            "hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100 hover:translate-x-0.5",
-            "border border-transparent hover:border-slate-200 dark:hover:border-primary/20",
+            "rounded-md py-1.5 motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+            "hover:bg-muted/60 hover:text-foreground motion-safe:hover:translate-x-0.5",
+            "border border-transparent hover:border-border",
+            "data-[active=true]:!bg-primary/15 data-[active=true]:!text-foreground",
             isActive &&
-              "bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-slate-100 font-medium border-slate-200 dark:border-primary/30"
+              "bg-primary/10 text-foreground font-medium border-primary/30 shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.16)]"
           )}
         >
           <Link
             href={subItem.href}
             onClick={(e) => {
-              // For scroll-spy items, smooth-scroll instead of navigating
-              if (subItem.sectionId) {
+              const url = new URL(subItem.href, "http://localhost");
+              const sectionId = subItem.sectionId || url.hash.replace(/^#/, "");
+              const samePath = pathname === url.pathname;
+              if (sectionId && samePath) {
                 e.preventDefault();
-                const el = document.getElementById(subItem.sectionId);
+                const el = document.getElementById(sectionId);
                 if (el) {
                   el.scrollIntoView({ behavior: "smooth", block: "start" });
-                  window.history.pushState(null, "", subItem.href);
-                  setActiveSection(subItem.sectionId);
+                  window.history.replaceState(null, "", subItem.href);
+                  setActiveSection(sectionId);
                 }
               }
             }}
@@ -657,10 +719,13 @@ function AppSidebarContent() {
 
   const renderItem = (item: SidebarItem) => {
     const hasSubItems = item.items && item.items.length > 0;
-    const isItemOpen = openItems.includes(item.title);
+    const isItemOpen = openItem === item.title;
     const isActive = isParentPathActive(item.href);
     const isChildActive = hasActiveChild(item.items);
     const isHighlighted = isActive || isChildActive;
+    const effectivePersona = persona ?? DEFAULT_PERSONA;
+    const personaPriority = PERSONA_ITEM_PRIORITY[effectivePersona] ?? [];
+    const isRecommended = personaPriority.slice(0, 2).includes(item.title);
 
     if (hasSubItems) {
       return (
@@ -675,11 +740,12 @@ function AppSidebarContent() {
               <SidebarMenuButton
                 tooltip={state === "collapsed" ? item.title : undefined}
                 className={cn(
-                  "group relative overflow-hidden rounded-lg transition-all duration-300",
-                  "hover:bg-slate-100 dark:hover:bg-slate-800/70 dark:hover:border-primary/20",
+                  "group relative overflow-hidden rounded-lg motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  "hover:bg-muted/60 motion-safe:hover:translate-x-0.5",
                   "border border-transparent",
+                  "data-[active=true]:!bg-primary/15 data-[active=true]:!text-foreground",
                   (isItemOpen || isHighlighted) &&
-                    "bg-slate-100 dark:bg-slate-800/80 dark:border-primary/30",
+                    "bg-primary/10 border-primary/30 shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.16)]",
                   state === "collapsed" &&
                     "w-11 h-11 p-0 flex items-center justify-center"
                 )}
@@ -689,7 +755,7 @@ function AppSidebarContent() {
                     "h-5 w-5 transition-all duration-300",
                     isHighlighted
                       ? "text-primary dark:drop-shadow-[0_0_8px_rgb(var(--persona-accent-rgb)/0.8)]"
-                      : "text-slate-500 dark:text-primary/80 group-hover:text-primary dark:group-hover:text-primary dark:group-hover:drop-shadow-[0_0_8px_rgb(var(--persona-accent-rgb)/0.6)]",
+                      : "text-muted-foreground group-hover:text-primary",
                     state === "collapsed" && "shrink-0"
                   )}
                 />
@@ -699,15 +765,18 @@ function AppSidebarContent() {
                       className={cn(
                         "flex-1 text-sm font-medium transition-colors",
                         isHighlighted
-                          ? "text-slate-900 dark:text-white"
-                          : "text-slate-600 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-white"
+                          ? "text-foreground"
+                          : "text-muted-foreground group-hover:text-foreground"
                       )}
                     >
                       {item.title}
                     </span>
+                    {isRecommended && (
+                      <Sparkles className="mr-1 h-3.5 w-3.5 text-primary" aria-label="Recommended" />
+                    )}
                     <ChevronRight
                       className={cn(
-                        "h-3.5 w-3.5 text-slate-400 dark:text-primary/50 transition-all duration-300",
+                        "h-3.5 w-3.5 text-muted-foreground transition-all duration-300",
                         isItemOpen && "rotate-90 text-primary"
                       )}
                     />
@@ -716,8 +785,13 @@ function AppSidebarContent() {
               </SidebarMenuButton>
             </CollapsibleTrigger>
             {state === "expanded" && (
-              <CollapsibleContent>
-                <SidebarMenuSub className="ml-0 border-l-2 border-slate-200 dark:border-primary/10 pl-6 pt-2">
+              <CollapsibleContent
+                className={cn(
+                  "overflow-hidden",
+                  "data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up"
+                )}
+              >
+                <SidebarMenuSub className="ml-0 border-l-2 border-border/80 pl-6 pt-2">
                   {item.items?.map(renderSubItem)}
                 </SidebarMenuSub>
               </CollapsibleContent>
@@ -735,11 +809,12 @@ function AppSidebarContent() {
           isActive={isActive}
           tooltip={state === "collapsed" ? item.title : undefined}
           className={cn(
-            "group relative overflow-hidden rounded-lg transition-all duration-300",
-            "hover:bg-slate-100 dark:hover:bg-slate-800/70 dark:hover:border-primary/20 hover:translate-x-0.5",
+            "group relative overflow-hidden rounded-lg motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+            "hover:bg-muted/60 motion-safe:hover:translate-x-0.5",
             "border border-transparent",
+            "data-[active=true]:!bg-primary/15 data-[active=true]:!text-foreground",
             isActive &&
-              "bg-slate-100 dark:bg-slate-800/80 dark:border-primary/40",
+              "bg-primary/10 border-primary/40 shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.16)]",
             state === "collapsed" &&
               "w-11 h-11 p-0 flex items-center justify-center"
           )}
@@ -756,7 +831,7 @@ function AppSidebarContent() {
                 "h-5 w-5 transition-all duration-300",
                 isActive
                   ? "text-primary dark:drop-shadow-[0_0_8px_rgb(var(--persona-accent-rgb)/0.8)]"
-                  : "text-slate-500 dark:text-primary/80 group-hover:text-primary dark:group-hover:text-primary dark:group-hover:drop-shadow-[0_0_8px_rgb(var(--persona-accent-rgb)/0.6)]",
+                  : "text-muted-foreground group-hover:text-primary",
                 state === "collapsed" && "shrink-0"
               )}
             />
@@ -765,8 +840,8 @@ function AppSidebarContent() {
                 className={cn(
                   "text-sm transition-colors",
                   isActive
-                    ? "text-slate-900 dark:text-white font-semibold"
-                    : "text-slate-600 dark:text-slate-100 font-medium group-hover:text-slate-900 dark:group-hover:text-white"
+                    ? "text-foreground font-semibold"
+                    : "text-muted-foreground font-medium group-hover:text-foreground"
                 )}
               >
                 {item.title}
@@ -781,42 +856,42 @@ function AppSidebarContent() {
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-slate-200 dark:border-primary/20 bg-white dark:bg-slate-950/95 backdrop-blur-xl"
+      className="border-r border-border bg-background/95 backdrop-blur-xl"
     >
       {/* Header with Toggle Button — matches navbar h-14 */}
       <SidebarHeader
         className={cn(
-          "h-14 border-b border-slate-200 dark:border-primary/20 bg-white/95 dark:bg-slate-950/80 transition-all duration-300 flex items-center",
+          "h-14 border-b border-border bg-background/95 transition-all duration-300 flex items-center",
           state === "expanded" ? "px-2" : "justify-center px-1"
         )}
       >
         <button
           onClick={handleToggle}
           className={cn(
-            "group flex items-center justify-center gap-2 rounded-lg transition-all duration-300",
-            "hover:bg-slate-100 dark:hover:bg-slate-800/70",
-            "border border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-primary/30",
-            "bg-slate-100 dark:bg-slate-800/60",
+            "group flex items-center justify-center gap-2 rounded-lg motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+            "hover:bg-muted/60 motion-safe:hover:scale-[1.01]",
+            "border border-border hover:border-primary/30",
+            "bg-muted/40",
             state === "expanded" ? "w-full h-10 px-3" : "w-10 h-10"
           )}
           title={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
         >
           {state === "expanded" ? (
             <>
-              <PanelLeft className="h-4 w-4 text-slate-600 dark:text-primary transition-colors group-hover:text-slate-900 dark:group-hover:text-primary shrink-0" />
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+              <PanelLeft className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+              <span className="text-sm font-medium text-foreground transition-colors">
                 Collapse
               </span>
             </>
           ) : (
-            <PanelLeftOpen className="h-4 w-4 text-slate-600 dark:text-primary transition-colors group-hover:text-slate-900 dark:group-hover:text-primary" />
+            <PanelLeftOpen className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
           )}
         </button>
       </SidebarHeader>
 
       <SidebarContent
         className={cn(
-          "gap-0 py-2 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-cyan-500/30",
+          "gap-0 py-2 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-primary/30",
           state === "collapsed" && "px-0 items-center"
         )}
       >
@@ -824,12 +899,12 @@ function AppSidebarContent() {
           <SidebarGroup key={section.id} className="py-0">
             {/* Section label (expanded) or separator line (collapsed) */}
             {state === "expanded" && section.label && (
-              <SidebarGroupLabel className="px-4 pb-1.5 pt-4 text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-primary/50">
+              <SidebarGroupLabel className="px-4 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {section.label}
               </SidebarGroupLabel>
             )}
             {state === "collapsed" && section.label && (
-              <div className="my-2 h-px w-6 bg-slate-300 dark:bg-primary/15" />
+              <div className="my-2 h-px w-6 bg-border" />
             )}
             <SidebarGroupContent
               className={cn(
@@ -851,15 +926,15 @@ function AppSidebarContent() {
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter className="border-t border-slate-200 dark:border-primary/20 bg-slate-50 dark:bg-slate-950/80 p-3">
+      <SidebarFooter className="border-t border-border bg-card/50 p-3">
         {membershipTier === "free" && (
           state === "expanded" ? (
             <Link href="/premium">
-              <div className="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-800/80 p-3 border border-slate-200 dark:border-primary/30 transition hover:border-slate-300 dark:hover:border-primary/50 hover:bg-slate-200 dark:hover:bg-slate-800">
+              <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 p-3 transition hover:bg-primary/15">
                 <Sparkles className="h-4 w-4 text-primary dark:drop-shadow-[0_0_6px_rgb(var(--persona-accent-rgb)/0.6)]" />
                 <div className="flex-1">
-                  <p className="text-xs font-semibold text-slate-900 dark:text-white">Pro Version</p>
-                  <p className="text-[10px] text-slate-600 dark:text-slate-300">
+                  <p className="text-xs font-semibold text-foreground">Pro Version</p>
+                  <p className="text-[10px] text-muted-foreground">
                     Unlock all features
                   </p>
                 </div>
@@ -868,7 +943,7 @@ function AppSidebarContent() {
           ) : (
             <Link
               href="/premium"
-              className="flex items-center justify-center p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+              className="flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted"
               title="Pro Version"
             >
               <Crown className="h-5 w-5 text-primary" />

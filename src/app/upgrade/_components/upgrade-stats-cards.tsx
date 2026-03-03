@@ -21,23 +21,22 @@ export function UpgradeStatsCards() {
         whileHover="hover"
         transition={{ duration: 0.2 }}
         className={cn(
-          "relative p-5 rounded-xl border border-cyan-400/20",
-          "bg-gradient-to-br from-white to-slate-50 dark:from-slate-900/80 dark:to-slate-950/80 backdrop-blur-sm",
-          "shadow-lg shadow-cyan-500/5",
-          "hover:border-cyan-400/40 hover:shadow-xl hover:shadow-cyan-500/10",
+          "relative p-5 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
+          "shadow-sm",
+          "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
           "transition-all duration-200"
         )}
       >
         <div className="flex items-center gap-2 mb-3">
-          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-400/20">
-            <Rocket className="h-4 w-4 text-cyan-400" />
+          <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
+            <Rocket className="h-4 w-4 text-primary" />
           </div>
-          <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Total Network Upgrades
           </h3>
         </div>
-        <p className="text-4xl font-bold text-slate-900 dark:text-white mb-1">21</p>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-4xl font-bold text-foreground mb-1">21</p>
+        <p className="text-sm text-muted-foreground">
           Since Frontier Thawing (2015)
         </p>
       </motion.div>
@@ -50,23 +49,22 @@ export function UpgradeStatsCards() {
           whileHover="hover"
           transition={{ duration: 0.2 }}
           className={cn(
-            "relative p-4 rounded-xl border border-emerald-400/20",
-            "bg-gradient-to-br from-white to-slate-50 dark:from-slate-900/80 dark:to-slate-950/80 backdrop-blur-sm",
-            "shadow-lg shadow-emerald-500/5",
-            "hover:border-emerald-400/40 hover:shadow-xl hover:shadow-emerald-500/10",
+            "relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
+            "shadow-sm",
+            "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
             "transition-all duration-200"
           )}
         >
           <div className="flex items-center gap-1.5 mb-2">
-            <div className="p-1 rounded-lg bg-emerald-500/10 border border-emerald-400/20">
-              <Code className="h-3.5 w-3.5 text-emerald-400" />
+            <div className="p-1 rounded-lg bg-primary/10 border border-primary/20">
+              <Code className="h-3.5 w-3.5 text-primary" />
             </div>
-            <h3 className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Execution Layer
             </h3>
           </div>
-          <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">19</p>
-          <p className="text-xs text-slate-600 dark:text-slate-400">Protocol & EVM</p>
+          <p className="text-3xl font-bold text-foreground mb-1">19</p>
+          <p className="text-xs text-muted-foreground">Protocol & EVM</p>
         </motion.div>
 
         {/* Consensus Layer */}
@@ -75,23 +73,22 @@ export function UpgradeStatsCards() {
           whileHover="hover"
           transition={{ duration: 0.2 }}
           className={cn(
-            "relative p-4 rounded-xl border border-violet-400/20",
-            "bg-gradient-to-br from-white to-slate-50 dark:from-slate-900/80 dark:to-slate-950/80 backdrop-blur-sm",
-            "shadow-lg shadow-violet-500/5",
-            "hover:border-violet-400/40 hover:shadow-xl hover:shadow-violet-500/10",
+            "relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
+            "shadow-sm",
+            "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
             "transition-all duration-200"
           )}
         >
           <div className="flex items-center gap-1.5 mb-2">
-            <div className="p-1 rounded-lg bg-violet-500/10 border border-violet-400/20">
-              <Layers className="h-3.5 w-3.5 text-violet-400" />
+            <div className="p-1 rounded-lg bg-primary/10 border border-primary/20">
+              <Layers className="h-3.5 w-3.5 text-primary" />
             </div>
-            <h3 className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Consensus Layer
             </h3>
           </div>
-          <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">6</p>
-          <p className="text-xs text-slate-600 dark:text-slate-400">Beacon Chain</p>
+          <p className="text-3xl font-bold text-foreground mb-1">6</p>
+          <p className="text-xs text-muted-foreground">Beacon Chain</p>
         </motion.div>
       </div>
 
@@ -101,23 +98,22 @@ export function UpgradeStatsCards() {
         whileHover="hover"
         transition={{ duration: 0.2 }}
         className={cn(
-          "relative p-4 rounded-xl border border-amber-400/20",
-          "bg-gradient-to-br from-white to-slate-50 dark:from-slate-900/80 dark:to-slate-950/80 backdrop-blur-sm",
-          "shadow-lg shadow-amber-500/5",
-          "hover:border-amber-400/40 hover:shadow-xl hover:shadow-amber-500/10",
+          "relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
+          "shadow-sm",
+          "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
           "transition-all duration-200"
         )}
       >
         <div className="flex items-center gap-1.5 mb-2">
-          <div className="p-1 rounded-lg bg-amber-500/10 border border-amber-400/20">
-            <Network className="h-3.5 w-3.5 text-amber-400" />
+          <div className="p-1 rounded-lg bg-primary/10 border border-primary/20">
+            <Network className="h-3.5 w-3.5 text-primary" />
           </div>
-          <h3 className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             Total Core EIPs
           </h3>
         </div>
-        <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">62</p>
-        <p className="text-xs text-slate-600 dark:text-slate-400">Implemented in upgrades</p>
+        <p className="text-3xl font-bold text-foreground mb-1">62</p>
+        <p className="text-xs text-muted-foreground">Implemented in upgrades</p>
       </motion.div>
     </div>
   );

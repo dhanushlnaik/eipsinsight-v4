@@ -1,113 +1,341 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { client } from "@/lib/orpc";
-import {
-  Loader2, ArrowLeft, Search, GitBranch, X,
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import ReactECharts from "echarts-for-react";
+import { Canvas } from "@react-three/fiber";
+import { Html, Line, OrbitControls } from "@react-three/drei";
+import { client } from "@/lib/orpc";
+import { ArrowLeft, GitBranch, Loader2, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const STATUS_COLORS: Record<string, string> = {
-  Draft: "#22d3ee", Review: "#60a5fa", "Last Call": "#fbbf24",
-  Final: "#34d399", Stagnant: "#94a3b8", Withdrawn: "#ef4444", Living: "#a78bfa",
-};
 
 type Node = { id: number; title: string | null; status: string; repo: string };
 type Edge = { source: number; target: number };
 
+const STATUS_COLORS: Record<string, string> = {
+  Draft: "#22d3ee",
+  Review: "#60a5fa",
+  "Last Call": "#fbbf24",
+  Final: "#34d399",
+  Stagnant: "#94a3b8",
+  Withdrawn: "#ef4444",
+  Living: "#a78bfa",
+};
+
 export default function DependenciesPage() {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [repo, setRepo] = useState<"eips" | "ercs" | "rips" | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [searchEip, setSearchEip] = useState<number | undefined>(undefined);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [focusDepth, setFocusDepth] = useState<1 | 2>(1);
+  const [showLabels, setShowLabels] = useState(false);
+  const [showCrossLinks, setShowCrossLinks] = useState(false);
+  const [neighborLimit, setNeighborLimit] = useState(25);
+  const [viaNodeId, setViaNodeId] = useState<number | null>(null);
+  const [graphMode, setGraphMode] = useState<"3d" | "2d">("3d");
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
-        const data = await client.tools.getDependencyGraph({
-          repo,
-          eipNumber: searchEip,
-        });
+        const data = await client.tools.getDependencyGraph({ repo, eipNumber: searchEip });
         setNodes(data.nodes);
         setEdges(data.edges);
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
+      } catch (err) {
+        console.error(err);
+        setNodes([]);
+        setEdges([]);
+        setLoadError("Could not load dependency graph data.");
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, [repo, searchEip]);
 
-  const handleSearch = () => {
-    const num = parseInt(search.replace(/[^0-9]/g, ""), 10);
-    setSearchEip(isNaN(num) ? undefined : num);
-  };
+  const nodeMap = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
-  // Find connected EIPs for the selected node
-  const connectedEips = useMemo(() => {
-    if (!selectedNode) return [];
-    const connectedIds = new Set<number>();
-    edges.forEach((e) => {
-      if (e.source === selectedNode.id) connectedIds.add(e.target);
-      if (e.target === selectedNode.id) connectedIds.add(e.source);
-    });
-    return nodes.filter((n) => connectedIds.has(n.id));
-  }, [selectedNode, edges, nodes]);
+  const adjacency = useMemo(() => {
+    const map = new Map<number, Set<number>>();
+    for (const n of nodes) map.set(n.id, new Set<number>());
+    for (const e of edges) {
+      if (!map.has(e.source)) map.set(e.source, new Set<number>());
+      if (!map.has(e.target)) map.set(e.target, new Set<number>());
+      map.get(e.source)!.add(e.target);
+      map.get(e.target)!.add(e.source);
+    }
+    return map;
+  }, [nodes, edges]);
 
-  // Filter nodes that have connections
+  const degreeMap = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const [id, neighbors] of adjacency.entries()) map.set(id, neighbors.size);
+    return map;
+  }, [adjacency]);
+
   const connectedNodes = useMemo(() => {
     const withEdges = new Set<number>();
-    edges.forEach((e) => { withEdges.add(e.source); withEdges.add(e.target); });
+    edges.forEach((e) => {
+      withEdges.add(e.source);
+      withEdges.add(e.target);
+    });
     return nodes.filter((n) => withEdges.has(n.id));
   }, [nodes, edges]);
 
-  // Group by status for visual layout
-  const nodesByStatus = useMemo(() => {
-    const groups: Record<string, Node[]> = {};
-    const displayNodes = selectedNode ? [selectedNode, ...connectedEips] : connectedNodes;
-    for (const n of displayNodes) {
-      if (!groups[n.status]) groups[n.status] = [];
-      groups[n.status].push(n);
+  const searchableNodes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return connectedNodes;
+    return connectedNodes.filter(
+      (n) =>
+        String(n.id).includes(q) ||
+        (n.title || "").toLowerCase().includes(q)
+    );
+  }, [connectedNodes, search]);
+
+  const topHubs = useMemo(
+    () =>
+      [...connectedNodes]
+        .sort((a, b) => (degreeMap.get(b.id) || 0) - (degreeMap.get(a.id) || 0))
+        .slice(0, 12),
+    [connectedNodes, degreeMap]
+  );
+
+  useEffect(() => {
+    if (!selectedNode && connectedNodes.length > 0) {
+      setSelectedNode(topHubs[0] ?? connectedNodes[0]);
+    } else if (selectedNode && !nodeMap.has(selectedNode.id)) {
+      setSelectedNode(connectedNodes[0] ?? null);
     }
-    return groups;
-  }, [connectedNodes, selectedNode, connectedEips]);
+  }, [selectedNode, connectedNodes, nodeMap, topHubs]);
+
+  useEffect(() => {
+    setNeighborLimit(25);
+    setViaNodeId(null);
+  }, [selectedNode?.id, focusDepth]);
+
+  const handleSearch = () => {
+    const num = parseInt(search.replace(/[^0-9]/g, ""), 10);
+    setSearchEip(Number.isNaN(num) ? undefined : num);
+  };
+
+  const selectedNeighborIds = useMemo(() => {
+    if (!selectedNode) return new Set<number>();
+    const first = [...(adjacency.get(selectedNode.id) ?? new Set<number>())]
+      .sort((a, b) => (degreeMap.get(b) || 0) - (degreeMap.get(a) || 0));
+    return new Set(first.slice(0, neighborLimit));
+  }, [selectedNode, adjacency, degreeMap, neighborLimit]);
+
+  const focusedNodeIds = useMemo(() => {
+    if (!selectedNode) return new Set<number>();
+    const out = new Set<number>([selectedNode.id, ...selectedNeighborIds]);
+    if (focusDepth === 2 && viaNodeId != null) {
+      const secondHop = [...(adjacency.get(viaNodeId) ?? new Set<number>())]
+        .filter((id) => id !== selectedNode.id)
+        .sort((a, b) => (degreeMap.get(b) || 0) - (degreeMap.get(a) || 0))
+        .slice(0, neighborLimit);
+      secondHop.forEach((id) => out.add(id));
+    }
+    return out;
+  }, [selectedNode, selectedNeighborIds, focusDepth, viaNodeId, adjacency, degreeMap, neighborLimit]);
+
+  const focusedNodes = useMemo(
+    () => nodes.filter((n) => focusedNodeIds.has(n.id)),
+    [nodes, focusedNodeIds]
+  );
+
+  const focusedEdges = useMemo(
+    () => {
+      if (!selectedNode) return [];
+      const sid = selectedNode.id;
+      return edges.filter((e) => {
+        const inScope = focusedNodeIds.has(e.source) && focusedNodeIds.has(e.target);
+        if (!inScope) return false;
+        if (showCrossLinks) return true;
+        return e.source === sid || e.target === sid || (viaNodeId != null && (e.source === viaNodeId || e.target === viaNodeId));
+      });
+    },
+    [edges, focusedNodeIds, selectedNode, showCrossLinks, viaNodeId]
+  );
+
+  const connectedEips = useMemo(() => {
+    if (!selectedNode) return [];
+    const neighbors = adjacency.get(selectedNode.id) ?? new Set<number>();
+    return [...neighbors]
+      .map((id) => nodeMap.get(id))
+      .filter((n): n is Node => !!n)
+      .sort((a, b) => (degreeMap.get(b.id) || 0) - (degreeMap.get(a.id) || 0));
+  }, [selectedNode, adjacency, nodeMap, degreeMap]);
+
+  const firstHopIds = useMemo(
+    () => [...selectedNeighborIds].sort((a, b) => (degreeMap.get(b) || 0) - (degreeMap.get(a) || 0)),
+    [selectedNeighborIds, degreeMap]
+  );
+
+  const secondHopIds = useMemo(() => {
+    if (!selectedNode) return [] as number[];
+    return [...focusedNodeIds]
+      .filter((id) => id !== selectedNode.id && !selectedNeighborIds.has(id))
+      .sort((a, b) => (degreeMap.get(b) || 0) - (degreeMap.get(a) || 0));
+  }, [focusedNodeIds, selectedNeighborIds, selectedNode, degreeMap]);
+
+  const positionMap = useMemo(() => {
+    const map = new Map<number, [number, number, number]>();
+    if (!selectedNode) return map;
+
+    const seedJitter = (id: number) => {
+      const v = Math.sin(id * 12.9898) * 43758.5453;
+      return (v - Math.floor(v)) - 0.5;
+    };
+
+    const placeOnSphere = (ids: number[], radius: number, jitter = 0.08) => {
+      const n = ids.length;
+      if (n === 0) return;
+      const golden = Math.PI * (3 - Math.sqrt(5));
+      ids.forEach((id, i) => {
+        const y = 1 - (i / Math.max(1, n - 1)) * 2;
+        const r = Math.sqrt(Math.max(0, 1 - y * y));
+        const theta = golden * i;
+        const x = Math.cos(theta) * r;
+        const z = Math.sin(theta) * r;
+        const j = seedJitter(id) * jitter;
+        map.set(id, [(x + j) * radius, (y + j) * radius, (z - j) * radius]);
+      });
+    };
+
+    map.set(selectedNode.id, [0, 0, 0]);
+    placeOnSphere(firstHopIds, 22, 0.06);
+    placeOnSphere(secondHopIds, 38, 0.05);
+    return map;
+  }, [selectedNode, firstHopIds, secondHopIds]);
+
+  const graphOption = useMemo(() => {
+    const seriesNodes = focusedNodes.map((n) => {
+      const isSelected = selectedNode?.id === n.id;
+      return {
+        id: String(n.id),
+        name: `#${n.id}`,
+        value: degreeMap.get(n.id) || 0,
+        symbolSize: isSelected ? 40 : Math.max(16, Math.min(34, 10 + (degreeMap.get(n.id) || 0) * 2)),
+        itemStyle: {
+          color: STATUS_COLORS[n.status] || "#94a3b8",
+          borderColor: isSelected ? "#f8fafc" : "rgba(148,163,184,0.35)",
+          borderWidth: isSelected ? 2.2 : 1,
+        },
+        label: {
+          show: showLabels || isSelected,
+          color: "#e2e8f0",
+          fontSize: isSelected ? 12 : 10,
+          formatter: showLabels ? `#${n.id}` : isSelected ? `#${n.id}` : "",
+        },
+      };
+    });
+
+    const seriesLinks = focusedEdges.map((e) => ({
+      source: String(e.source),
+      target: String(e.target),
+      lineStyle: {
+        color:
+          selectedNode && (e.source === selectedNode.id || e.target === selectedNode.id)
+            ? "rgba(56,189,248,0.75)"
+            : "rgba(148,163,184,0.3)",
+        width:
+          selectedNode && (e.source === selectedNode.id || e.target === selectedNode.id)
+            ? 1.8
+            : 1,
+      },
+    }));
+
+    return {
+      backgroundColor: "transparent",
+      tooltip: {
+        trigger: "item",
+        backgroundColor: "rgba(15,23,42,0.96)",
+        borderColor: "rgba(148,163,184,0.25)",
+        textStyle: { color: "#e2e8f0", fontSize: 12 },
+        formatter: (params: { dataType: string; data: { id?: string; source?: string; target?: string } }) => {
+          if (params.dataType === "edge") return `Link: #${params.data.source} ↔ #${params.data.target}`;
+          const node = nodeMap.get(Number(params.data.id));
+          if (!node) return "";
+          return `#${node.id}<br/>${node.title || "Untitled"}<br/>${node.status}`;
+        },
+      },
+      animationDurationUpdate: 250,
+      series: [
+        {
+          type: "graph",
+          layout: "force",
+          roam: true,
+          draggable: true,
+          data: seriesNodes,
+          links: seriesLinks,
+          force: {
+            repulsion: 150,
+            edgeLength: [35, 90],
+            gravity: 0.08,
+          },
+          lineStyle: { opacity: 0.85, curveness: 0.02 },
+          emphasis: { focus: "adjacency" },
+        },
+      ],
+    };
+  }, [focusedNodes, focusedEdges, selectedNode, showLabels, degreeMap, nodeMap]);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
-      <div className="border-b border-slate-200 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/30 backdrop-blur-sm sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-3">
-          <Link href="/tools" className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors mb-2">
-            <ArrowLeft className="h-4 w-4" />Back to Tools
+    <div className="min-h-screen bg-background">
+      <div className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-sm">
+        <div className="w-full px-4 py-3 sm:px-6 lg:px-8 xl:px-12">
+          <Link
+            href="/tools"
+            className="mb-2 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Tools
           </Link>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="dec-title bg-linear-to-br from-emerald-600 via-slate-700 to-cyan-600 dark:from-emerald-300 dark:via-slate-100 dark:to-cyan-200 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl">EIP Dependency Graph</h1>
-              <p className="text-xs text-slate-600 dark:text-slate-400">
-                {connectedNodes.length} EIPs with {edges.length} relationships (via shared PRs)
+              <h1 className="dec-title persona-title text-3xl font-semibold tracking-tight sm:text-4xl">
+                Dependency Graph
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                {connectedNodes.length} connected proposals · {edges.length} links
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
-                  type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                   placeholder="Focus on EIP #..."
-                  className="pl-8 pr-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg text-slate-800 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 w-44"
+                  className="w-44 rounded-lg border border-border bg-muted/60 py-1.5 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
                 />
               </div>
               {searchEip && (
-                <button onClick={() => { setSearchEip(undefined); setSearch(""); setSelectedNode(null); }}
-                  className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
-                  <X className="h-3 w-3" />Clear
+                <button
+                  onClick={() => {
+                    setSearchEip(undefined);
+                    setSearch("");
+                  }}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
                 </button>
               )}
-              <select value={repo ?? "all"} onChange={(e) => setRepo(e.target.value === "all" ? undefined : e.target.value as "eips" | "ercs" | "rips")}
-                className="bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none focus:border-cyan-500/50">
+              <select
+                value={repo ?? "all"}
+                onChange={(e) =>
+                  setRepo(e.target.value === "all" ? undefined : (e.target.value as "eips" | "ercs" | "rips"))
+                }
+                className="rounded-lg border border-border bg-muted/60 px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+              >
                 <option value="all">All Repos</option>
                 <option value="eips">EIPs</option>
                 <option value="ercs">ERCs</option>
@@ -118,99 +346,307 @@ export default function DependenciesPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8 space-y-6">
+      <div className="w-full px-4 py-6 sm:px-6 lg:px-8 xl:px-12">
         {loading ? (
-          <div className="flex items-center justify-center min-h-[400px]"><Loader2 className="h-8 w-8 animate-spin text-cyan-500" /></div>
+          <div className="flex min-h-[400px] items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : loadError ? (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+            {loadError}
+          </div>
         ) : (
-          <>
-            {/* Selected node detail */}
-            {selectedNode && (
-              <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 backdrop-blur-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-white">
-                    EIP-{selectedNode.id}: {selectedNode.title || "Untitled"}
-                  </h3>
-                  <button onClick={() => setSelectedNode(null)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center gap-1">
-                    <X className="h-3 w-3" />Deselect
-                  </button>
+          <div className="space-y-4">
+            <section className="rounded-xl border border-border bg-card/60 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">About This Graph</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This component visualizes proposal relationships inferred from shared pull requests. Use it to identify hubs, local neighborhoods, and bridge proposals.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">1-hop</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Direct neighbors connected to the selected EIP by shared PR linkage.</p>
                 </div>
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${STATUS_COLORS[selectedNode.status] ?? "#94a3b8"}20`, color: STATUS_COLORS[selectedNode.status] ?? "#94a3b8" }}>
-                    {selectedNode.status}
-                  </span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400">{selectedNode.repo.toUpperCase()}</span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400">{connectedEips.length} connected EIP{connectedEips.length !== 1 ? "s" : ""}</span>
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">2-hop</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Second-order neighborhood explored through one chosen “via” neighbor.</p>
                 </div>
-                {connectedEips.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {connectedEips.map((n) => (
-                      <button
-                        key={n.id}
-                        onClick={() => setSelectedNode(n)}
-                        className="text-xs px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-100 dark:bg-slate-800/30 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-cyan-500/30 transition-colors"
-                      >
-                        #{n.id} — {n.title?.slice(0, 40) || "Untitled"}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Cross-links</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Neighbor-to-neighbor edges. Keep off for clarity; enable for dense cluster analysis.</p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Hub Score</p>
+                  <p className="mt-1 text-xs text-muted-foreground">The chain icon count is degree: number of connected proposals.</p>
+                </div>
               </div>
-            )}
+            </section>
 
-            {/* Graph visualization (grouped by status) */}
-            {Object.keys(nodesByStatus).length > 0 ? (
-              <div className="space-y-6">
-                {Object.entries(nodesByStatus).map(([status, statusNodes]) => (
-                  <div key={status}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] ?? "#94a3b8" }} />
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{status}</h3>
-                      <span className="text-xs text-slate-500 dark:text-slate-400">{statusNodes.length}</span>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                      {statusNodes.slice(0, 50).map((node) => {
-                        const nodeEdges = edges.filter((e) => e.source === node.id || e.target === node.id);
-                        const isSelected = selectedNode?.id === node.id;
-                        return (
-                          <button
-                            key={node.id}
-                            onClick={() => setSelectedNode(isSelected ? null : node)}
-                            className={cn(
-                              "text-left rounded-lg border p-3 transition-all hover:-translate-y-0.5",
-                              isSelected
-                                ? "border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_15px_rgba(34,211,238,0.15)]"
-                                : "border-slate-700/30 bg-slate-100 dark:bg-slate-800/30 hover:border-slate-600/50"
-                            )}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-bold text-cyan-700 dark:text-cyan-300">#{node.id}</span>
-                              {nodeEdges.length > 0 && (
-                                <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-500 dark:text-slate-400">
-                                  <GitBranch className="h-2.5 w-2.5" />{nodeEdges.length}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2 leading-snug">
-                              {node.title || "Untitled"}
-                            </p>
-                          </button>
-                        );
-                      })}
-                      {statusNodes.length > 50 && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-center">+{statusNodes.length - 50} more</p>
-                      )}
-                    </div>
-                  </div>
+            <div className="grid gap-4 xl:grid-cols-12">
+            <section className="xl:col-span-3 rounded-xl border border-border bg-card/60 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Overview</p>
+              <p className="mt-1 text-xs text-muted-foreground">Top hubs (highest degree)</p>
+              <div className="mt-2 space-y-1.5">
+                {topHubs.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => setSelectedNode(n)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left transition-colors",
+                      selectedNode?.id === n.id
+                        ? "border-primary/40 bg-primary/10"
+                        : "border-border bg-muted/30 hover:border-primary/30 hover:bg-primary/5"
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-xs font-semibold text-foreground">#{n.id}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{n.title || "Untitled"}</span>
+                    </span>
+                    <span className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <GitBranch className="h-3 w-3" />
+                      {degreeMap.get(n.id) || 0}
+                    </span>
+                  </button>
                 ))}
               </div>
-            ) : (
-              <div className="text-center py-16">
-                <GitBranch className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-                <p className="text-lg text-slate-600 dark:text-slate-400">No relationships found</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Try a different filter or search for a specific EIP</p>
+
+              <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Search Results</p>
+              <div className="mt-2 max-h-[300px] space-y-1.5 overflow-y-auto pr-1">
+                {searchableNodes.slice(0, 30).map((n) => (
+                  <button
+                    key={`sr-${n.id}`}
+                    onClick={() => setSelectedNode(n)}
+                    className={cn(
+                      "w-full rounded-md border px-2 py-1.5 text-left text-xs transition-colors",
+                      selectedNode?.id === n.id
+                        ? "border-primary/40 bg-primary/10 text-foreground"
+                        : "border-border bg-muted/20 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                    )}
+                  >
+                    #{n.id} — {n.title?.slice(0, 46) || "Untitled"}
+                  </button>
+                ))}
               </div>
-            )}
-          </>
+            </section>
+
+            <section className="xl:col-span-9 space-y-4">
+              <div className="rounded-xl border border-border bg-card/60 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Focus Graph {selectedNode ? `(EIP-${selectedNode.id})` : ""}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex overflow-hidden rounded-lg border border-border">
+                      <button
+                        onClick={() => setGraphMode("3d")}
+                        className={cn(
+                          "px-2 py-1 text-xs",
+                          graphMode === "3d" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        3D
+                      </button>
+                      <button
+                        onClick={() => setGraphMode("2d")}
+                        className={cn(
+                          "border-l border-border px-2 py-1 text-xs",
+                          graphMode === "2d" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        2D
+                      </button>
+                    </div>
+                    <div className="inline-flex overflow-hidden rounded-lg border border-border">
+                      <button
+                        onClick={() => setFocusDepth(1)}
+                        className={cn(
+                          "px-2 py-1 text-xs",
+                          focusDepth === 1 ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        1-hop
+                      </button>
+                      <button
+                        onClick={() => setFocusDepth(2)}
+                        className={cn(
+                          "border-l border-border px-2 py-1 text-xs",
+                          focusDepth === 2 ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        2-hop
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => setShowLabels((p) => !p)}
+                      className="rounded-lg border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      {showLabels ? "Hide labels" : "Show labels"}
+                    </button>
+                    <button
+                      onClick={() => setShowCrossLinks((p) => !p)}
+                      className={cn(
+                        "rounded-lg border px-2 py-1 text-xs",
+                        showCrossLinks
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {showCrossLinks ? "Hide cross-links" : "Show cross-links"}
+                    </button>
+                  </div>
+                </div>
+                <div className="h-[460px] rounded-lg border border-border/60 bg-muted/15">
+                  {focusedNodes.length === 0 ? (
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                      Select a node to render the graph.
+                    </div>
+                  ) : graphMode === "2d" ? (
+                    <ReactECharts
+                      option={graphOption}
+                      style={{ height: "100%", width: "100%" }}
+                      onEvents={{
+                        click: (params: { dataType?: string; data?: { id?: string } }) => {
+                          if (params?.dataType !== "node" || !params?.data?.id) return;
+                          const n = nodeMap.get(Number(params.data.id));
+                          if (n) setSelectedNode(n);
+                        },
+                      }}
+                    />
+                  ) : (
+                    <Canvas
+                      camera={{ position: [0, 0, 95], fov: 48 }}
+                      className="h-full w-full rounded-lg"
+                    >
+                      <ambientLight intensity={0.6} />
+                      <pointLight position={[20, 22, 28]} intensity={0.85} />
+                      <pointLight position={[-18, -15, -22]} intensity={0.35} />
+
+                      {focusedEdges.map((e, idx) => {
+                        const p1 = positionMap.get(e.source);
+                        const p2 = positionMap.get(e.target);
+                        if (!p1 || !p2) return null;
+                        const primary =
+                          selectedNode &&
+                          (e.source === selectedNode.id || e.target === selectedNode.id);
+                        return (
+                          <Line
+                            key={`edge3d-${idx}-${e.source}-${e.target}`}
+                            points={[p1, p2]}
+                            color={primary ? "#38bdf8" : "rgba(148,163,184,0.45)"}
+                            lineWidth={primary ? 1.7 : 1}
+                            transparent
+                            opacity={primary ? 0.85 : 0.28}
+                          />
+                        );
+                      })}
+
+                      {focusedNodes.map((n) => {
+                        const p = positionMap.get(n.id);
+                        if (!p) return null;
+                        const isSelected = selectedNode?.id === n.id;
+                        const size = isSelected
+                          ? 3.5
+                          : Math.max(1.3, Math.min(2.8, 1 + (degreeMap.get(n.id) || 0) * 0.06));
+                        return (
+                          <group key={`node3d-${n.id}`} position={p}>
+                            <mesh onClick={() => setSelectedNode(n)}>
+                              <sphereGeometry args={[size, 24, 24]} />
+                              <meshStandardMaterial
+                                color={STATUS_COLORS[n.status] || "#94a3b8"}
+                                emissive={isSelected ? "#22d3ee" : "#000000"}
+                                emissiveIntensity={isSelected ? 0.28 : 0}
+                                roughness={0.35}
+                                metalness={0.05}
+                              />
+                            </mesh>
+                            {(showLabels || isSelected) && (
+                              <Html position={[0, size + 1.5, 0]} center>
+                                <div className="rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white">
+                                  #{n.id}
+                                </div>
+                              </Html>
+                            )}
+                          </group>
+                        );
+                      })}
+
+                      <OrbitControls
+                        makeDefault
+                        enablePan
+                        enableZoom
+                        minDistance={28}
+                        maxDistance={170}
+                        autoRotate={false}
+                      />
+                    </Canvas>
+                  )}
+                </div>
+              </div>
+
+              {selectedNode && (
+                <div className="rounded-xl border border-border bg-card/60 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-foreground">
+                      Connected to EIP-{selectedNode.id}
+                    </p>
+                    <span className="text-xs text-muted-foreground">
+                      {connectedEips.length} neighbor{connectedEips.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Neighbors shown: {Math.min(neighborLimit, connectedEips.length)} / {connectedEips.length}</span>
+                    {connectedEips.length > neighborLimit && (
+                      <button
+                        onClick={() => setNeighborLimit((v) => v + 25)}
+                        className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Show more (+25)
+                      </button>
+                    )}
+                    {neighborLimit > 25 && (
+                      <button
+                        onClick={() => setNeighborLimit(25)}
+                        className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Reset
+                      </button>
+                    )}
+                    {focusDepth === 2 && (
+                      <span className="text-xs text-muted-foreground">
+                        {viaNodeId ? `2-hop via #${viaNodeId}` : "Pick a neighbor to explore 2-hop"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {connectedEips.slice(0, neighborLimit).map((n) => (
+                      <div key={`n-${n.id}`} className="inline-flex items-center overflow-hidden rounded-md border border-border bg-muted/30">
+                        <button
+                          onClick={() => setSelectedNode(n)}
+                          className="px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-primary/5 hover:text-foreground"
+                        >
+                          #{n.id} — {n.title?.slice(0, 38) || "Untitled"}
+                        </button>
+                        {focusDepth === 2 && (
+                          <button
+                            onClick={() => setViaNodeId(n.id)}
+                            className={cn(
+                              "border-l border-border px-2 py-1 text-[10px]",
+                              viaNodeId === n.id
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            via
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+            </div>
+          </div>
         )}
       </div>
     </div>

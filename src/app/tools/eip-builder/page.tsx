@@ -439,20 +439,20 @@ export default function EIPBuilderPage() {
   const showOutput = viewMode === "output" || viewMode === "split";
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* ─── Top Bar ─── */}
-      <div className="border-b border-slate-200 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/30 backdrop-blur-sm sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-2">
-          <NextLink href="/tools" className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors mb-1.5">
+      <div className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-sm">
+        <div className="w-full px-4 py-2 sm:px-6 lg:px-8 xl:px-12">
+          <NextLink href="/tools" className="mb-1.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" />Tools
           </NextLink>
           <div className="flex flex-wrap items-center gap-2">
             {/* New / Import toggle */}
-            <div className="flex rounded-lg border border-slate-200 dark:border-slate-700/50 overflow-hidden">
-              <button onClick={() => setTabMode("new")} className={cn("px-3 py-1.5 text-xs font-medium transition-colors", tabMode === "new" ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white")}>
+            <div className="flex overflow-hidden rounded-lg border border-border">
+              <button onClick={() => setTabMode("new")} className={cn("px-3 py-1.5 text-xs font-medium transition-colors", tabMode === "new" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>
                 New {repoType.toUpperCase()}
               </button>
-              <button onClick={() => setTabMode("import")} className={cn("px-3 py-1.5 text-xs font-medium transition-colors border-l border-slate-200 dark:border-slate-700/50", tabMode === "import" ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white")}>
+              <button onClick={() => setTabMode("import")} className={cn("border-l border-border px-3 py-1.5 text-xs font-medium transition-colors", tabMode === "import" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>
                 Import {repoType.toUpperCase()}
               </button>
             </div>
@@ -464,34 +464,34 @@ export default function EIPBuilderPage() {
                   <input type="text" value={importQuery} onChange={(e) => setImportQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleImport()}
                     placeholder={`Enter ${repoType.toUpperCase()} number`}
-                    className="pl-3 pr-8 py-1.5 text-xs bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg text-slate-800 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 w-40" />
+                    className="w-40 rounded-lg border border-border bg-muted/60 py-1.5 pl-3 pr-8 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30" />
                   <button onClick={handleImport} disabled={importing} className="absolute right-1.5 top-1/2 -translate-y-1/2">
-                    {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" /> : <Search className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" />}
+                    {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" /> : <Search className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />}
                   </button>
                 </div>
-                {importError && <span className="text-xs text-red-700 dark:text-red-400">{importError}</span>}
+                {importError && <span className="text-xs text-red-500">{importError}</span>}
               </div>
             )}
 
             {/* Repo selector */}
-            <div className="flex rounded-lg border border-slate-200 dark:border-slate-700/50 overflow-hidden ml-auto">
+            <div className="ml-auto flex overflow-hidden rounded-lg border border-border">
               {(["eip", "erc", "rip"] as EipType[]).map((r) => (
                 <button key={r} onClick={() => setRepoType(r)}
-                  className={cn("px-3 py-1.5 text-xs font-medium transition-colors", r !== "eip" && "border-l border-slate-200 dark:border-slate-700/50", repoType === r ? "bg-blue-500/20 text-blue-700 dark:text-blue-300" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white")}>
+                  className={cn("px-3 py-1.5 text-xs font-medium transition-colors", r !== "eip" && "border-l border-border", repoType === r ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>
                   {r.toUpperCase()}s
                 </button>
               ))}
             </div>
 
             {/* View mode */}
-            <div className="flex rounded-lg border border-slate-200 dark:border-slate-700/50 overflow-hidden">
-              <button onClick={() => setViewMode("split")} className={cn("px-2.5 py-1.5 text-xs transition-colors", viewMode === "split" ? "bg-blue-500/20 text-blue-700 dark:text-blue-300" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white")} title="Split">
+            <div className="flex overflow-hidden rounded-lg border border-border">
+              <button onClick={() => setViewMode("split")} className={cn("px-2.5 py-1.5 text-xs transition-colors", viewMode === "split" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")} title="Split">
                 <Columns2 className="h-3.5 w-3.5" />
               </button>
-              <button onClick={() => setViewMode("edit")} className={cn("px-2.5 py-1.5 text-xs transition-colors border-l border-slate-200 dark:border-slate-700/50", viewMode === "edit" ? "bg-blue-500/20 text-blue-700 dark:text-blue-300" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white")} title="Edit">
+              <button onClick={() => setViewMode("edit")} className={cn("border-l border-border px-2.5 py-1.5 text-xs transition-colors", viewMode === "edit" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")} title="Edit">
                 <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button onClick={() => setViewMode("output")} className={cn("px-2.5 py-1.5 text-xs transition-colors border-l border-slate-200 dark:border-slate-700/50", viewMode === "output" ? "bg-blue-500/20 text-blue-700 dark:text-blue-300" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white")} title="Output">
+              <button onClick={() => setViewMode("output")} className={cn("border-l border-border px-2.5 py-1.5 text-xs transition-colors", viewMode === "output" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")} title="Output">
                 <Eye className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -503,18 +503,18 @@ export default function EIPBuilderPage() {
       <div className={cn("flex flex-1 overflow-hidden", viewMode === "split" ? "flex-row" : "flex-col")}>
         {/* LEFT: Editor */}
         {showEdit && (
-          <div className={cn("overflow-y-auto p-4 space-y-3", viewMode === "split" ? "w-1/2 border-r border-slate-200 dark:border-slate-800/50" : "w-full")}>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+          <div className={cn("overflow-y-auto p-4 space-y-3", viewMode === "split" ? "w-1/2 border-r border-border" : "w-full")}>
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground">
               Document {repoType === "eip" ? "an EIP" : repoType === "erc" ? "an ERC" : "a RIP"}
             </h2>
 
             {/* Preamble */}
-            <div className="rounded-lg border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/40 p-4">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Preamble</h3>
+            <div className="rounded-xl border border-border bg-card/60 p-4">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Preamble</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {preambleFields.map((field) => (
                   <div key={field.key} className={cn(field.wide ? "md:col-span-2" : "")}>
-                    <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                    <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                       {field.label}
                       {INSTRUCTIONS[field.key] && (
                         <span title={INSTRUCTIONS[field.key]} className="cursor-help"><Info className="h-3 w-3 text-slate-500" /></span>
@@ -524,7 +524,7 @@ export default function EIPBuilderPage() {
                       <select
                         value={data[field.key]} onChange={(e) => handleInput(field.key, e.target.value)}
                         disabled={field.disabled}
-                        className={cn("w-full px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500/50", field.disabled && "opacity-40 cursor-not-allowed")}>
+                        className={cn("w-full rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30", field.disabled && "opacity-40 cursor-not-allowed")}>
                         <option value="">Select...</option>
                         {field.options?.map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
@@ -539,7 +539,7 @@ export default function EIPBuilderPage() {
                           field.key === "lastCallDeadline" ? "YYYY-MM-DD" :
                           `Enter ${field.label.toLowerCase()}`
                         }
-                        className={cn("w-full px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg text-slate-800 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50", field.disabled && "opacity-40 cursor-not-allowed")} />
+                        className={cn("w-full rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30", field.disabled && "opacity-40 cursor-not-allowed")} />
                     )}
                   </div>
                 ))}
@@ -550,25 +550,25 @@ export default function EIPBuilderPage() {
             {SECTION_DEFS.map((sec) => {
               const isExpanded = expandedSections.includes(sec.key);
               return (
-                <div key={sec.key} className="rounded-lg border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/40 overflow-hidden">
+                <div key={sec.key} className="overflow-hidden rounded-xl border border-border bg-card/60">
                   <button onClick={() => toggleSection(sec.key)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-800/30 transition-colors">
-                    <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-2">
+                    className="w-full flex items-center justify-between px-4 py-2.5 transition-colors hover:bg-primary/5">
+                    <span className="flex items-center gap-2 text-sm font-medium text-foreground">
                       {sec.label}
                       {data[sec.key]?.trim() && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
                     </span>
-                    {isExpanded ? <ChevronDown className="h-4 w-4 text-slate-600 dark:text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-600 dark:text-slate-400" />}
+                    {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                   </button>
                   {isExpanded && (
                     <div className="px-4 pb-4">
-                      <p className="text-xs text-slate-500 mb-2">{INSTRUCTIONS[sec.key]}</p>
+                      <p className="mb-2 text-xs text-muted-foreground">{INSTRUCTIONS[sec.key]}</p>
                       {/* Toolbar */}
                       <div className="flex flex-wrap gap-1 mb-2">
                         {MD_TOOLBAR.map((btn) => {
                           const Icon = btn.icon;
                           return (
                             <button key={btn.label} onClick={() => insertMarkdown(sec.key, btn.syntax)} title={btn.label}
-                              className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                              className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary">
                               <Icon className="h-3.5 w-3.5" />
                             </button>
                           );
@@ -581,7 +581,7 @@ export default function EIPBuilderPage() {
                         onKeyDown={(e) => handleTextareaKeyDown(e, sec.key)}
                         rows={8}
                         placeholder={`Write your ${sec.label.toLowerCase()} here (markdown supported)...`}
-                        className="w-full px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg text-slate-800 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 resize-y font-mono"
+                        className="w-full resize-y rounded-lg border border-border bg-muted/60 px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
                       />
                     </div>
                   )}
@@ -593,23 +593,23 @@ export default function EIPBuilderPage() {
 
         {/* RIGHT: Output */}
         {showOutput && (
-          <div className={cn("overflow-y-auto bg-slate-50 dark:bg-slate-950/50 flex flex-col", viewMode === "split" ? "w-1/2" : "w-full")}>
+          <div className={cn("flex flex-col overflow-y-auto bg-muted/20", viewMode === "split" ? "w-1/2" : "w-full")}>
             {/* Toggle: Code / Preview */}
-            <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-slate-800/50 bg-white dark:bg-slate-900/40 backdrop-blur-sm">
-              <div className="flex rounded-lg border border-slate-200 dark:border-slate-700/50 overflow-hidden">
-                <button onClick={() => setPreview(false)} className={cn("px-3 py-1 text-xs font-medium flex items-center gap-1.5 transition-colors", !preview ? "bg-blue-500/20 text-blue-700 dark:text-blue-300" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white")}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/80 px-4 py-2.5 backdrop-blur-sm">
+              <div className="flex overflow-hidden rounded-lg border border-border">
+                <button onClick={() => setPreview(false)} className={cn("flex items-center gap-1.5 px-3 py-1 text-xs font-medium transition-colors", !preview ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>
                   <FileCode className="h-3.5 w-3.5" />Code
                 </button>
-                <button onClick={() => setPreview(true)} className={cn("px-3 py-1 text-xs font-medium flex items-center gap-1.5 transition-colors border-l border-slate-200 dark:border-slate-700/50", preview ? "bg-blue-500/20 text-blue-700 dark:text-blue-300" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white")}>
+                <button onClick={() => setPreview(true)} className={cn("border-l border-border px-3 py-1 text-xs font-medium flex items-center gap-1.5 transition-colors", preview ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>
                   <BookOpen className="h-3.5 w-3.5" />Preview
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={handleCopy} className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg hover:text-slate-900 dark:hover:text-white transition-colors">
-                  {copied ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                <button onClick={handleCopy} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground">
+                  {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                   {copied ? "Copied" : "Copy"}
                 </button>
-                <span className="text-[10px] text-slate-500">{markdownRaw.length} chars</span>
+                <span className="text-[10px] text-muted-foreground">{markdownRaw.length} chars</span>
               </div>
             </div>
 
@@ -618,26 +618,26 @@ export default function EIPBuilderPage() {
                 /* ── Preview mode ── */
                 <div className="max-w-2xl mx-auto space-y-4">
                   {previewTableRows.length > 0 && (
-                    <div className="rounded-lg border border-slate-200 dark:border-slate-700/50 overflow-hidden">
+                    <div className="overflow-hidden rounded-lg border border-border">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="bg-slate-100 dark:bg-slate-800/40">
-                            <th className="px-4 py-2 text-left text-xs font-medium text-slate-600 dark:text-slate-400">Field</th>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-slate-600 dark:text-slate-400">Value</th>
+                          <tr className="bg-muted/40">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Field</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Value</th>
                           </tr>
                         </thead>
                         <tbody>
                           {previewTableRows.map(([field, value], i) => (
-                            <tr key={i} className="border-t border-slate-200 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/20">
-                              <td className="px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300">{field}</td>
-                              <td className="px-4 py-2 text-xs text-slate-600 dark:text-slate-400">{value}</td>
+                            <tr key={i} className="border-t border-border/60 hover:bg-primary/5">
+                              <td className="px-4 py-2 text-xs font-medium text-foreground/90">{field}</td>
+                              <td className="px-4 py-2 text-xs text-muted-foreground">{value}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
                   )}
-                  <div className="prose prose-sm dark:prose-invert max-w-none rounded-lg bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700/50 p-6">
+                  <div className="prose prose-sm dark:prose-invert max-w-none rounded-lg border border-border bg-card/60 p-6">
                     {previewBody.split("\n").map((line, i) => {
                       if (line.startsWith("## ")) return <h2 key={i} className="text-lg font-bold text-slate-900 dark:text-white mt-6 mb-2 first:mt-0">{line.replace("## ", "")}</h2>;
                       if (line.startsWith("### ")) return <h3 key={i} className="text-base font-semibold text-slate-900 dark:text-white mt-4 mb-1">{line.replace("### ", "")}</h3>;
@@ -655,7 +655,7 @@ export default function EIPBuilderPage() {
                 <textarea
                   value={markdownRaw}
                   onChange={(e) => { setLastEdited("code"); setMarkdownRaw(e.target.value); setValidated(false); }}
-                  className="w-full h-full min-h-[600px] px-4 py-3 text-sm bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700/50 rounded-xl text-slate-700 dark:text-slate-300 font-mono leading-relaxed focus:outline-none focus:border-cyan-500/50 resize-none"
+                  className="h-full min-h-[600px] w-full resize-none rounded-xl border border-border bg-card/60 px-4 py-3 font-mono text-sm leading-relaxed text-foreground/90 focus:outline-none focus:ring-1 focus:ring-primary/30"
                   spellCheck={false}
                 />
               )}
@@ -665,25 +665,25 @@ export default function EIPBuilderPage() {
       </div>
 
       {/* ─── Bottom Action Bar ─── */}
-      <div className="border-t border-slate-200 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/30 backdrop-blur-sm px-4 py-3">
-        <div className="container mx-auto flex items-center justify-between">
+      <div className="border-t border-border bg-card/80 px-4 py-3 backdrop-blur-sm sm:px-6 lg:px-8 xl:px-12">
+        <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-2">
             {validated && <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-3.5 w-3.5" />Validated</span>}
             {validationErrors.length > 0 && !validated && (
-              <button onClick={() => setShowValidationDialog(true)} className="inline-flex items-center gap-1.5 text-xs text-red-700 dark:text-red-300 hover:text-red-800 dark:hover:text-red-200">
+              <button onClick={() => setShowValidationDialog(true)} className="inline-flex items-center gap-1.5 text-xs text-red-500 hover:text-red-400">
                 <AlertCircle className="h-3.5 w-3.5" />{validationErrors.length} error{validationErrors.length > 1 ? "s" : ""}
               </button>
             )}
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handleValidate} disabled={validating}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-900 dark:text-white bg-blue-500/20 border border-blue-500/40 rounded-lg hover:bg-blue-500/30 transition-colors disabled:opacity-50">
+              className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-50">
               {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Validate
             </button>
             <button onClick={handleDownload} disabled={!validated}
               className={cn("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
-                validated ? "text-slate-900 dark:text-white bg-cyan-500/20 border border-cyan-500/40 hover:bg-cyan-500/30" : "text-slate-500 bg-slate-100 dark:bg-slate-800/30 border border-slate-300 dark:border-slate-700/30 cursor-not-allowed"
+                validated ? "border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15" : "cursor-not-allowed border border-border bg-muted/60 text-muted-foreground"
               )}>
               <Download className="h-4 w-4" />Download
             </button>

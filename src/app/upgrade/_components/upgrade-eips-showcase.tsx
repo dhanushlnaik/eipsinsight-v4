@@ -20,20 +20,20 @@ interface UpgradeEIPsShowcaseProps {
 }
 
 const bucketColors: Record<string, { bg: string; text: string; border: string }> = {
-  'included': { bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-400/30' },
-  'scheduled': { bg: 'bg-cyan-500/10', text: 'text-cyan-300', border: 'border-cyan-400/30' },
-  'proposed': { bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-400/30' },
-  'considered': { bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-400/30' },
-  'declined': { bg: 'bg-red-500/10', text: 'text-red-300', border: 'border-red-400/30' },
+  'included': { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-300', border: 'border-emerald-400/30' },
+  'scheduled': { bg: 'bg-cyan-500/10', text: 'text-cyan-600 dark:text-cyan-300', border: 'border-cyan-400/30' },
+  'proposed': { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-300', border: 'border-blue-400/30' },
+  'considered': { bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-300', border: 'border-amber-400/30' },
+  'declined': { bg: 'bg-red-500/10', text: 'text-red-600 dark:text-red-300', border: 'border-red-400/30' },
 };
 
 const statusColors: Record<string, { bg: string; text: string }> = {
-  'Draft': { bg: 'bg-cyan-500/20', text: 'text-cyan-300' },
-  'Review': { bg: 'bg-blue-500/20', text: 'text-blue-300' },
-  'Last Call': { bg: 'bg-amber-500/20', text: 'text-amber-300' },
-  'Final': { bg: 'bg-emerald-500/20', text: 'text-emerald-300' },
-  'Stagnant': { bg: 'bg-slate-500/20', text: 'text-slate-300' },
-  'Withdrawn': { bg: 'bg-red-500/20', text: 'text-red-300' },
+  'Draft': { bg: 'bg-cyan-500/20', text: 'text-cyan-600 dark:text-cyan-300' },
+  'Review': { bg: 'bg-blue-500/20', text: 'text-blue-600 dark:text-blue-300' },
+  'Last Call': { bg: 'bg-amber-500/20', text: 'text-amber-600 dark:text-amber-300' },
+  'Final': { bg: 'bg-emerald-500/20', text: 'text-emerald-600 dark:text-emerald-300' },
+  'Stagnant': { bg: 'bg-slate-500/20', text: 'text-slate-600 dark:text-slate-300' },
+  'Withdrawn': { bg: 'bg-red-500/20', text: 'text-red-600 dark:text-red-300' },
 };
 
 function formatBucket(bucket: string | null): string {
@@ -79,10 +79,10 @@ export function UpgradeEIPsShowcase({ upgradeName, composition, upgradeColor = '
       <Link href={`/eip/${eip.eip_number}`}>
         <motion.div
           className={cn(
-            'relative rounded-lg border bg-slate-950/50 p-2.5 cursor-pointer overflow-hidden',
+            'group relative rounded-lg border border-border bg-card/60 p-2.5 cursor-pointer overflow-hidden',
             'transition-all',
-            isHovered ? bucketColor.border : 'border-slate-700/40',
-            'hover:border-cyan-400/50 hover:bg-slate-900/70'
+            isHovered ? bucketColor.border : 'border-border',
+            'hover:border-primary/40'
           )}
           onMouseEnter={() => setHoveredEip(eip.eip_number)}
           onMouseLeave={() => setHoveredEip(null)}
@@ -118,10 +118,10 @@ export function UpgradeEIPsShowcase({ upgradeName, composition, upgradeColor = '
                   </span>
                 )}
               </div>
-              <ExternalLink className="h-3 w-3 text-slate-500 group-hover:text-cyan-400 transition-colors" />
+              <ExternalLink className="h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
 
-            <h4 className="text-xs font-semibold text-white line-clamp-2 leading-snug">
+            <h4 className="text-sm font-semibold text-foreground line-clamp-2 leading-snug">
               {eip.title}
             </h4>
 
@@ -138,8 +138,8 @@ export function UpgradeEIPsShowcase({ upgradeName, composition, upgradeColor = '
 
   if (orderedBuckets.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-700/40 bg-slate-950/50 p-6">
-        <p className="text-sm text-slate-400">No EIPs in this upgrade yet.</p>
+      <div className="rounded-xl border border-border bg-card/60 p-6">
+        <p className="text-sm text-muted-foreground">No EIPs in this upgrade yet.</p>
       </div>
     );
   }
@@ -147,10 +147,10 @@ export function UpgradeEIPsShowcase({ upgradeName, composition, upgradeColor = '
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-lg font-bold text-white mb-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
           {upgradeName} EIPs
         </h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-sm text-muted-foreground">
           Complete list of Ethereum Improvement Proposals in this upgrade
         </p>
       </div>
@@ -214,8 +214,8 @@ export function UpgradeEIPsShowcase({ upgradeName, composition, upgradeColor = '
                   whileTap={{ scale: 0.98 }}
                   className={cn(
                     'px-3 py-1.5 rounded-lg border text-xs font-medium transition-all',
-                    'border-slate-700/40 bg-slate-900/50 text-slate-300',
-                    'hover:border-cyan-400/50 hover:text-cyan-300 hover:bg-cyan-500/10',
+                    'border-border bg-muted/60 text-muted-foreground',
+                    'hover:border-primary/40 hover:text-primary hover:bg-primary/10',
                     'flex items-center gap-1.5'
                   )}
                 >
@@ -238,10 +238,10 @@ export function UpgradeEIPsShowcase({ upgradeName, composition, upgradeColor = '
       })}
 
       {/* Summary */}
-      <div className="rounded-lg border border-slate-700/40 bg-slate-900/30 p-3">
-        <div className="flex items-center justify-center gap-4 text-xs text-slate-400 flex-wrap">
+      <div className="rounded-lg border border-border bg-card/60 p-3">
+        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground flex-wrap">
           <div>
-            <span className="font-semibold text-white">{composition.length}</span> Total EIPs
+            <span className="font-semibold text-foreground">{composition.length}</span> Total EIPs
           </div>
           {orderedBuckets.map((bucket) => (
             <div key={bucket}>

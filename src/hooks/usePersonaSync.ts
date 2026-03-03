@@ -4,7 +4,7 @@ import { useEffect, useCallback, useRef } from "react";
 import { client } from "@/lib/orpc";
 import { useSession } from "@/hooks/useSession";
 import { usePersonaStore } from "@/stores/personaStore";
-import { isValidPersona, type Persona } from "@/lib/persona";
+import { isValidPersona, PERSONA_PAGE_CONFIG, type Persona } from "@/lib/persona";
 
 /**
  * Hook to sync persona preferences between client state and server
@@ -99,7 +99,15 @@ export function usePersonaSyncOnChange() {
       if (!session?.user) return;
 
       try {
-        await client.preferences.setPersona({ persona: newPersona });
+        const cfg = PERSONA_PAGE_CONFIG[newPersona];
+        await client.preferences.update({
+          persona: newPersona,
+          default_view: {
+            upgradesView: cfg.upgradesView,
+            analyticsView: cfg.analyticsDefault,
+            standardsView: cfg.standardsFocus,
+          },
+        });
       } catch (error) {
         console.error("Failed to sync persona to server:", error);
       }

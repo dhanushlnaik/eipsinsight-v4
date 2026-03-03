@@ -5,6 +5,7 @@ import {
   DEFAULT_PERSONA,
   isValidPersona,
   PERSONA_DEFAULTS,
+  PERSONA_PAGE_CONFIG,
 } from "@/lib/persona";
 
 export interface DefaultView {
@@ -52,7 +53,17 @@ export const usePersonaStore = create<PersonaState>()(
         const { redirect = true, syncToServer = true } = options || {};
         
         if (isValidPersona(persona)) {
-          set({ persona, isOnboarded: true });
+          const personaConfig = PERSONA_PAGE_CONFIG[persona];
+          set((state) => ({
+            persona,
+            isOnboarded: true,
+            defaultView: {
+              ...state.defaultView,
+              upgradesView: personaConfig.upgradesView,
+              analyticsView: personaConfig.analyticsDefault,
+              standardsView: personaConfig.standardsFocus,
+            },
+          }));
           
           // Redirect to persona's default landing page
           if (redirect && typeof window !== "undefined") {
@@ -70,7 +81,18 @@ export const usePersonaStore = create<PersonaState>()(
       // Separate method for server sync - doesn't redirect or trigger server update
       setPersonaFromServer: (persona: Persona) => {
         if (isValidPersona(persona)) {
-          set({ persona, isOnboarded: true, hasSyncedFromServer: true });
+          const personaConfig = PERSONA_PAGE_CONFIG[persona];
+          set((state) => ({
+            persona,
+            isOnboarded: true,
+            hasSyncedFromServer: true,
+            defaultView: {
+              ...state.defaultView,
+              upgradesView: state.defaultView.upgradesView ?? personaConfig.upgradesView,
+              analyticsView: state.defaultView.analyticsView ?? personaConfig.analyticsDefault,
+              standardsView: state.defaultView.standardsView ?? personaConfig.standardsFocus,
+            },
+          }));
         }
       },
 

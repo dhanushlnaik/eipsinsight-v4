@@ -1,19 +1,34 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { client } from "@/lib/orpc";
-import {
-  Loader2, ArrowLeft, Search, ArrowRight, CheckCircle2, Clock,
-  FileCode, GitPullRequest, Calendar, Tag, AlertTriangle,
-  ExternalLink, GitCommit,
-} from "lucide-react";
 import Link from "next/link";
+import { client } from "@/lib/orpc";
+import { PageHeader, SectionSeparator } from "@/components/header";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  FileCode,
+  GitCommit,
+  GitPullRequest,
+  Loader2,
+  Search,
+  Tag,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STATUS_COLORS: Record<string, string> = {
-  Draft: "#22d3ee", Review: "#60a5fa", "Last Call": "#fbbf24",
-  Final: "#34d399", Living: "#a78bfa", Stagnant: "#94a3b8", Withdrawn: "#ef4444",
+  Draft: "#22d3ee",
+  Review: "#60a5fa",
+  "Last Call": "#fbbf24",
+  Final: "#34d399",
+  Living: "#a78bfa",
+  Stagnant: "#94a3b8",
+  Withdrawn: "#ef4444",
 };
 
 interface TimelineData {
@@ -29,274 +44,493 @@ interface TimelineData {
   categoryEvents: Array<{ from: string | null; to: string; date: string }>;
   deadlineEvents: Array<{ previous: string | null; newDeadline: string | null; date: string }>;
   linkedPRs: Array<{
-    prNumber: number; title: string | null; author: string | null;
-    state: string | null; mergedAt: string | null; createdAt: string | null;
-    commits: number; files: number; repo: string;
+    prNumber: number;
+    title: string | null;
+    author: string | null;
+    state: string | null;
+    mergedAt: string | null;
+    createdAt: string | null;
+    commits: number;
+    files: number;
+    repo: string;
   }>;
+}
+
+type UnifiedEvent = {
+  date: string;
+  type: "created" | "status" | "category" | "deadline" | "pr-opened" | "pr-merged";
+  title: string;
+  detail: string;
+  color: string;
+  meta?: string;
+  prNumber?: number;
+};
+
+function parseDate(input: string | null | undefined): Date | null {
+  if (!input) return null;
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function formatDateTime(input: string | null | undefined) {
+  const d = parseDate(input);
+  if (!d) return "—";
+  return d.toLocaleString("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function formatDate(input: string | null | undefined) {
+  const d = parseDate(input);
+  if (!d) return "—";
+  return d.toLocaleDateString("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+}
+
+function daysBetween(a: string | null | undefined, b: string | null | undefined) {
+  const d1 = parseDate(a);
+  const d2 = parseDate(b);
+  if (!d1 || !d2) return null;
+  return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86400000));
 }
 
 function TimelineContent() {
   const searchParams = useSearchParams();
-  const initialEip = searchParams.get("eip") || "";
+  const rawRepo = (searchParams.get("repo") || "eips").toLowerCase();
+  const initialRepo: "eips" | "ercs" | "rips" =
+    rawRepo === "ercs" || rawRepo === "erc" ? "ercs" : rawRepo === "rips" || rawRepo === "rip" ? "rips" : "eips";
+  const initialNumber = searchParams.get("number") || searchParams.get("eip") || "";
 
-  const [query, setQuery] = useState(initialEip);
+  const [repo, setRepo] = useState<"eips" | "ercs" | "rips">(initialRepo);
+  const [query, setQuery] = useState(initialNumber);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TimelineData | null>(null);
 
-  const handleSearch = async (num?: number) => {
-    const eipNum = num ?? parseInt(query.replace(/[^0-9]/g, ""), 10);
-    if (isNaN(eipNum)) { setError("Enter a valid EIP number"); return; }
-
-    setError(null);
-    setLoading(true);
-    try {
-      const result = await client.tools.getEIPFullTimeline({ eipNumber: eipNum });
-      if (!result.title && result.statusEvents.length === 0) {
-        setError(`No data found for EIP-${eipNum}`);
-        setData(null);
-      } else {
-        setData(result);
+  const handleSearch = useCallback(
+    async (num?: number) => {
+      const proposalNum = num ?? parseInt(query.replace(/[^0-9]/g, ""), 10);
+      if (Number.isNaN(proposalNum)) {
+        setError("Enter a valid proposal number.");
+        return;
       }
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load timeline.");
-      setData(null);
-    } finally { setLoading(false); }
-  };
 
-  // Auto-search if URL has ?eip=
+      setError(null);
+      setLoading(true);
+      try {
+        const result = await client.tools.getEIPFullTimeline({ eipNumber: proposalNum });
+        if (!result.title && result.statusEvents.length === 0) {
+          setError(`No timeline data found for #${proposalNum}.`);
+          setData(null);
+        } else {
+          setData(result);
+          const params = new URLSearchParams(window.location.search);
+          params.set("repo", repo);
+          params.set("number", String(proposalNum));
+          window.history.replaceState(null, "", `/tools/timeline?${params.toString()}`);
+        }
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load timeline data.");
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [query, repo]
+  );
+
   useEffect(() => {
-    if (initialEip) {
-      const num = parseInt(initialEip, 10);
-      if (!isNaN(num)) handleSearch(num);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!initialNumber) return;
+    const num = parseInt(initialNumber, 10);
+    if (!Number.isNaN(num)) void handleSearch(num);
+  }, [initialNumber, handleSearch]);
 
-  // Build unified chronological timeline
-  const timeline = useMemo(() => {
+  const repoLabel = repo === "ercs" ? "ERC" : repo === "rips" ? "RIP" : "EIP";
+
+  const timeline = useMemo<UnifiedEvent[]>(() => {
     if (!data) return [];
-    const events: Array<{
-      date: string; type: string; icon: typeof CheckCircle2;
-      title: string; detail: string; color: string; meta?: string;
-    }> = [];
+    const events: UnifiedEvent[] = [];
 
     if (data.createdAt) {
       events.push({
-        date: data.createdAt, type: "created", icon: Calendar,
-        title: "EIP Created", detail: `EIP-${data.eipNumber} authored by ${data.author || "unknown"}`,
+        date: data.createdAt,
+        type: "created",
+        title: "Proposal Created",
+        detail: `EIP-${data.eipNumber} authored by ${data.author || "Unknown"}`,
         color: "#22d3ee",
       });
     }
 
     data.statusEvents.forEach((e) => {
       events.push({
-        date: e.date, type: "status", icon: CheckCircle2,
-        title: `Status: ${e.from ? `${e.from} → ` : ""}${e.to}`,
-        detail: e.prNumber ? `via PR #${e.prNumber}` : "via commit",
+        date: e.date,
+        type: "status",
+        title: e.from ? `Status changed: ${e.from} -> ${e.to}` : `Status set: ${e.to}`,
+        detail: e.prNumber ? `Transition tracked via PR #${e.prNumber}` : "Transition tracked via commit history",
         color: STATUS_COLORS[e.to] ?? "#94a3b8",
-        meta: e.commitSha?.slice(0, 8),
+        meta: e.commitSha ? e.commitSha.slice(0, 8) : undefined,
+        prNumber: e.prNumber ?? undefined,
       });
     });
 
     data.categoryEvents.forEach((e) => {
       events.push({
-        date: e.date, type: "category", icon: Tag,
-        title: `Category: ${e.from ? `${e.from} → ` : ""}${e.to}`,
-        detail: "Category change", color: "#a78bfa",
+        date: e.date,
+        type: "category",
+        title: e.from ? `Category changed: ${e.from} -> ${e.to}` : `Category set: ${e.to}`,
+        detail: "Metadata classification updated.",
+        color: "#a78bfa",
       });
     });
 
     data.deadlineEvents.forEach((e) => {
+      const from = e.previous ? formatDate(e.previous) : "not set";
+      const to = e.newDeadline ? formatDate(e.newDeadline) : "removed";
       events.push({
-        date: e.date, type: "deadline", icon: Clock,
-        title: `Deadline ${e.previous ? `${e.previous} → ` : "set to "}${e.newDeadline ?? "removed"}`,
-        detail: "Deadline update", color: "#fbbf24",
+        date: e.date,
+        type: "deadline",
+        title: `Deadline update: ${from} -> ${to}`,
+        detail: "Governance deadline metadata changed.",
+        color: "#fbbf24",
       });
     });
 
     data.linkedPRs.forEach((pr) => {
       if (pr.createdAt) {
         events.push({
-          date: pr.createdAt, type: "pr", icon: GitPullRequest,
+          date: pr.createdAt,
+          type: "pr-opened",
           title: `PR #${pr.prNumber} opened`,
           detail: pr.title || "Untitled PR",
-          color: pr.mergedAt ? "#34d399" : pr.state === "open" ? "#22d3ee" : "#94a3b8",
-          meta: `${pr.commits} commits, ${pr.files} files`,
+          color: "#38bdf8",
+          meta: `${pr.commits} commits · ${pr.files} files`,
+          prNumber: pr.prNumber,
         });
       }
       if (pr.mergedAt) {
         events.push({
-          date: pr.mergedAt, type: "pr-merged", icon: GitCommit,
+          date: pr.mergedAt,
+          type: "pr-merged",
           title: `PR #${pr.prNumber} merged`,
           detail: pr.title || "Untitled PR",
           color: "#34d399",
+          prNumber: pr.prNumber,
         });
       }
     });
 
-    return events.sort((a, b) => a.date.localeCompare(b.date));
+    return events.sort((a, b) => (parseDate(a.date)?.getTime() ?? 0) - (parseDate(b.date)?.getTime() ?? 0));
   }, [data]);
 
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
-      <div className="border-b border-slate-200 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/30 backdrop-blur-sm sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-3">
-          <Link href="/tools" className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors mb-2">
-            <ArrowLeft className="h-4 w-4" />Back to Tools
-          </Link>
-          <h1 className="dec-title bg-linear-to-br from-emerald-600 via-slate-700 to-cyan-600 dark:from-emerald-300 dark:via-slate-100 dark:to-cyan-200 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl">EIP Status & Commit Timeline</h1>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Full lifecycle of any EIP — status changes, category shifts, deadlines, and linked PRs.</p>
-        </div>
-      </div>
+  const summary = useMemo(() => {
+    if (!data) return null;
+    const firstStatusDate = data.statusEvents[0]?.date ?? null;
+    const finalDate = data.statusEvents.find((s) => s.to === "Final")?.date ?? null;
+    const timeToFinal = finalDate ? daysBetween(data.createdAt, finalDate) : null;
+    const draftToReview = (() => {
+      const review = data.statusEvents.find((s) => s.to === "Review")?.date;
+      if (!review) return null;
+      return daysBetween(data.createdAt, review);
+    })();
+    const lastCallToFinal = (() => {
+      const lastCall = data.statusEvents.find((s) => s.to === "Last Call")?.date;
+      if (!lastCall || !finalDate) return null;
+      return daysBetween(lastCall, finalDate);
+    })();
 
-      <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
-        {/* Search */}
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/40 p-5 backdrop-blur-sm">
-          <label className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2 block">Enter an EIP / ERC / RIP number</label>
-          <div className="flex gap-3">
+    const keyMoments = [
+      data.createdAt ? `Created on ${formatDate(data.createdAt)}.` : null,
+      firstStatusDate ? `First status transition on ${formatDate(firstStatusDate)}.` : null,
+      data.statusEvents.find((s) => s.to === "Last Call")?.date
+        ? `Entered Last Call on ${formatDate(data.statusEvents.find((s) => s.to === "Last Call")?.date)}.`
+        : null,
+      finalDate ? `Finalized on ${formatDate(finalDate)}.` : null,
+      data.linkedPRs.length > 0 ? `${data.linkedPRs.length} linked PRs recorded in lifecycle data.` : "No linked PRs in current index.",
+    ].filter((x): x is string => !!x);
+
+    return {
+      timeToFinal,
+      draftToReview,
+      lastCallToFinal,
+      keyMoments,
+      totalEvents: timeline.length,
+    };
+  }, [data, timeline.length]);
+
+  const iconForEvent = (type: UnifiedEvent["type"]) => {
+    switch (type) {
+      case "created":
+        return Calendar;
+      case "status":
+        return CheckCircle2;
+      case "category":
+        return Tag;
+      case "deadline":
+        return Clock;
+      case "pr-opened":
+        return GitPullRequest;
+      case "pr-merged":
+        return GitCommit;
+      default:
+        return FileCode;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <PageHeader
+        eyebrow="Tools"
+        indicator={{ icon: "activity", label: "Timeline", pulse: !!data }}
+        title="Status & Commit Timeline"
+        description="Trace a proposal's lifecycle across status transitions, metadata updates, and linked pull requests."
+        sectionId="proposal-timeline"
+      />
+      <SectionSeparator />
+
+      <div className="w-full space-y-4 px-4 pb-12 sm:px-6 lg:px-8 xl:px-12">
+        <Link href="/tools" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Tools
+        </Link>
+
+        <section className="rounded-xl border border-border bg-card/60 p-4">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Search Proposal</label>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="inline-flex rounded-lg border border-border bg-muted/50 p-1">
+              {(["eips", "ercs", "rips"] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRepo(r)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    repo === r ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {r.toUpperCase()}
+                </button>
+              ))}
+            </div>
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-600 dark:text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
-                type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="e.g. 1559, 4844, 20"
-                className="w-full pl-11 pr-4 py-3 text-sm bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg text-slate-800 dark:text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
+                placeholder={`e.g. ${repo === "eips" ? "1559" : repo === "ercs" ? "20" : "1"}`}
+                className="w-full rounded-lg border border-border bg-muted/60 py-2.5 pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
             </div>
-            <button onClick={() => handleSearch()} disabled={loading || !query.trim()}
-              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-slate-900 dark:text-white bg-cyan-500/20 border border-cyan-500/40 rounded-lg hover:bg-cyan-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <button
+              onClick={() => void handleSearch()}
+              disabled={loading || !query.trim()}
+              className="inline-flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-medium text-primary hover:bg-primary/15 disabled:opacity-50"
+            >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-              Search
+              Analyze
             </button>
           </div>
-          {error && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{error}</p>}
-        </div>
+          {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+        </section>
 
         {loading && (
-          <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-cyan-500" /></div>
+          <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-border bg-card/60">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
         )}
 
         {data && !loading && (
           <>
-            {/* EIP Header */}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/40 p-5 backdrop-blur-sm">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <section className="rounded-xl border border-border bg-card/60 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">EIP-{data.eipNumber}</h2>
-                  <p className="text-base text-slate-700 dark:text-slate-300">{data.title ?? "Untitled"}</p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">Author: {data.author ?? "Unknown"}</p>
+                  <h2 className="dec-title text-2xl font-semibold tracking-tight text-foreground">{repoLabel}-{data.eipNumber}</h2>
+                  <p className="mt-1 text-sm text-foreground/90">{data.title ?? "Untitled"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Author: {data.author ?? "Unknown"} · Repo: {data.repo.toUpperCase()}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {data.currentStatus && (
-                    <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium"
-                      style={{ backgroundColor: `${STATUS_COLORS[data.currentStatus] ?? "#94a3b8"}20`, color: STATUS_COLORS[data.currentStatus] ?? "#94a3b8", border: `1px solid ${STATUS_COLORS[data.currentStatus] ?? "#94a3b8"}40` }}>
+                    <span
+                      className="rounded-full border px-3 py-1 text-xs font-medium"
+                      style={{
+                        backgroundColor: `${STATUS_COLORS[data.currentStatus] ?? "#94a3b8"}22`,
+                        borderColor: `${STATUS_COLORS[data.currentStatus] ?? "#94a3b8"}66`,
+                        color: STATUS_COLORS[data.currentStatus] ?? "#94a3b8",
+                      }}
+                    >
                       {data.currentStatus}
                     </span>
                   )}
-                  {data.type && <span className="text-xs px-2 py-1 rounded-md bg-slate-200 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600/30">{data.type}</span>}
-                  {data.category && <span className="text-xs px-2 py-1 rounded-md bg-slate-200 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600/30">{data.category}</span>}
+                  {data.type && <span className="rounded-md border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground">{data.type}</span>}
+                  {data.category && <span className="rounded-md border border-border bg-muted/50 px-2 py-1 text-xs text-muted-foreground">{data.category}</span>}
                 </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 pt-5 border-t border-slate-200 dark:border-slate-700/50">
-                <div><p className="text-xs text-slate-500 dark:text-slate-400">Created</p><p className="text-sm text-slate-900 dark:text-white">{data.createdAt ?? "—"}</p></div>
-                <div><p className="text-xs text-slate-500 dark:text-slate-400">Repo</p><p className="text-sm text-slate-900 dark:text-white uppercase">{data.repo}</p></div>
-                <div><p className="text-xs text-slate-500 dark:text-slate-400">Status Changes</p><p className="text-sm text-slate-900 dark:text-white">{data.statusEvents.length}</p></div>
-                <div><p className="text-xs text-slate-500 dark:text-slate-400">Linked PRs</p><p className="text-sm text-slate-900 dark:text-white">{data.linkedPRs.length}</p></div>
-              </div>
-            </div>
 
-            {/* Unified Timeline */}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/40 p-5 backdrop-blur-sm">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">Full Timeline</h3>
-              <div className="relative">
-                <div className="absolute left-[19px] top-0 bottom-0 w-0.5 bg-slate-200 dark:bg-slate-700/50" />
-                <div className="space-y-4">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Created</p>
+                  <p className="mt-1 text-sm text-foreground">{formatDate(data.createdAt)}</p>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status Changes</p>
+                  <p className="mt-1 text-sm text-foreground">{data.statusEvents.length}</p>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Linked PRs</p>
+                  <p className="mt-1 text-sm text-foreground">{data.linkedPRs.length}</p>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Timeline Events</p>
+                  <p className="mt-1 text-sm text-foreground">{summary?.totalEvents ?? 0}</p>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Time To Final</p>
+                  <p className="mt-1 text-sm text-foreground">{summary?.timeToFinal != null ? `${summary.timeToFinal}d` : "—"}</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-xl border border-border bg-card/60 p-4 lg:col-span-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Lifecycle Notes</p>
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Draft → Review</p>
+                    <p className="text-sm text-foreground">{summary?.draftToReview != null ? `${summary.draftToReview}d` : "—"}</p>
+                  </div>
+                  <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Last Call → Final</p>
+                    <p className="text-sm text-foreground">{summary?.lastCallToFinal != null ? `${summary.lastCallToFinal}d` : "—"}</p>
+                  </div>
+                </div>
+                <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Key Moments</p>
+                <div className="mt-2 space-y-1.5">
+                  {summary?.keyMoments.map((m, i) => (
+                    <p key={i} className="text-xs text-muted-foreground">• {m}</p>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card/60 p-4 lg:col-span-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Descriptive Timeline</p>
+                <div className="mt-3 space-y-2">
                   {timeline.length === 0 ? (
-                    <p className="text-slate-600 dark:text-slate-400 text-sm pl-14">No events recorded</p>
-                  ) : timeline.map((event, i) => {
-                    const Icon = event.icon;
-                    return (
-                      <div key={i} className="flex gap-4">
-                        <div className="relative z-10 shrink-0">
-                          <div className="h-10 w-10 rounded-full flex items-center justify-center border"
-                            style={{ backgroundColor: `${event.color}15`, borderColor: `${event.color}40` }}>
-                            <Icon className="h-4 w-4" style={{ color: event.color }} />
+                    <p className="text-sm text-muted-foreground">No events recorded.</p>
+                  ) : (
+                    timeline.map((event, idx) => {
+                      const Icon = iconForEvent(event.type);
+                      const prev = timeline[idx - 1];
+                      const elapsed = prev ? daysBetween(prev.date, event.date) : null;
+                      return (
+                        <div key={`${event.type}-${event.date}-${idx}`} className="rounded-lg border border-border/70 bg-muted/25 p-3">
+                          <div className="flex items-start gap-3">
+                            <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-md border" style={{ borderColor: `${event.color}66`, backgroundColor: `${event.color}22` }}>
+                              <Icon className="h-4 w-4" style={{ color: event.color }} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-medium text-foreground">{event.title}</p>
+                                {event.prNumber && (
+                                  <span className="text-xs text-primary">PR #{event.prNumber}</span>
+                                )}
+                              </div>
+                              <p className="mt-0.5 text-xs text-muted-foreground">{event.detail}</p>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span className="text-[11px] text-muted-foreground">{formatDateTime(event.date)}</span>
+                                {event.meta && (
+                                  <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{event.meta}</span>
+                                )}
+                                {elapsed != null && idx > 0 && (
+                                  <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground">+{elapsed}d since previous</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex-1 pt-1.5">
-                          <p className="text-sm text-slate-900 dark:text-white font-medium">{event.title}</p>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{event.detail}</p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400">{event.date}</span>
-                            {event.meta && (
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded">{event.meta}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </div>
-            </div>
+            </section>
 
-            {/* Linked PRs Table */}
             {data.linkedPRs.length > 0 && (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-900/40 backdrop-blur-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700/50">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Linked Pull Requests</h3>
+              <section className="overflow-hidden rounded-xl border border-border bg-card/60">
+                <div className="border-b border-border px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Linked Pull Requests</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700/50 bg-slate-100 dark:bg-slate-800/20">
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">PR</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">Title</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">Author</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">State</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-slate-600 dark:text-slate-400">Commits</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-slate-600 dark:text-slate-400">Files</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">Created</th>
+                      <tr className="border-b border-border/70 bg-muted/30">
+                        <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">PR</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Title</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Author</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">State</th>
+                        <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Commits</th>
+                        <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Files</th>
+                        <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Created</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.linkedPRs.map((pr) => (
-                        <tr key={pr.prNumber} className="border-b border-slate-200 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/30">
+                        <tr key={pr.prNumber} className="border-b border-border/60 last:border-0 hover:bg-muted/20">
                           <td className="px-4 py-3">
-                            <a href={`https://github.com/${pr.repo}/pull/${pr.prNumber}`} target="_blank" rel="noopener noreferrer"
-                              className="text-cyan-700 dark:text-cyan-300 font-medium hover:text-cyan-800 dark:hover:text-cyan-200 inline-flex items-center gap-1">
-                              #{pr.prNumber} <ExternalLink className="h-3 w-3" />
+                            <a
+                              href={`https://github.com/${pr.repo}/pull/${pr.prNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-primary hover:underline"
+                            >
+                              #{pr.prNumber}
+                              <ExternalLink className="h-3 w-3" />
                             </a>
                           </td>
-                          <td className="px-4 py-3 text-slate-800 dark:text-slate-200 max-w-[200px] truncate">{pr.title ?? "—"}</td>
-                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">{pr.author ?? "—"}</td>
+                          <td className="max-w-[260px] truncate px-4 py-3 text-foreground/90">{pr.title ?? "—"}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{pr.author ?? "—"}</td>
                           <td className="px-4 py-3">
-                            <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full",
-                              pr.mergedAt ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" :
-                              pr.state === "open" ? "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300" :
-                              "bg-slate-500/20 text-slate-700 dark:text-slate-300"
-                            )}>{pr.mergedAt ? "Merged" : pr.state ?? "—"}</span>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs font-medium",
+                                pr.mergedAt
+                                  ? "bg-emerald-500/20 text-emerald-300"
+                                  : pr.state === "open"
+                                    ? "bg-primary/20 text-primary"
+                                    : "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              {pr.mergedAt ? "Merged" : pr.state ?? "—"}
+                            </span>
                           </td>
-                          <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{pr.commits}</td>
-                          <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{pr.files}</td>
-                          <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{pr.createdAt ?? "—"}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{pr.commits}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{pr.files}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(pr.createdAt)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </section>
             )}
           </>
         )}
 
         {!data && !loading && !error && (
-          <div className="text-center py-16">
-            <Clock className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-            <p className="text-lg text-slate-600 dark:text-slate-400">Search for an EIP to explore its full timeline</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Every status change, commit, and PR — in chronological order</p>
+          <div className="rounded-xl border border-border bg-card/50 px-4 py-14 text-center">
+            <Clock className="mx-auto h-10 w-10 text-muted-foreground" />
+            <p className="mt-3 text-base text-foreground">Search a proposal number to explore its lifecycle timeline.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Includes status transitions, metadata updates, and linked PR chronology.</p>
           </div>
         )}
       </div>
@@ -306,7 +540,13 @@ function TimelineContent() {
 
 export default function TimelinePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-cyan-500" /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      }
+    >
       <TimelineContent />
     </Suspense>
   );

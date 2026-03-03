@@ -88,7 +88,7 @@ const markdownComponents: Components = {
   h1: ({ children, ...props }) => {
     const id = slugify(extractText(children));
     return (
-      <h1 id={id} className="mt-10 mb-5 text-3xl font-bold text-slate-900 dark:text-white" {...props}>
+      <h1 id={id} className="dec-title mt-8 mb-4 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl" {...props}>
         {children}
       </h1>
     );
@@ -98,7 +98,7 @@ const markdownComponents: Components = {
     return (
       <h2
         id={id}
-        className="mt-12 mb-4 border-b border-slate-300 pb-2 text-2xl font-semibold text-slate-900 dark:border-slate-700/50 dark:text-white"
+        className="dec-title mt-10 mb-3 border-b border-border pb-2 text-xl font-semibold tracking-tight text-foreground sm:text-2xl"
         {...props}
       >
         {children}
@@ -108,7 +108,7 @@ const markdownComponents: Components = {
   h3: ({ children, ...props }) => {
     const id = slugify(extractText(children));
     return (
-      <h3 id={id} className="mt-8 mb-3 text-xl font-semibold text-slate-900 dark:text-white" {...props}>
+      <h3 id={id} className="mt-8 mb-2 text-lg font-semibold text-foreground" {...props}>
         {children}
       </h3>
     );
@@ -116,13 +116,13 @@ const markdownComponents: Components = {
   h4: ({ children, ...props }) => {
     const id = slugify(extractText(children));
     return (
-      <h4 id={id} className="mt-6 mb-3 text-lg font-semibold text-slate-900 dark:text-white" {...props}>
+      <h4 id={id} className="mt-6 mb-2 text-base font-semibold text-foreground" {...props}>
         {children}
       </h4>
     );
   },
   p: ({ children, ...props }) => (
-    <p className="mb-4 leading-relaxed text-slate-700 dark:text-slate-300" {...props}>
+    <p className="mb-4 text-sm leading-relaxed text-foreground/90 sm:text-base" {...props}>
       {children}
     </p>
   ),
@@ -134,7 +134,7 @@ const markdownComponents: Components = {
     return (
       <a
         href={url}
-        className="text-cyan-600 underline transition-colors hover:text-cyan-700 dark:text-cyan-300 dark:hover:text-cyan-200"
+        className="text-primary underline transition-colors hover:text-primary/80"
         target={isExternal && !isInternalRoute ? '_blank' : undefined}
         rel={isExternal && !isInternalRoute ? 'noopener noreferrer' : undefined}
         {...props}
@@ -144,12 +144,12 @@ const markdownComponents: Components = {
     );
   },
   ul: ({ children, ...props }) => (
-    <ul className="mb-4 ml-6 list-disc space-y-1 text-slate-700 dark:text-slate-300" {...props}>
+    <ul className="mb-4 ml-6 list-disc space-y-1 text-sm text-foreground/90 sm:text-base" {...props}>
       {children}
     </ul>
   ),
   ol: ({ children, ...props }) => (
-    <ol className="mb-4 ml-6 list-decimal space-y-1 text-slate-700 dark:text-slate-300" {...props}>
+    <ol className="mb-4 ml-6 list-decimal space-y-1 text-sm text-foreground/90 sm:text-base" {...props}>
       {children}
     </ol>
   ),
@@ -160,13 +160,13 @@ const markdownComponents: Components = {
   ),
   blockquote: ({ children, ...props }) => (
     <blockquote
-      className="my-4 border-l-4 border-cyan-500/50 pl-4 italic text-slate-600 dark:text-slate-400"
+      className="my-4 border-l-2 border-primary/40 pl-4 text-sm italic text-muted-foreground sm:text-base"
       {...props}
     >
       {children}
     </blockquote>
   ),
-  hr: (props) => <hr className="my-8 border-slate-300 dark:border-slate-700/50" {...props} />,
+  hr: (props) => <hr className="my-8 border-border" {...props} />,
   code: ({ className, children, ...props }) => {
     const language = className?.replace('language-', '');
     const value = String(children).replace(/\n$/, '');
@@ -174,7 +174,7 @@ const markdownComponents: Components = {
     if (!language) {
       return (
         <code
-          className="rounded bg-slate-200 px-1.5 py-0.5 font-mono text-sm text-cyan-700 dark:bg-slate-800/80 dark:text-cyan-300"
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground"
           {...props}
         >
           {children}
@@ -183,35 +183,35 @@ const markdownComponents: Components = {
     }
 
     return (
-      <pre className="my-6 overflow-x-auto rounded-lg border border-slate-300 bg-slate-100 p-4 dark:border-slate-700/50 dark:bg-slate-950/50">
-        <code className="font-mono text-sm leading-relaxed text-slate-800 dark:text-slate-300" {...props}>
+      <pre className="my-6 overflow-x-auto rounded-lg border border-border bg-muted/40 p-4">
+        <code className="font-mono text-sm leading-relaxed text-foreground" {...props}>
           {value}
         </code>
       </pre>
     );
   },
   table: ({ children, ...props }) => (
-    <div className="my-6 w-full overflow-x-auto rounded-lg border border-slate-300 dark:border-slate-700/50">
+    <div className="my-6 w-full overflow-x-auto rounded-xl border border-border bg-card/60">
       <table className="w-full border-collapse text-sm" {...props}>
         {children}
       </table>
     </div>
   ),
   thead: ({ children, ...props }) => (
-    <thead className="bg-slate-100 dark:bg-slate-900/50" {...props}>
+    <thead className="bg-muted/40" {...props}>
       {children}
     </thead>
   ),
   th: ({ children, ...props }) => (
     <th
-      className="border-b border-slate-300 px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700/50 dark:text-slate-400"
+      className="border-b border-border px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
       {...props}
     >
       {children}
     </th>
   ),
   td: ({ children, ...props }) => (
-    <td className="border-b border-slate-200 px-4 py-2 text-slate-700 dark:border-slate-800 dark:text-slate-300" {...props}>
+    <td className="border-b border-border/60 px-4 py-2 text-sm text-foreground" {...props}>
       {children}
     </td>
   ),
@@ -232,68 +232,68 @@ export function MarkdownRenderer({
   const metadata = { ...frontmatter, ...preamble };
 
   return (
-    <div className="prose prose-slate max-w-none dark:prose-invert">
+    <div className="max-w-none">
       {!skipPreamble && metadata && (
-        <div className="mb-10 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-700/50 dark:bg-slate-950/30">
+        <div className="mb-10 overflow-hidden rounded-xl border border-border bg-card/60">
           <table className="w-full border-collapse">
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
+            <tbody className="divide-y divide-border/70">
               {metadata.eip && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">EIP</td>
-                  <td className="px-5 py-3.5 font-mono text-sm text-slate-900 dark:text-white">{metadata.eip}</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">EIP</td>
+                  <td className="px-5 py-3.5 font-mono text-sm text-foreground">{metadata.eip}</td>
                 </tr>
               )}
               {metadata.title && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">Title</td>
-                  <td className="px-5 py-3.5 text-sm text-slate-900 dark:text-white">{metadata.title}</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Title</td>
+                  <td className="px-5 py-3.5 text-sm text-foreground">{metadata.title}</td>
                 </tr>
               )}
               {metadata.status && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">Status</td>
-                  <td className="px-5 py-3.5 text-sm text-slate-900 dark:text-white">{metadata.status}</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</td>
+                  <td className="px-5 py-3.5 text-sm text-foreground">{metadata.status}</td>
                 </tr>
               )}
               {metadata.type && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">Type</td>
-                  <td className="px-5 py-3.5 text-sm text-slate-900 dark:text-white">{metadata.type}</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</td>
+                  <td className="px-5 py-3.5 text-sm text-foreground">{metadata.type}</td>
                 </tr>
               )}
               {metadata.category && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">Category</td>
-                  <td className="px-5 py-3.5 text-sm text-slate-900 dark:text-white">{metadata.category}</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</td>
+                  <td className="px-5 py-3.5 text-sm text-foreground">{metadata.category}</td>
                 </tr>
               )}
               {metadata.author && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">Author</td>
-                  <td className="px-5 py-3.5 text-sm text-slate-900 dark:text-white">{metadata.author}</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Author</td>
+                  <td className="px-5 py-3.5 text-sm text-foreground">{metadata.author}</td>
                 </tr>
               )}
               {metadata.created && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">Created</td>
-                  <td className="px-5 py-3.5 text-sm text-slate-900 dark:text-white">{metadata.created}</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Created</td>
+                  <td className="px-5 py-3.5 text-sm text-foreground">{metadata.created}</td>
                 </tr>
               )}
               {metadata.requires && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">Requires</td>
-                  <td className="px-5 py-3.5 text-sm text-slate-900 dark:text-white">{metadata.requires}</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Requires</td>
+                  <td className="px-5 py-3.5 text-sm text-foreground">{metadata.requires}</td>
                 </tr>
               )}
               {metadata.discussionsTo && (
                 <tr>
-                  <td className="w-36 align-top bg-slate-200/60 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/50 dark:text-slate-400">Discussions-To</td>
+                  <td className="w-36 align-top bg-muted/50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Discussions-To</td>
                   <td className="px-5 py-3.5 text-sm">
                     <a
                       href={metadata.discussionsTo}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="break-all text-cyan-600 transition-colors hover:text-cyan-700 dark:text-cyan-300 dark:hover:text-cyan-200"
+                      className="break-all text-primary transition-colors hover:text-primary/80"
                     >
                       {metadata.discussionsTo}
                     </a>
@@ -305,7 +305,7 @@ export function MarkdownRenderer({
         </div>
       )}
 
-      <article className="markdown-content mx-auto max-w-4xl" style={{ lineHeight: '1.75' }}>
+      <article className="markdown-content mx-auto max-w-4xl" style={{ lineHeight: "1.75" }}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[rehypeKatex]}
@@ -327,7 +327,7 @@ export function MarkdownRenderer({
           content: '#';
           position: absolute;
           left: -1.5rem;
-          color: rgba(100, 116, 139, 0.55);
+          color: hsl(var(--muted-foreground) / 0.55);
           font-weight: normal;
         }
       `}</style>

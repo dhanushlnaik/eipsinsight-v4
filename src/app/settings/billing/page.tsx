@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/hooks/useSession";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, CreditCard, Calendar, TrendingUp, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface SubscriptionData {
   tier: string;
@@ -162,7 +163,7 @@ export default function BillingPage() {
 
   if (loading || dataLoading) {
     return (
-      <div className="flex items-center justify-center min-h-100">
+      <div className="flex min-h-[420px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -172,25 +173,30 @@ export default function BillingPage() {
   const isFreeTier = tier === "free";
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Billing & Subscription</h1>
-        <p className="text-muted-foreground">
+    <div className="mx-auto w-full max-w-4xl space-y-8 px-4 py-10 sm:px-6 lg:px-8">
+      <div className="flex flex-col gap-2">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs uppercase tracking-wide text-primary">
+          Billing
+        </div>
+        <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
+          Billing & Subscription
+        </h1>
+        <p className="text-sm text-muted-foreground sm:text-base">
           Manage your subscription and billing information
         </p>
       </div>
 
       {message && (
-        <div className="bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg">
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-emerald-700 dark:text-emerald-300">
           {message}
         </div>
       )}
 
       {/* Current Plan */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <div className="flex items-start justify-between mb-6">
+      <div className="rounded-xl border border-border bg-card/60 p-6">
+        <div className="mb-6 flex items-start justify-between">
           <div>
-            <h2 className="text-xl font-semibold mb-1">Current Plan</h2>
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground">Current Plan</h2>
             <p className="text-muted-foreground text-sm">
               Your current subscription tier and status
             </p>
@@ -199,10 +205,10 @@ export default function BillingPage() {
             <span
               className={`px-3 py-1 rounded-full text-xs font-medium ${
                 subscription.status === "active"
-                  ? "bg-green-500/10 text-green-600 dark:text-green-400"
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                   : subscription.status === "trialing"
-                    ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                    : "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                    ? "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                    : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
               }`}
             >
               {subscription.status.charAt(0).toUpperCase() +
@@ -211,7 +217,7 @@ export default function BillingPage() {
           )}
         </div>
 
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
+        <div className="mb-6 grid gap-4 md:grid-cols-3">
           <div className="flex items-start gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
               <CreditCard className="h-5 w-5 text-primary" />
@@ -258,7 +264,7 @@ export default function BillingPage() {
         </div>
 
         {subscription?.cancelAtPeriodEnd && (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-4 py-3 rounded-lg mb-6">
+          <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-amber-700 dark:text-amber-300">
             Your subscription will be cancelled on{" "}
             {subscription.currentPeriodEnd
               ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
@@ -269,18 +275,18 @@ export default function BillingPage() {
 
         <div className="flex flex-wrap gap-3">
           {isFreeTier ? (
-            <button
+            <Button
               onClick={() => router.push("/pricing")}
-              className="bg-primary text-primary-foreground px-6 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors"
+              className="rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
             >
               Upgrade Plan
-            </button>
+            </Button>
           ) : (
             <>
-              <button
+              <Button
                 onClick={handleManageSubscription}
                 disabled={portalLoading}
-                className="bg-primary text-primary-foreground px-6 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 disabled:opacity-50"
               >
                 {portalLoading ? (
                   <>
@@ -293,23 +299,25 @@ export default function BillingPage() {
                     <ExternalLink className="h-4 w-4" />
                   </>
                 )}
-              </button>
+              </Button>
               {subscription?.cancelAtPeriodEnd ? (
-                <button
+                <Button
                   onClick={handleResumeSubscription}
                   disabled={actionLoading === "resume"}
-                  className="border border-border bg-background px-6 py-2 rounded-lg font-medium hover:bg-accent transition-colors disabled:opacity-50"
+                  variant="secondary"
+                  className="rounded-full"
                 >
                   {actionLoading === "resume" ? "Resuming..." : "Resume Plan"}
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   onClick={handleCancelSubscription}
                   disabled={actionLoading === "cancel"}
-                  className="border border-border bg-background px-6 py-2 rounded-lg font-medium hover:bg-accent transition-colors disabled:opacity-50"
+                  variant="secondary"
+                  className="rounded-full"
                 >
                   {actionLoading === "cancel" ? "Cancelling..." : "Cancel Plan"}
-                </button>
+                </Button>
               )}
             </>
           )}
@@ -317,8 +325,8 @@ export default function BillingPage() {
       </div>
 
       {/* Plan Features */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Plan Features</h2>
+      <div className="rounded-xl border border-border bg-card/60 p-6">
+        <h2 className="dec-title mb-4 text-xl font-semibold tracking-tight text-foreground">Plan Features</h2>
         <div className="space-y-3">
           {tier === "free" && (
             <>
@@ -382,8 +390,8 @@ export default function BillingPage() {
       </div>
 
       {/* Billing History - Future Enhancement */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-2">Billing History</h2>
+      <div className="rounded-xl border border-border bg-card/60 p-6">
+        <h2 className="dec-title mb-2 text-xl font-semibold tracking-tight text-foreground">Billing History</h2>
         <p className="text-muted-foreground text-sm mb-4">
           View and download your past invoices
         </p>

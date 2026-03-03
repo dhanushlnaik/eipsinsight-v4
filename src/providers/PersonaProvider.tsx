@@ -49,6 +49,7 @@ export function PersonaProvider({ children }: PersonaProviderProps) {
 
   // Fallback to a sensible default persona when none is set yet
   const effectivePersona: Persona = (persona ?? "developer") as Persona;
+  const transitionTimeoutRef = React.useRef<number | null>(null);
 
   const value = React.useMemo<PersonaContextValue>(
     () => ({
@@ -77,7 +78,24 @@ export function PersonaProvider({ children }: PersonaProviderProps) {
   );
 
   React.useEffect(() => {
-    document.documentElement.setAttribute("data-persona", effectivePersona);
+    const root = document.documentElement;
+    root.classList.add("persona-theme-transition");
+    root.setAttribute("data-persona", effectivePersona);
+
+    if (transitionTimeoutRef.current) {
+      window.clearTimeout(transitionTimeoutRef.current);
+    }
+    transitionTimeoutRef.current = window.setTimeout(() => {
+      root.classList.remove("persona-theme-transition");
+      transitionTimeoutRef.current = null;
+    }, 480);
+
+    return () => {
+      if (transitionTimeoutRef.current) {
+        window.clearTimeout(transitionTimeoutRef.current);
+      }
+      root.classList.remove("persona-theme-transition");
+    };
   }, [effectivePersona]);
 
   return (
