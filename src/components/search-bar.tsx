@@ -162,10 +162,12 @@ export function SearchBar() {
     } else if (result.kind === 'author') {
       router.push(`/people/${encodeURIComponent(result.name)}`);
     } else if (result.kind === 'pr') {
-      // Open GitHub PR directly using the full repository name from search results,
-      // e.g. "ethereum/EIPs" -> https://github.com/ethereum/EIPs/pull/11171
-      const githubUrl = `https://github.com/${result.repo}/pull/${result.prNumber}`;
-      window.open(githubUrl, "_blank", "noopener,noreferrer");
+      // Navigate to internal PR detail page
+      // Convert full repo name (ethereum/EIPs) to short name (eips)
+      let shortRepo = 'eips'; // default
+      if (result.repo.toLowerCase().includes('erc')) shortRepo = 'ercs';
+      if (result.repo.toLowerCase().includes('rip')) shortRepo = 'rips';
+      router.push(`/pr/${shortRepo}/${result.prNumber}`);
     }
     setShowDropdown(false);
     setQuery('');

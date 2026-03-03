@@ -21,7 +21,15 @@ type FeedFilter = 'all' | 'comments' | 'labels' | 'editors' | 'mentions';
 type TimelineMode = 'discussion' | 'events';
 
 function normalizeRepo(input: string): 'eips' | 'ercs' | 'rips' | null {
-  const x = (input || '').toLowerCase();
+  // Decode URI component in case it's encoded (e.g., "ethereum%2FEIPs")
+  let x = decodeURIComponent(input || '').toLowerCase();
+  
+  // Handle full repo names (e.g., "ethereum/eips", "ethereum/ercs", "ethereum/rips")
+  if (x.includes('/')) {
+    const parts = x.split('/');
+    x = parts[parts.length - 1]; // Get the last part (e.g., "eips" from "ethereum/eips")
+  }
+  
   if (x === 'eips' || x === 'eip') return 'eips';
   if (x === 'ercs' || x === 'erc') return 'ercs';
   if (x === 'rips' || x === 'rip') return 'rips';

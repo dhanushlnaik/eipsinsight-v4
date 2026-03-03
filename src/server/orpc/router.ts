@@ -15,6 +15,10 @@ import { insightsProcedures } from './procedures/insights'
 import { toolsProcedures } from './procedures/tools'
 import { blogProcedures } from './procedures/blog'
 import { videoProcedures } from './procedures/video'
+import { githubProcedures } from './procedures/github'
+import { feedbackProcedures } from './procedures/feedback'
+import { pageCommentProcedures } from './procedures/pageComment'
+import { commentVoteProcedures } from './procedures/commentVote'
 
 export const router = {
   auth: authProcedures,
@@ -34,4 +38,8 @@ export const router = {
   tools: toolsProcedures,
   blog: blogProcedures,
   video: videoProcedures,
+  github: githubProcedures,
+  feedback: feedbackProcedures,
+  pageComment: pageCommentProcedures,
+  commentVote: commentVoteProcedures,
 }

@@ -92,18 +92,27 @@ function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {
 
 function githubLinkForActivity(activity: ActivityDetail) {
   const repo = activity.repo || "ethereum/EIPs";
-  const basePr = `https://github.com/${repo}/pull/${activity.prNumber}`;
+  
+  // Convert full repo name to short name (e.g., "ethereum/EIPs" → "eips")
+  let shortRepo = 'eips';
+  if (repo.toLowerCase().includes('erc')) shortRepo = 'ercs';
+  if (repo.toLowerCase().includes('rip')) shortRepo = 'rips';
+  
+  const basePr = `/pr/${shortRepo}/${activity.prNumber}`;
 
   if (activity.commitSha) {
+    // For commits, we still link to GitHub since we don't have internal commit detail pages
     return `https://github.com/${repo}/commit/${activity.commitSha}`;
   }
 
   const eventType = (activity.eventType || "").toUpperCase();
   if (activity.githubId && ["APPROVED", "CHANGES_REQUESTED", "REVIEWED"].includes(eventType)) {
+    // For review comments, link to internal PR page with hash anchor
     return `${basePr}#pullrequestreview-${activity.githubId}`;
   }
 
   if (activity.githubId && eventType === "COMMENTED") {
+    // For PR comments, link to internal PR page with hash anchor
     return `${basePr}#issuecomment-${activity.githubId}`;
   }
 

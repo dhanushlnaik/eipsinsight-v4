@@ -28,6 +28,7 @@ const processUpgradeData = () => {
     eips: string[];
     isMeta: boolean;
     layer?: 'execution' | 'consensus';
+    type?: 'execution' | 'consensus' | 'beacon_genesis';
     blockNumber?: number;
     forkEpoch?: number;
   }> = [];
@@ -45,6 +46,7 @@ const processUpgradeData = () => {
         eips: processedEips,
         isMeta: false,
         layer: item.layer,
+        type: item.type,
         blockNumber: item.blockNumber,
         forkEpoch: item.forkEpoch,
       });
@@ -57,6 +59,7 @@ const processUpgradeData = () => {
         eips: [metaEIP.replace('EIP-', '')],
         isMeta: true,
         layer: item.layer,
+        type: item.type,
         blockNumber: item.blockNumber,
         forkEpoch: item.forkEpoch,
       });
@@ -334,7 +337,7 @@ export function NetworkUpgradesChart() {
                       Network upgrades are categorized by the layer of the Ethereum protocol they modify:
                     </p>
                   </div>
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid md:grid-cols-3 gap-3">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <span className="px-2 py-1 rounded text-xs font-semibold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-400/30">
@@ -353,6 +356,16 @@ export function NetworkUpgradesChart() {
                       </div>
                       <p className="text-xs text-muted-foreground leading-relaxed">
                         Beacon Chain upgrades that affect proof-of-stake consensus, validators, attestations, and the beacon chain protocol.
+                      </p>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="px-2 py-1 rounded text-xs font-semibold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-400/30">
+                          🌟 Beacon Genesis
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        The launch of the Beacon Chain (Phase 0), marking the beginning of Ethereum's proof-of-stake consensus layer.
                       </p>
                     </div>
                   </div>
@@ -452,7 +465,7 @@ export function NetworkUpgradesChart() {
             />
 
             {/* EIP bars */}
-            {upgradeRows.map(({ date, upgrade, eips, isMeta, layer }, i) => {
+            {upgradeRows.map(({ date, upgrade, eips, isMeta, layer, type }, i) => {
               const x = xScale(date);
               if (x == null) return null;
 
@@ -485,6 +498,13 @@ export function NetworkUpgradesChart() {
                   : isMeta
                     ? '#8B5CF6'
                     : professionalColorMap[upgrade] || '#6B7280';
+
+                // Type badge colors
+                const typeBadgeColor = 
+                  type === 'execution' ? '#06B6D4' :  // cyan
+                  type === 'consensus' ? '#10B981' :  // emerald/green
+                  type === 'beacon_genesis' ? '#F59E0B' :  // amber/yellow
+                  '#9CA3AF';  // gray fallback
 
                 return (
                   <Group key={`${date}-${upgrade}-${eip}-${j}-${isMeta}`}>
@@ -538,21 +558,19 @@ export function NetworkUpgradesChart() {
                       }}
                     />
 
-                    {/* Layer badge */}
-                    {!isMeta && layer && eip !== 'NO-EIP' && eip !== 'CONSENSUS' && (
-                      <text
-                        x={x + 3}
-                        y={y + 6}
-                        fontSize={5}
-                        fill="#FFFFFF"
-                        fontWeight="600"
+                    {/* Type indicator circle */}
+                    {!isMeta && type && eip !== 'NO-EIP' && eip !== 'CONSENSUS' && (
+                      <circle
+                        cx={x + 4}
+                        cy={y + 4}
+                        r={2}
+                        fill={typeBadgeColor}
+                        stroke="#FFFFFF"
+                        strokeWidth={0.5}
                         style={{
                           pointerEvents: 'none',
-                          opacity: 0.7,
                         }}
-                      >
-                        {layer === 'execution' ? 'E' : 'C'}
-                      </text>
+                      />
                     )}
 
                     {/* Removed indicator */}
@@ -676,12 +694,18 @@ export function NetworkUpgradesChart() {
                     <span
                       className={cn(
                         'px-2 py-0.5 rounded text-[10px] font-semibold',
-                        upgradeData.layer === 'consensus'
-                          ? 'bg-violet-500/20 text-violet-300 border border-violet-400/30'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                        upgradeData.type === 'beacon_genesis'
+                          ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-400/30'
+                          : upgradeData.type === 'consensus'
+                            ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-400/30'
+                            : 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-400/30'
                       )}
                     >
-                      {upgradeData.layer === 'consensus' ? '⛓️ Consensus' : '⚙️ Execution'}
+                      {upgradeData.type === 'beacon_genesis' 
+                        ? '🌟 Beacon Genesis' 
+                        : upgradeData.layer === 'consensus' 
+                          ? '⛓️ Consensus' 
+                          : '⚙️ Execution'}
                     </span>
                   )}
                 </div>

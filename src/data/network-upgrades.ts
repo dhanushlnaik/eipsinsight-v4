@@ -3,6 +3,7 @@ export interface UpgradeData {
     upgrade: string;
     eips: string[];
     layer?: 'execution' | 'consensus';
+    type?: 'execution' | 'consensus' | 'beacon_genesis';
     description?: string;
     blockNumber?: number;
     forkEpoch?: number;
@@ -212,32 +213,32 @@ export interface UpgradeData {
   };
   
   export const rawData: UpgradeData[] = [
-    { date: "2025-12-03", upgrade: "Osaka", layer: "execution", blockNumber: 23935694, eips: ["EIP-7594", "EIP-7823", "EIP-7825", "EIP-7883", "EIP-7917", "EIP-7918", "EIP-7934", "EIP-7939", "EIP-7951"] },
-    { date: "2025-12-03", upgrade: "Fulu", layer: "consensus", forkEpoch: 411392, eips: ["CONSENSUS"] },
-    { date: "2025-05-07", upgrade: "Prague", layer: "execution", blockNumber: 22431084, eips: ["EIP-2537", "EIP-2935", "EIP-6110", "EIP-7002", "EIP-7251", "EIP-7549", "EIP-7623", "EIP-7685", "EIP-7691", "EIP-7702"] },
-    { date: "2025-05-07", upgrade: "Electra", layer: "consensus", forkEpoch: 364032, eips: ["CONSENSUS"] },
-    { date: "2024-03-13", upgrade: "Cancun", layer: "execution", blockNumber: 19426587, eips: ["EIP-1153", "EIP-4788", "EIP-4844", "EIP-5656", "EIP-6780", "EIP-7516"] },
-    { date: "2024-03-13", upgrade: "Deneb", layer: "consensus", forkEpoch: 269568, eips: ["CONSENSUS","EIP-7044", "EIP-7045", "EIP-7514"] },
-    { date: "2023-04-12", upgrade: "Shanghai", layer: "execution", blockNumber: 17034870, eips: ["EIP-3651", "EIP-3855", "EIP-3860", "EIP-4895"] },
-    { date: "2023-04-12", upgrade: "Capella", layer: "consensus", forkEpoch: 194048, eips: ["CONSENSUS"] },
-    { date: "2022-09-15", upgrade: "Paris", layer: "execution", blockNumber: 15537394, eips: ["EIP-3675", "EIP-4399"] },
-    { date: "2022-09-06", upgrade: "Bellatrix", layer: "consensus", forkEpoch: 144896, eips: ["CONSENSUS"] },
-    { date: "2022-06-30", upgrade: "Gray Glacier", layer: "execution", blockNumber: 15050000, eips: ["EIP-5133"] },
-    { date: "2021-12-09", upgrade: "Arrow Glacier", layer: "execution", blockNumber: 13773000, eips: ["EIP-4345"] },
-    { date: "2021-10-27", upgrade: "Altair", layer: "consensus", forkEpoch: 74240, eips: ["CONSENSUS"] },
-    { date: "2021-08-05", upgrade: "London", layer: "execution", blockNumber: 12965000, eips: ["EIP-1559", "EIP-3198", "EIP-3529", "EIP-3541", "EIP-3554"] },
-    { date: "2021-04-15", upgrade: "Berlin", layer: "execution", blockNumber: 12244000, eips: ["EIP-2565", "EIP-2929", "EIP-2718", "EIP-2930"] },
-    { date: "2020-01-02", upgrade: "Muir Glacier", layer: "execution", blockNumber: 9200000, eips: ["EIP-2384"] },
-    { date: "2019-12-07", upgrade: "Istanbul", layer: "execution", blockNumber: 9069000, eips: ["EIP-152", "EIP-1108", "EIP-1344", "EIP-1884", "EIP-2028", "EIP-2200"] },
-    { date: "2019-02-28", upgrade: "Petersburg", layer: "execution", blockNumber: 7280000, eips: ["EIP-1283-removed"] },
-    { date: "2019-02-28", upgrade: "Constantinople", layer: "execution", blockNumber: 7280000, eips: ["EIP-145", "EIP-1014", "EIP-1052", "EIP-1234", "EIP-1283"] },
-    { date: "2017-10-16", upgrade: "Byzantium", layer: "execution", blockNumber: 4370000, eips: ["EIP-100", "EIP-140", "EIP-196", "EIP-197", "EIP-198", "EIP-211", "EIP-214", "EIP-649", "EIP-658"] },
-    { date: "2016-11-22", upgrade: "Spurious Dragon", layer: "execution", blockNumber: 2675000, eips: ["EIP-155", "EIP-160", "EIP-161", "EIP-170"] },
-    { date: "2016-10-18", upgrade: "Tangerine Whistle", layer: "execution", blockNumber: 2463000, eips: ["EIP-150"] },
-    { date: "2016-07-20", upgrade: "DAO Fork", layer: "execution", blockNumber: 1920000, eips: ["NO-EIP"] },
-    { date: "2016-03-14", upgrade: "Homestead", layer: "execution", blockNumber: 1150000, eips: ["EIP-2", "EIP-7", "EIP-8"] },
-    { date: "2015-09-07", upgrade: "Frontier Thawing", layer: "execution", blockNumber: 200000, eips: ["NO-EIP"] },
-    { date: "2015-07-30", upgrade: "Frontier", layer: "execution", blockNumber: 0, eips: ["NO-EIP"], sr_number: 0 },
-    { date: "2020-12-01", upgrade: "Phase 0 (Genesis)", layer: "consensus", forkEpoch: 0, eips: ["CONSENSUS"], sr_number: 0 },
+    { date: "2025-12-03", upgrade: "Osaka", layer: "execution", type: "execution", blockNumber: 23935694, eips: ["EIP-7594", "EIP-7823", "EIP-7825", "EIP-7883", "EIP-7917", "EIP-7918", "EIP-7934", "EIP-7939", "EIP-7951"] },
+    { date: "2025-12-03", upgrade: "Fulu", layer: "consensus", type: "consensus", forkEpoch: 411392, eips: ["CONSENSUS"] },
+    { date: "2025-05-07", upgrade: "Prague", layer: "execution", type: "execution", blockNumber: 22431084, eips: ["EIP-2537", "EIP-2935", "EIP-6110", "EIP-7002", "EIP-7251", "EIP-7549", "EIP-7623", "EIP-7685", "EIP-7691", "EIP-7702"] },
+    { date: "2025-05-07", upgrade: "Electra", layer: "consensus", type: "consensus", forkEpoch: 364032, eips: ["CONSENSUS"] },
+    { date: "2024-03-13", upgrade: "Cancun", layer: "execution", type: "execution", blockNumber: 19426587, eips: ["EIP-1153", "EIP-4788", "EIP-4844", "EIP-5656", "EIP-6780", "EIP-7516"] },
+    { date: "2024-03-13", upgrade: "Deneb", layer: "consensus", type: "consensus", forkEpoch: 269568, eips: ["CONSENSUS","EIP-7044", "EIP-7045", "EIP-7514"] },
+    { date: "2023-04-12", upgrade: "Shanghai", layer: "execution", type: "execution", blockNumber: 17034870, eips: ["EIP-3651", "EIP-3855", "EIP-3860", "EIP-4895"] },
+    { date: "2023-04-12", upgrade: "Capella", layer: "consensus", type: "consensus", forkEpoch: 194048, eips: ["CONSENSUS"] },
+    { date: "2022-09-15", upgrade: "Paris", layer: "execution", type: "execution", blockNumber: 15537394, eips: ["EIP-3675", "EIP-4399"] },
+    { date: "2022-09-06", upgrade: "Bellatrix", layer: "consensus", type: "consensus", forkEpoch: 144896, eips: ["CONSENSUS"] },
+    { date: "2022-06-30", upgrade: "Gray Glacier", layer: "execution", type: "execution", blockNumber: 15050000, eips: ["EIP-5133"] },
+    { date: "2021-12-09", upgrade: "Arrow Glacier", layer: "execution", type: "execution", blockNumber: 13773000, eips: ["EIP-4345"] },
+    { date: "2021-10-27", upgrade: "Altair", layer: "consensus", type: "consensus", forkEpoch: 74240, eips: ["CONSENSUS"] },
+    { date: "2021-08-05", upgrade: "London", layer: "execution", type: "execution", blockNumber: 12965000, eips: ["EIP-1559", "EIP-3198", "EIP-3529", "EIP-3541", "EIP-3554"] },
+    { date: "2021-04-15", upgrade: "Berlin", layer: "execution", type: "execution", blockNumber: 12244000, eips: ["EIP-2565", "EIP-2929", "EIP-2718", "EIP-2930"] },
+    { date: "2020-01-02", upgrade: "Muir Glacier", layer: "execution", type: "execution", blockNumber: 9200000, eips: ["EIP-2384"] },
+    { date: "2019-12-07", upgrade: "Istanbul", layer: "execution", type: "execution", blockNumber: 9069000, eips: ["EIP-152", "EIP-1108", "EIP-1344", "EIP-1884", "EIP-2028", "EIP-2200"] },
+    { date: "2019-02-28", upgrade: "Petersburg", layer: "execution", type: "execution", blockNumber: 7280000, eips: ["EIP-1283-removed"] },
+    { date: "2019-02-28", upgrade: "Constantinople", layer: "execution", type: "execution", blockNumber: 7280000, eips: ["EIP-145", "EIP-1014", "EIP-1052", "EIP-1234", "EIP-1283"] },
+    { date: "2017-10-16", upgrade: "Byzantium", layer: "execution", type: "execution", blockNumber: 4370000, eips: ["EIP-100", "EIP-140", "EIP-196", "EIP-197", "EIP-198", "EIP-211", "EIP-214", "EIP-649", "EIP-658"] },
+    { date: "2016-11-22", upgrade: "Spurious Dragon", layer: "execution", type: "execution", blockNumber: 2675000, eips: ["EIP-155", "EIP-160", "EIP-161", "EIP-170"] },
+    { date: "2016-10-18", upgrade: "Tangerine Whistle", layer: "execution", type: "execution", blockNumber: 2463000, eips: ["EIP-150"] },
+    { date: "2016-07-20", upgrade: "DAO Fork", layer: "execution", type: "execution", blockNumber: 1920000, eips: ["NO-EIP"] },
+    { date: "2016-03-14", upgrade: "Homestead", layer: "execution", type: "execution", blockNumber: 1150000, eips: ["EIP-2", "EIP-7", "EIP-8"] },
+    { date: "2015-09-07", upgrade: "Frontier Thawing", layer: "execution", type: "execution", blockNumber: 200000, eips: ["NO-EIP"] },
+    { date: "2015-07-30", upgrade: "Frontier", layer: "execution", type: "execution", blockNumber: 0, eips: ["NO-EIP"], sr_number: 0 },
+    { date: "2020-12-01", upgrade: "Phase 0 (Genesis)", layer: "consensus", type: "beacon_genesis", forkEpoch: 0, eips: ["CONSENSUS"], sr_number: 0 },
   ];
   
