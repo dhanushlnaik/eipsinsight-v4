@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { PageHeader, SectionSeparator } from '@/components/header';
+import { PageHeader } from '@/components/header';
 import { ZoomableTimeline } from '@/app/upgrade/_components/zoomable-timeline';
 import { UpgradeStatsCards } from '@/app/upgrade/_components/upgrade-stats-cards';
 import { CollapsibleHeader } from '@/app/upgrade/_components/collapsible-header';
@@ -13,8 +13,7 @@ import { UpgradeTimelineChart } from '@/app/upgrade/_components/upgrade-timeline
 import { client } from '@/lib/orpc';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import Link from 'next/link';
-import { ArrowRight, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface Upgrade {
   id: number;
@@ -69,10 +68,10 @@ export default function UpgradePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        <div className="container mx-auto px-4 py-16">
+      <div className="min-h-screen bg-background">
+        <div className="mx-auto w-full px-4 py-16 sm:px-6 lg:px-8 xl:px-12">
           <div className="flex items-center justify-center min-h-[400px]">
-            <Loader2 className="h-8 w-8 animate-spin text-cyan-600 dark:text-cyan-400" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         </div>
       </div>
@@ -81,10 +80,10 @@ export default function UpgradePage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        <div className="container mx-auto px-4 py-16">
+      <div className="min-h-screen bg-background">
+        <div className="mx-auto w-full px-4 py-16 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center">
-            <p className="text-red-600 dark:text-red-400">{error}</p>
+            <p className="text-destructive">{error}</p>
           </div>
         </div>
       </div>
@@ -103,8 +102,8 @@ export default function UpgradePage() {
       <CollapsibleHeader />
 
       {/* Stats & Flowchart Section */}
-      <section className="relative w-full bg-slate-100/70 dark:bg-slate-950/30">
-        <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pt-6 pb-6">
+      <section className="relative w-full bg-background">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-12 pt-6 pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Left: Stats Cards */}
             <div className="flex h-full">
@@ -119,9 +118,9 @@ export default function UpgradePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
               className={cn(
-                "relative rounded-xl border border-cyan-400/20",
-                "bg-white/85 dark:bg-slate-950/50 backdrop-blur-sm overflow-hidden",
-                "hover:border-cyan-400/30 hover:shadow-lg hover:shadow-cyan-500/10",
+                "relative rounded-xl border border-border",
+                "bg-card/60 backdrop-blur-sm overflow-hidden",
+                "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
                 "transition-all duration-200",
                 "h-full min-h-[350px] sm:min-h-[380px] lg:min-h-[420px]"
               )}
@@ -140,17 +139,20 @@ export default function UpgradePage() {
         </div>
       </section>
 
-      <SectionSeparator />
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
+        <div className="h-px w-full bg-border/60" />
+      </div>
 
       {/* Timeline Section */}
-      <section className="relative w-full bg-slate-100/70 dark:bg-slate-950/30">
+      <section className="relative w-full bg-background">
         <PageHeader
           title="Ethereum Upgrade Timeline"
           description="Visual timeline of all network upgrades from Frontier to present"
           sectionId="timeline"
-          className="bg-slate-100/70 dark:bg-slate-950/30"
+          titleAs="h2"
+          className="bg-background"
         />
-        <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-12 pb-6">
           <ZoomableTimeline
             imagePath="/upgrade/ethupgradetimeline.png"
             alt="Ethereum Network Upgrade Timeline"
@@ -158,32 +160,38 @@ export default function UpgradePage() {
         </div>
       </section>
 
-      <SectionSeparator />
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
+        <div className="h-px w-full bg-border/60" />
+      </div>
 
       {/* Network Upgrades Chart Section */}
-      <section className="relative w-full bg-slate-100/70 dark:bg-slate-950/30">
+      <section className="relative w-full bg-background">
         <PageHeader
           title="Network Upgrade Timeline"
           description="Interactive timeline showing all Ethereum network upgrades and their EIP implementations"
           sectionId="network-upgrades-chart"
-          className="bg-slate-100/70 dark:bg-slate-950/30"
+          titleAs="h2"
+          className="bg-background"
         />
-        <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-12 pb-6">
           <NetworkUpgradesChart />
         </div>
       </section>
 
-      <SectionSeparator />
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
+        <div className="h-px w-full bg-border/60" />
+      </div>
 
       {/* Upgrades List / Roadmap Section */}
-      <section className="relative w-full bg-slate-100/70 dark:bg-slate-950/30">
+      <section className="relative w-full bg-background">
         <PageHeader
           title="Network Upgrade Roadmap"
           description="High‑level view of recent and upcoming coordinated Ethereum network upgrades."
           sectionId="upgrades"
-          className="bg-slate-100/70 dark:bg-slate-950/30"
+          titleAs="h2"
+          className="bg-background"
         />
-        <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-12 pb-6">
           <div className="mb-6">
             <HorizontalUpgradeTimeline />
           </div>

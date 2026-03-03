@@ -67,52 +67,46 @@ function VerifyRequestContent() {
 
   return (
     <div className="w-full max-w-md">
-      {/* Main Card */}
-      <div className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-black/40 p-8 backdrop-blur-2xl">
-        {/* Gradient overlay */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-cyan-500/5 to-blue-500/5" />
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card/80 p-8 shadow-lg shadow-primary/10 backdrop-blur-2xl">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-primary/10 to-transparent" />
 
         <div className="relative z-10">
-          {/* Back button */}
           <Link
             href="/login"
-            className="mb-6 inline-flex items-center gap-2 text-sm text-cyan-300 transition-colors hover:text-cyan-200"
+            className="mb-6 inline-flex items-center gap-2 text-sm text-primary transition-colors hover:text-primary/80"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to login
           </Link>
 
-          {/* Header */}
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/10">
-              <Mail className="h-8 w-8 text-cyan-300" />
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
+              <Mail className="h-8 w-8 text-primary" />
             </div>
-            <h1 className="dec-title mb-2 text-3xl font-bold text-white">
+            <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
               Check Your Email
             </h1>
-            <p className="text-sm text-cyan-200/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               We sent a verification code to
             </p>
-            <p className="mt-1 font-semibold text-white">{email}</p>
+            <p className="mt-1 font-semibold text-foreground">{email}</p>
           </div>
 
-          {/* Success state */}
           {success ? (
             <div className="space-y-4 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10">
-                <CheckCircle2 className="h-8 w-8 text-emerald-300" />
+                <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-300" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-white">Verified!</p>
-                <p className="text-sm text-cyan-200/60">Redirecting you now...</p>
+                <p className="text-lg font-semibold text-foreground">Verified!</p>
+                <p className="text-sm text-muted-foreground">Redirecting you now...</p>
               </div>
             </div>
           ) : (
             <>
-              {/* OTP Form */}
               <form onSubmit={handleVerify} className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-cyan-200/70">
+                  <label className="mb-2 block text-sm font-medium text-muted-foreground">
                     Verification Code
                   </label>
                   <Input
@@ -122,15 +116,15 @@ function VerifyRequestContent() {
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     required
                     maxLength={6}
-                    className="border-cyan-300/20 bg-black/20 py-6 text-center text-2xl tracking-widest text-white placeholder:text-slate-400 focus:border-cyan-400/40 focus:ring-cyan-400/20"
+                    className="h-14 border-border bg-muted/40 text-center text-2xl tracking-widest text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
-                  <p className="mt-2 text-xs text-cyan-200/60">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Enter the 6-digit code sent to your email
                   </p>
                 </div>
 
                 {error && (
-                  <div className="rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
                     {error}
                   </div>
                 )}
@@ -139,29 +133,27 @@ function VerifyRequestContent() {
                   type="submit"
                   disabled={loading || otp.length !== 6}
                   className={cn(
-                    "group relative w-full overflow-hidden border border-transparent bg-gradient-to-r from-emerald-500/20 to-cyan-600/20 py-6 transition-all duration-300",
-                    "hover:from-emerald-500/30 hover:to-cyan-600/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:border-emerald-400/30",
+                    "group relative h-12 w-full overflow-hidden border border-primary/30 bg-primary/10 text-primary transition-all duration-300",
+                    "hover:bg-primary/15 hover:shadow-lg hover:shadow-primary/10",
                     "disabled:opacity-50 disabled:cursor-not-allowed"
                   )}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-cyan-600/10 opacity-0 transition-opacity group-hover:opacity-100" />
                   <div className="relative flex items-center justify-center gap-3">
-                    {loading && <Loader2 className="h-5 w-5 animate-spin text-white" />}
-                    <span className="font-semibold text-white">
+                    {loading && <Loader2 className="h-5 w-5 animate-spin" />}
+                    <span className="font-semibold">
                       {loading ? "Verifying..." : "Verify & Sign In"}
                     </span>
                   </div>
                 </Button>
               </form>
 
-              {/* Resend */}
               <div className="mt-6 text-center">
-                <p className="mb-2 text-sm text-slate-400">Didn&apos;t receive the code?</p>
+                <p className="mb-2 text-sm text-muted-foreground">Didn&apos;t receive the code?</p>
                 <Button
                   onClick={handleResend}
                   disabled={resending}
                   variant="ghost"
-                  className="text-cyan-300 hover:bg-cyan-500/10 hover:text-cyan-200"
+                  className="text-primary hover:bg-primary/10 hover:text-primary/80"
                 >
                   {resending ? (
                     <>
@@ -174,9 +166,8 @@ function VerifyRequestContent() {
                 </Button>
               </div>
 
-              {/* Info box */}
-              <div className="mt-6 rounded-lg border border-cyan-400/10 bg-cyan-500/5 p-4 text-xs text-cyan-200/70">
-                <p className="mb-1 font-semibold text-cyan-300">Code expires in 5 minutes</p>
+              <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-xs text-muted-foreground">
+                <p className="mb-1 font-semibold text-foreground">Code expires in 5 minutes</p>
                 <p>You have 3 attempts to enter the correct code. After that, you&apos;ll need to request a new one.</p>
               </div>
             </>
@@ -191,13 +182,13 @@ export default function VerifyRequestPage() {
   return (
     <Suspense fallback={
       <div className="w-full max-w-md">
-        <div className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-black/40 p-8 backdrop-blur-2xl">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card/80 p-8 backdrop-blur-2xl">
           <div className="animate-pulse space-y-6">
-            <div className="mx-auto h-16 w-16 rounded-full bg-slate-700/40" />
-            <div className="h-8 w-48 mx-auto rounded bg-slate-700/40" />
-            <div className="h-4 w-64 mx-auto rounded bg-slate-700/40" />
-            <div className="h-16 rounded-lg bg-slate-700/40" />
-            <div className="h-12 rounded-lg bg-slate-700/40" />
+            <div className="mx-auto h-16 w-16 rounded-full bg-muted" />
+            <div className="h-8 w-48 mx-auto rounded bg-muted" />
+            <div className="h-4 w-64 mx-auto rounded bg-muted" />
+            <div className="h-16 rounded-lg bg-muted" />
+            <div className="h-12 rounded-lg bg-muted" />
           </div>
         </div>
       </div>

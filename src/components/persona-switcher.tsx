@@ -58,7 +58,7 @@ export function PersonaSwitcher({ className, compact = false }: PersonaSwitcherP
 
   const handleSelectPersona = (newPersona: Persona) => {
     if (newPersona !== persona) {
-      setPersona(newPersona);
+      setPersona(newPersona, { redirect: false });
       // Sync to server if user is authenticated
       if (isAuthenticated) {
         syncPersonaToServer(newPersona);

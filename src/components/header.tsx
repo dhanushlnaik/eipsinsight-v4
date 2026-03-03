@@ -52,6 +52,7 @@ interface PageHeaderProps {
   className?: string;
   sectionId?: string;
   showCopyLink?: boolean;
+  titleAs?: 'h1' | 'h2';
 }
 
 const iconMap = {
@@ -69,6 +70,7 @@ export function PageHeader({
   className,
   sectionId,
   showCopyLink = true,
+  titleAs = 'h1',
 }: PageHeaderProps) {
   const [copied, setCopied] = useState(false);
   const IconComponent = indicator?.icon ? iconMap[indicator.icon] : null;
@@ -85,6 +87,8 @@ export function PageHeader({
       console.error('Failed to copy:', err);
     }
   };
+
+  const TitleTag = titleAs;
 
   return (
     <section id={sectionId} className={cn('relative w-full', className)}>
@@ -138,14 +142,22 @@ export function PageHeader({
               </motion.div>
             )}
 
-            <motion.h1
+            <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.05 }}
-              className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl"
             >
-              {title}
-            </motion.h1>
+              <TitleTag
+                className={cn(
+                  'dec-title text-balance font-semibold tracking-tight leading-[1.1]',
+                  titleAs === 'h1'
+                    ? 'persona-title text-3xl sm:text-4xl'
+                    : 'text-xl text-foreground sm:text-2xl'
+                )}
+              >
+                {title}
+              </TitleTag>
+            </motion.div>
 
             {description && (
               <motion.p

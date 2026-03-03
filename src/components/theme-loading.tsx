@@ -30,65 +30,80 @@ export function ThemeLoading() {
         <motion.div
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
-          className="fixed inset-0 z-9999 flex items-center justify-center bg-background"
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className="fixed inset-0 z-9999 flex items-center justify-center bg-background/70 backdrop-blur-md"
         >
-          <div className="flex flex-col items-center gap-6 px-4">
-            {/* Logo */}
+          <div className="w-full max-w-md px-4">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="relative"
+              transition={{ duration: 0.45 }}
+              className="rounded-xl border border-border bg-card/70 p-6 shadow-[0_18px_50px_rgb(var(--persona-accent-rgb)/0.18)]"
             >
-              <ThemedLogoGif
-                alt="EIPsInsight"
-                width={80}
-                height={80}
-                unoptimized
-                className="drop-shadow-2xl"
-              />
-            </motion.div>
+              <div className="absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-primary/60 to-transparent" />
+              <div className="flex flex-col items-center gap-6">
+                {/* Logo */}
+                <div className="relative">
+                  <ThemedLogoGif
+                    alt="EIPsInsight"
+                    width={74}
+                    height={74}
+                    unoptimized
+                    className="drop-shadow-[0_0_24px_rgb(var(--persona-accent-rgb)/0.35)]"
+                  />
+                </div>
 
-            {/* Loading Text */}
-            <motion.div
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="flex flex-col items-center gap-2"
-            >
-              <h2 className="dec-title text-2xl font-semibold bg-linear-to-r from-emerald-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">
-                Loading Experience
-              </h2>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Preparing your insights...
-              </p>
-            </motion.div>
-
-            {/* Progress Bar */}
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="w-full max-w-xs"
-            >
-              <div className="relative h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800/50">
+                {/* Loading Text */}
                 <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.3, ease: 'easeOut' }}
-                  className="h-full rounded-full bg-linear-to-r from-emerald-500 via-cyan-500 to-emerald-500"
-                  style={{
-                    boxShadow: '0 0 20px rgba(34, 211, 238, 0.5)',
-                  }}
-                />
-              </div>
+                  initial={{ y: 10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ duration: 0.45, delay: 0.15 }}
+                  className="flex flex-col items-center gap-1.5"
+                >
+                  <h2 className="dec-title persona-title text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+                    Loading Experience
+                  </h2>
+                  <p className="text-sm text-muted-foreground sm:text-base">
+                    Preparing your insights...
+                  </p>
+                </motion.div>
 
-              {/* Progress Percentage */}
-              <div className="mt-2 text-center">
-                <span className="text-xs font-medium text-cyan-400">
-                  {Math.round(progress)}%
-                </span>
+                {/* Progress Bar */}
+                <motion.div
+                  initial={{ scale: 0.95, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.45, delay: 0.25 }}
+                  className="w-full"
+                >
+                  <div className="relative h-2.5 overflow-hidden rounded-full border border-border bg-muted/60">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(progress, 100)}%` }}
+                      transition={{ duration: 0.3, ease: 'easeOut' }}
+                      className="relative h-full rounded-full bg-linear-to-r from-primary/75 via-primary to-primary/80"
+                      style={{
+                        boxShadow: '0 0 18px rgb(var(--persona-accent-rgb) / 0.45)',
+                      }}
+                    >
+                      <motion.div
+                        initial={{ x: '-100%' }}
+                        animate={{ x: '220%' }}
+                        transition={{ repeat: Infinity, duration: 1.1, ease: 'linear' }}
+                        className="absolute inset-y-0 w-1/3 bg-white/35 blur-[1px]"
+                      />
+                    </motion.div>
+                  </div>
+
+                  {/* Progress Percentage */}
+                  <div className="mt-2.5 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Loading
+                    </span>
+                    <span className="text-xs font-semibold text-primary">
+                      {Math.round(Math.min(progress, 100))}%
+                    </span>
+                  </div>
+                </motion.div>
               </div>
             </motion.div>
           </div>

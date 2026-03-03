@@ -1,118 +1,140 @@
 "use client";
 
 import Link from "next/link";
-import { Github, Twitter, Mail, BookOpen } from "lucide-react";
+import { Bug, Heart, Linkedin, MessageSquare, Twitter, Youtube } from "lucide-react";
 import { ThemedLogoGif } from "@/components/themed-logo-gif";
 
+const productLinks = [
+  { name: "All", href: "/standards" },
+  { name: "Status", href: "/standards?view=status" },
+  { name: "March 2026 Insights", href: "/insights/year-month-analysis?month=2026-03" },
+  { name: "About Us", href: "/about" },
+  { name: "Resources", href: "/resources" },
+];
+
+const supportLinks = [
+  { name: "Found a bug?", href: "https://github.com/Avarch-org/eipsinsight-v4/issues/new" },
+  { name: "Donate", href: "/donate" },
+  { name: "Feedback", href: "/feedback" },
+];
+
+const socialLinks = [
+  { name: "Twitter", href: "https://x.com/eipsinsight", icon: Twitter },
+  { name: "YouTube", href: "https://www.youtube.com/@avarch" , icon: Youtube },
+  { name: "LinkedIn", href: "https://www.linkedin.com/company/avarch", icon: Linkedin },
+  { name: "EtherWorld", href: "https://etherworld.co/" , icon: MessageSquare },
+];
+
 export default function Footer() {
-  const footerLinks = {
-    product: [
-      { name: "EIP Explorer", href: "/eips" },
-      { name: "Analytics", href: "/analytics" },
-      { name: "Governance", href: "/governance" },
-    ],
-    legal: [
-      { name: "About Us", href: "/about" },
-      { name: "Privacy", href: "/privacy" },
-      { name: "Terms", href: "/terms" },
-    ],
-  };
-
   return (
-    <footer className="relative border-t border-slate-200 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-950">
-      {/* Subtle top gradient */}
-      <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-slate-300 dark:via-slate-700/50 to-transparent" />
+    <footer className="relative border-t border-border bg-background">
+      <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-primary/50 to-transparent" />
 
-      <div className="relative w-full max-w-full px-4 py-12 sm:px-6 lg:px-8 xl:px-12">
-        <div className="grid gap-10 lg:grid-cols-12 lg:gap-8">
-          {/* Branding */}
-          <div className="lg:col-span-5">
+      <div className="w-full px-4 py-10 sm:px-6 lg:px-8 xl:px-12">
+        <div className="grid gap-8 lg:grid-cols-12">
+          <section className="lg:col-span-4">
             <Link href="/" className="group inline-flex items-center gap-2.5">
               <ThemedLogoGif
-                alt="EIPsInsight"
-                width={36}
-                height={36}
+                alt="EIPs Insight"
+                width={34}
+                height={34}
                 unoptimized
-                className="transition-transform duration-200 group-hover:scale-105"
+                className="transition-transform duration-300 group-hover:scale-105"
               />
-              <span className="dec-title text-lg font-semibold tracking-tight text-slate-800 dark:text-slate-200 sm:text-xl">
-                EIPsInsight
+              <span className="dec-title text-xl font-semibold tracking-tight text-foreground">
+                EIPs Insight
               </span>
             </Link>
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-slate-600 dark:text-slate-500">
-              Clear, visual insights into Ethereum Improvement Proposals.
-            </p>
-            <div className="mt-5 flex items-center gap-2">
-              <a
-                href="https://github.com/ethereum/EIPs"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-200 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-300"
-                aria-label="GitHub"
-              >
-                <Github className="h-4 w-4" />
-              </a>
-              <a
-                href="https://twitter.com/EIPsInsight"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-200 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-300"
-                aria-label="Twitter"
-              >
-                <Twitter className="h-4 w-4" />
-              </a>
-              <a
-                href="mailto:hello@eipsinsight.com"
-                className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-200 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-300"
-                aria-label="Email"
-              >
-                <Mail className="h-4 w-4" />
-              </a>
-            </div>
-          </div>
 
-          {/* Links */}
-          <div className="lg:col-span-7">
-            <div className="grid gap-8 sm:grid-cols-2">
-              {Object.entries(footerLinks).map(([category, links]) => (
-                <div key={category}>
-                  <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    {category}
-                  </h4>
-                  <ul className="space-y-2">
-                    {links.map((link) => (
-                      <li key={link.name}>
-                        <Link
-                          href={link.href}
-                          className="text-sm text-slate-600 dark:text-slate-500 transition-colors hover:text-slate-800 dark:hover:text-slate-300"
-                        >
-                          {link.name}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+            <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              Build With <Heart className="mx-1 inline h-3.5 w-3.5 text-primary" /> by Avarch
+            </p>
+
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Join us:
+            </p>
+            <div className="mt-2 inline-flex items-center rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+              v4.0.0
             </div>
-          </div>
+          </section>
+
+          <section className="lg:col-span-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Links
+            </h3>
+            <ul className="mt-3 space-y-2.5">
+              {productLinks.map((item) => (
+                <li key={item.name}>
+                  <Link
+                    href={item.href}
+                    className="text-sm text-foreground/90 transition-colors hover:text-primary"
+                  >
+                    {item.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="lg:col-span-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Support
+            </h3>
+            <ul className="mt-3 space-y-2.5">
+              {supportLinks.map((item) => (
+                <li key={item.name}>
+                  {item.href.startsWith("http") ? (
+                    <a
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm text-foreground/90 transition-colors hover:text-primary"
+                    >
+                      {item.name.includes("bug") && <Bug className="h-3.5 w-3.5" />}
+                      {item.name}
+                    </a>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      className="text-sm text-foreground/90 transition-colors hover:text-primary"
+                    >
+                      {item.name}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="lg:col-span-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Follow Us
+            </h3>
+            <ul className="mt-3 space-y-2.5">
+              {socialLinks.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.name}>
+                    <a
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-sm text-foreground/90 transition-colors hover:text-primary"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {item.name}
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         </div>
 
-        {/* Bottom bar */}
-        <hr className="mt-10 border-slate-200 dark:border-slate-800/60" />
-        <div className="mt-6 flex flex-col items-center justify-between gap-4 sm:flex-row sm:gap-6">
-          <p className="text-center text-xs text-slate-600 dark:text-slate-600">
-            © 2026 EIPsInsight. Built for the{" "}
-            <span className="text-emerald-600 dark:text-emerald-400/80">Ethereum</span> community.
+        <div className="mt-8 border-t border-border pt-4">
+          <p className="text-xs text-muted-foreground">
+            © 2026 EIPs Insight. Governance and standards intelligence for Ethereum.
           </p>
-          <a
-            href="https://github.com/ethereum/EIPs"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-slate-600 transition-colors hover:text-slate-700 dark:hover:text-slate-500"
-          >
-            <BookOpen className="h-3 w-3 shrink-0" />
-            <span>Data from ethereum/EIPs repository</span>
-          </a>
         </div>
       </div>
     </footer>

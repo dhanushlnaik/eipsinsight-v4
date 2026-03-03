@@ -23,6 +23,7 @@ import {
   Video,
   ArrowUp,
   ArrowDown,
+  Film,
 } from "lucide-react";
 import { client } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -67,6 +68,13 @@ type VideoItem = {
   updatedAt: Date | string;
 };
 
+type AdminTab = "blogs" | "editors" | "videos";
+const ADMIN_TABS: Array<{ id: AdminTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: "blogs", label: "Blogs", icon: FileText },
+  { id: "editors", label: "Editors", icon: Users },
+  { id: "videos", label: "Videos", icon: Film },
+];
+
 export default function AdminPage() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [blogsLoading, setBlogsLoading] = useState(true);
@@ -92,6 +100,7 @@ export default function AdminPage() {
   const [videosLoading, setVideosLoading] = useState(true);
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [activeTab, setActiveTab] = useState<AdminTab>("blogs");
 
   const fetchPosts = () => {
     setBlogsLoading(true);
@@ -134,55 +143,19 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    // Enable smooth scrolling for this page
-    const originalScrollBehavior = document.documentElement.style.scrollBehavior;
-    document.documentElement.style.scrollBehavior = 'smooth';
-    return () => {
-      document.documentElement.style.scrollBehavior = originalScrollBehavior;
-    };
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    if (tab === "blogs" || tab === "editors" || tab === "videos") {
+      setActiveTab(tab);
+    }
   }, []);
 
-  useEffect(() => {
-    // Scroll spy - update hash based on which section is at the top
-    const sections = ['blogs', 'editors', 'videos'];
-    
-    const updateActiveSection = () => {
-      const scrollPosition = window.scrollY + window.innerHeight * 0.3; // Check at 30% from top
-      
-      // Find which section we're currently in
-      let currentSection = 'blogs'; // Default to first section
-      
-      for (const sectionId of sections) {
-        const element = document.getElementById(sectionId);
-        if (element) {
-          const rect = element.getBoundingClientRect();
-          const elementTop = window.scrollY + rect.top;
-          
-          // If we've scrolled past this section's top, it becomes active
-          if (scrollPosition >= elementTop) {
-            currentSection = sectionId;
-          }
-        }
-      }
-      
-      // Update hash if it changed
-      const newHash = `#${currentSection}`;
-      if (window.location.hash !== newHash) {
-        window.history.replaceState(null, '', newHash);
-        window.dispatchEvent(new HashChangeEvent('hashchange'));
-      }
-    };
-    
-    // Update on scroll
-    window.addEventListener('scroll', updateActiveSection, { passive: true });
-    
-    // Initial update
-    updateActiveSection();
-    
-    return () => {
-      window.removeEventListener('scroll', updateActiveSection);
-    };
-  }, []);
+  const switchTab = (tab: AdminTab) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", tab);
+    window.history.replaceState(null, "", `/admin?${params.toString()}`);
+  };
 
   const handleDeletePost = async (id: string) => {
     if (!confirm("Delete this blog post?")) return;
@@ -344,44 +317,61 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <section className="border-b border-slate-200 dark:border-slate-800/50 bg-white dark:bg-slate-900/50">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <Shield className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+    <div className="min-h-screen bg-background">
+      <section className="border-b border-border bg-card/60">
+        <div className="mx-auto w-full px-4 py-8 sm:px-6 lg:px-8">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs uppercase tracking-wide text-primary">
+            <Shield className="h-3.5 w-3.5" />
             Admin
           </div>
-          <h1 className="dec-title text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mt-2">
-            Admin Console
+          <h1 className="dec-title persona-title mt-3 text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
+            Advanced Admin Console
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            Manage blogs, editors, and videos from a single workspace.
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            Operate publishing, editor access, and video inventory from one control surface.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href="#blogs"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50"
-            >
-              Blogs
-            </a>
-            <a
-              href="#editors"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50"
-            >
-              Editors
-            </a>
-            <a
-              href="#videos"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50"
-            >
-              Videos
-            </a>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card/70 p-4">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Posts</div>
+              <div className="mt-1 text-2xl font-semibold text-foreground tabular-nums">{posts.length}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card/70 p-4">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Editors</div>
+              <div className="mt-1 text-2xl font-semibold text-foreground tabular-nums">{editors.length}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card/70 p-4">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Videos</div>
+              <div className="mt-1 text-2xl font-semibold text-foreground tabular-nums">{videos.length}</div>
+            </div>
+          </div>
+          <div className="mt-6 inline-flex rounded-xl border border-border bg-card/60 p-1">
+            {ADMIN_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const selected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => switchTab(tab.id)}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    selected
+                      ? "bg-primary/15 text-primary"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-10 space-y-12">
-        <section id="blogs" className="scroll-mt-24 border-t-4 border-emerald-500 pt-8">
+      <div className="mx-auto w-full px-4 py-10 sm:px-6 lg:px-8">
+        {activeTab === "blogs" && (
+        <section className="rounded-xl border border-border bg-card/40 p-6">
           <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700/50">
             <div className="flex gap-3 items-start justify-between">
               <div className="flex gap-3 items-start flex-1">
@@ -495,8 +485,10 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+        )}
 
-        <section id="editors" className="scroll-mt-24 border-t-4 border-cyan-500 pt-8">
+        {activeTab === "editors" && (
+        <section className="rounded-xl border border-border bg-card/40 p-6">
           <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700/50">
             <div className="flex gap-3 items-start">
               <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600">
@@ -515,7 +507,7 @@ export default function AdminPage() {
 
           {isAdmin === false && (
             <div className="mb-6 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-sm">
-              Only admins can manage editors. <Link href="/admin#blogs" className="underline hover:no-underline">Go to Manage Blogs</Link>
+              Only admins can manage editors. <button onClick={() => switchTab("blogs")} className="underline hover:no-underline">Go to Manage Blogs</button>
             </div>
           )}
           {editorError && (
@@ -777,8 +769,10 @@ export default function AdminPage() {
             )}
           </div>
         </section>
+        )}
 
-        <section id="videos" className="scroll-mt-24 border-t-4 border-purple-500 pt-8">
+        {activeTab === "videos" && (
+        <section className="rounded-xl border border-border bg-card/40 p-6">
           <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700/50">
             <div className="flex gap-3 items-start justify-between">
               <div className="flex gap-3 items-start flex-1">
@@ -942,6 +936,7 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+        )}
       </div>
     </div>
   );

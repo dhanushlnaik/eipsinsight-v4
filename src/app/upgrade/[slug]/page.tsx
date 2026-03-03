@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'motion/react';
-import { 
+import {
   Package,
   AlertCircle,
   FileText,
@@ -11,17 +11,14 @@ import {
   Activity,
 } from 'lucide-react';
 import { client } from '@/lib/orpc';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { UpgradeTimelineChart } from '@/app/upgrade/_components/upgrade-timeline-chart';
-import { PageHeader } from '@/components/header';
 import { getUpgradeTimelineData } from '@/data/upgrade-timelines';
 import { UpgradeBlogCarousel } from '@/app/upgrade/_components/upgrade-blog-carousel';
 import { UpgradeEIPsShowcase } from '@/app/upgrade/_components/upgrade-eips-showcase';
 import { getUpgradeBlogs } from '@/data/upgrade-blogs';
-import { Info, ChevronDown } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 
 interface UpgradeData {
@@ -39,25 +36,6 @@ interface CompositionItem {
   status: string | null;
   updated_at: string | null;
 }
-
-
-// Bucket color mapping
-const bucketColors: Record<string, { bg: string; text: string; border: string }> = {
-  'scheduled': { bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-400/30' },
-  'proposed': { bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-400/30' },
-  'considered': { bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-400/30' },
-  'declined': { bg: 'bg-red-500/10', text: 'text-red-300', border: 'border-red-400/30' },
-};
-
-// Status color mapping
-const statusColors: Record<string, { bg: string; text: string }> = {
-  'Draft': { bg: 'bg-cyan-500/20', text: 'text-cyan-300' },
-  'Review': { bg: 'bg-blue-500/20', text: 'text-blue-300' },
-  'Last Call': { bg: 'bg-amber-500/20', text: 'text-amber-300' },
-  'Final': { bg: 'bg-emerald-500/20', text: 'text-emerald-300' },
-  'Stagnant': { bg: 'bg-slate-500/20', text: 'text-slate-300' },
-  'Withdrawn': { bg: 'bg-red-500/20', text: 'text-red-300' },
-};
 
 
 export default function UpgradePage() {
@@ -190,7 +168,7 @@ export default function UpgradePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-cyan-400 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }
@@ -200,8 +178,8 @@ export default function UpgradePage() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">Failed to load upgrade</h2>
-          <p className="text-slate-400">{error || 'Unknown error'}</p>
+          <h2 className="text-xl font-bold text-foreground mb-2">Failed to load upgrade</h2>
+          <p className="text-muted-foreground">{error || 'Unknown error'}</p>
         </div>
       </div>
     );
@@ -210,33 +188,26 @@ export default function UpgradePage() {
 
   return (
     <div className="bg-background relative w-full overflow-hidden min-h-screen">
-      {/* Seamless Background */}
-      <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(52,211,153,0.15),_transparent_50%),_radial-gradient(ellipse_at_bottom_right,_rgba(6,182,212,0.12),_transparent_50%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(34,211,238,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(34,211,238,0.03)_1px,transparent_1px)] bg-[size:4rem_4rem]" />
-        <div className="absolute top-0 left-1/2 h-[800px] w-[800px] -translate-x-1/2 rounded-full bg-gradient-to-br from-cyan-400/10 via-emerald-400/5 to-transparent blur-3xl" />
-      </div>
-
       <div className="relative z-10">
         {/* 1. Upgrade Header */}
-        <div className="relative w-full bg-background/80 backdrop-blur-xl border-b border-cyan-400/10">
-          <div className="mx-auto max-w-5xl px-4 pt-8 pb-4 sm:px-6 sm:pt-10 sm:pb-6">
+        <div className="relative w-full bg-background border-b border-border/60">
+          <div className="mx-auto w-full px-4 pt-8 pb-4 sm:px-6 sm:pt-10 sm:pb-6 lg:px-8 xl:px-12">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 space-y-2">
                 {/* Upgrade name */}
-                <h1 className="dec-title text-balance bg-gradient-to-br from-emerald-300 via-slate-100 to-cyan-200 bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl md:text-5xl">
+                <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl md:text-5xl">
                   {upgrade.name}
                 </h1>
 
                 {/* Subtitle and Meta EIP */}
                 <div className="flex items-center gap-4 flex-wrap">
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-muted-foreground">
                     Network Upgrade
                   </p>
                   {upgrade.meta_eip && (
                     <Link 
                       href={`/eip/${upgrade.meta_eip}`}
-                      className="text-sm text-cyan-300 hover:text-cyan-200 transition-colors inline-flex items-center gap-1"
+                      className="text-sm text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1"
                     >
                       <FileText className="h-3.5 w-3.5" />
                       Meta EIP: EIP-{upgrade.meta_eip}
@@ -250,9 +221,9 @@ export default function UpgradePage() {
                 onClick={() => setIsInfoOpen(!isInfoOpen)}
                 className={cn(
                   "group relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
-                  "border-slate-700/40 bg-slate-900/50 backdrop-blur-sm",
-                  "transition-all hover:border-cyan-400/50 hover:bg-cyan-400/15",
-                  "hover:shadow-lg hover:shadow-cyan-500/10"
+                  "border-border bg-muted/60 backdrop-blur-sm",
+                  "transition-all hover:border-primary/40 hover:bg-primary/10",
+                  "hover:shadow-lg hover:shadow-primary/15"
                 )}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -260,8 +231,8 @@ export default function UpgradePage() {
               >
                 <Info className={cn(
                   "h-4 w-4 transition-all",
-                  "text-slate-400 group-hover:text-cyan-300",
-                  isInfoOpen && "text-cyan-300"
+                  "text-muted-foreground group-hover:text-primary",
+                  isInfoOpen && "text-primary"
                 )} />
               </motion.button>
             </div>
@@ -276,43 +247,43 @@ export default function UpgradePage() {
                   transition={{ duration: 0.3 }}
                   className="overflow-hidden mt-4"
                 >
-                  <div className="rounded-lg border border-slate-700/50 bg-gradient-to-br from-slate-900/60 via-slate-900/50 to-slate-900/60 backdrop-blur-sm p-4 sm:p-6">
+                  <div className="rounded-lg border border-border bg-card/60 backdrop-blur-sm p-4 sm:p-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
                       <div className="flex items-start gap-3">
-                        <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-400/20 shrink-0">
-                          <Package className="h-4 w-4 text-cyan-400" />
+                        <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                          <Package className="h-4 w-4 text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-semibold text-white mb-1">
+                          <h3 className="text-sm font-semibold text-foreground mb-1">
                             EIP Composition
                           </h3>
-                          <p className="text-xs text-slate-400 leading-relaxed">
+                          <p className="text-xs text-muted-foreground leading-relaxed">
                             Track which EIPs are included, scheduled, or under consideration for this upgrade
                           </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
-                        <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-400/20 shrink-0">
-                          <Clock className="h-4 w-4 text-cyan-400" />
+                        <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                          <Clock className="h-4 w-4 text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-semibold text-white mb-1">
+                          <h3 className="text-sm font-semibold text-foreground mb-1">
                             Timeline
                           </h3>
-                          <p className="text-xs text-slate-400 leading-relaxed">
+                          <p className="text-xs text-muted-foreground leading-relaxed">
                             Visualize how EIP statuses change over time as the upgrade progresses
                           </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
-                        <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-400/20 shrink-0">
-                          <Activity className="h-4 w-4 text-cyan-400" />
+                        <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                          <Activity className="h-4 w-4 text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-semibold text-white mb-1">
+                          <h3 className="text-sm font-semibold text-foreground mb-1">
                             Activity
                           </h3>
-                          <p className="text-xs text-slate-400 leading-relaxed">
+                          <p className="text-xs text-muted-foreground leading-relaxed">
                             View all changes, additions, and removals of EIPs in this upgrade
                           </p>
                         </div>
@@ -325,7 +296,7 @@ export default function UpgradePage() {
           </div>
         </div>
 
-        <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-12 pb-8">
           {/* Timeline Chart Section */}
           {timelineData.length > 0 && (
             <motion.div
@@ -345,16 +316,16 @@ export default function UpgradePage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.05 }}
-            className="rounded-lg border border-slate-700/40 bg-slate-950/50 p-4 sm:p-5 mb-6"
+            className="rounded-xl border border-border bg-card/60 p-4 sm:p-5 mb-6"
           >
             <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-lg font-bold text-white">About {upgrade.name}</h2>
+              <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">About {upgrade.name}</h2>
             </div>
             {slug === 'pectra' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Ethereum developers are moving toward the next major network upgrade, Prague and Electra,
                 collectively known as{' '}
-                <Link href="/eip/7600" className="text-cyan-300 hover:text-cyan-200 underline">
+                <Link href="/eip/7600" className="text-primary hover:text-primary/80 underline">
                   Pectra
                 </Link>
                 . This upgrade will involve significant changes to the{' '}
@@ -362,7 +333,7 @@ export default function UpgradePage() {
                   href="https://www.youtube.com/watch?v=nJ57mkttCH0"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-cyan-300 hover:text-cyan-200 underline"
+                  className="text-primary hover:text-primary/80 underline"
                 >
                   Execution and Consensus layers
                 </a>{' '}
@@ -371,12 +342,12 @@ export default function UpgradePage() {
                   href="https://www.youtube.com/watch?v=AyidVR6X6J8"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-cyan-300 hover:text-cyan-200 underline"
+                  className="text-primary hover:text-primary/80 underline"
                 >
                   Ethereum Improvement Proposals (EIPs)
                 </a>
                 , some EIPs were deferred to{' '}
-                <Link href="/upgrade/fusaka" className="text-cyan-300 hover:text-cyan-200 underline">
+                <Link href="/upgrade/fusaka" className="text-primary hover:text-primary/80 underline">
                   Fusaka
                 </Link>
                 . Testing is ongoing on{' '}
@@ -384,97 +355,97 @@ export default function UpgradePage() {
                   href="https://notes.ethereum.org/@ethpandaops/pectra-devnet-6"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-cyan-300 hover:text-cyan-200 underline"
+                  className="text-primary hover:text-primary/80 underline"
                 >
                   Devnet 6
                 </a>
                 .
               </p>
             ) : slug === 'fusaka' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
-                <Link href="/upgrade/fusaka" className="text-cyan-300 hover:text-cyan-200 underline">
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                <Link href="/upgrade/fusaka" className="text-primary hover:text-primary/80 underline">
                   Fusaka
                 </Link>{' '}
                 follows the Pectra upgrade, focusing on scaling and efficiency. Its headlining feature is{' '}
-                <Link href="/eip/7594" className="text-cyan-300 hover:text-cyan-200 underline">
+                <Link href="/eip/7594" className="text-primary hover:text-primary/80 underline">
                   PeerDAS
                 </Link>{' '}
                 (Peer Data Availability Sampling), enabling significant blob throughput scaling. Fusaka also raises the L1 gas limit to 60M and introduces "Blob Parameter Only" (BPO) forks to safely scale blob capacity. Scheduled for Mainnet activation at slot{' '}
-                <span className="font-semibold text-white">13,164,544</span> (Dec 3, 2025), it includes optimizations for L1 performance and UX improvements.
+                <span className="font-semibold text-foreground">13,164,544</span> (Dec 3, 2025), it includes optimizations for L1 performance and UX improvements.
               </p>
             ) : slug === 'hegota' ? (
               <div className="space-y-3">
-                <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-300">
+                <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300">
                   Early Planning Stage
                 </span>
-                <p className="text-sm leading-relaxed text-slate-300">
-                  <Link href="/eip/8081" className="text-cyan-300 hover:text-cyan-200 underline font-semibold">
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  <Link href="/eip/8081" className="text-primary hover:text-primary/80 underline font-semibold">
                     Hegotá
                   </Link>{' '}
                   is in early planning. The headliner proposal window will open soon. Check back for updates as the upgrade planning process begins.
                 </p>
-                <p className="text-xs leading-relaxed text-slate-400">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   Future network upgrade currently in early planning stages. Named after the combination of{' '}
                   <span className="font-semibold">"Heze"</span> (consensus layer upgrade, named after a star) and{' '}
                   <span className="font-semibold">"Bogotá"</span> (execution layer upgrade, named after a Devcon location).
                 </p>
               </div>
             ) : slug === 'frontier' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Frontier was Ethereum's genesis release on July 30, 2015, marked the official launch of the Ethereum mainnet. It enabled the deployment of smart contracts and laid the foundation for decentralized applications, establishing the core protocol functionality that Ethereum is built upon today.
               </p>
             ) : slug === 'homestead' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Homestead was the first planned Ethereum upgrade, introducing critical safety improvements. It added the DELEGATECALL opcode for complex contract interactions and fixed vulnerabilities in the contract creation process, establishing a foundation for more secure smart contract development.
               </p>
             ) : slug === 'dao-fork' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 The DAO Fork was an irregular state transition coordinated by the community to recover funds stolen in The DAO exploit. This upgrade demonstrated the power of community governance and established an important precedent for protocol decision-making during critical security incidents.
               </p>
             ) : slug === 'tangerine-whistle' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Tangerine Whistle addressed denial-of-service vulnerabilities by repricing gas for state-heavy operations. This upgrade made attacks economically infeasible and significantly enhanced network resilience against spam attacks.
               </p>
             ) : slug === 'spurious-dragon' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Spurious Dragon continued Ethereum's security improvements with EXP gas repricing, contract code size limits, and transaction replay protection via the ChainID parameter (EIP-155). It hardened the network against further DoS vectors and enabled cross-chain transaction safety.
               </p>
             ) : slug === 'byzantium' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Byzantium was a major Metropolis phase upgrade introducing the REVERT opcode for safer contract development, zk-SNARKs precompiles for privacy technologies, and block rewards reduction moving the network toward Proof-of-Stake. It represented a significant modernization of the EVM.
               </p>
             ) : slug === 'constantinople' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Constantinople optimized EVM operations including SSTORE gas cost improvements, the CREATE2 opcode, and bitwise shifting. These changes reduced smart contract deployment costs and significantly improved EVM performance.
               </p>
             ) : slug === 'istanbul' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Istanbul introduced gas repricing for state-rent preparation, privacy-enabling precompiles, and STATICCALL optimizations. These changes prepared the network for scalability solutions and enhanced interoperability between different systems.
               </p>
             ) : slug === 'berlin' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Berlin optimized gas accounting for state-access operations and introduced transaction access lists to enable more efficient Layer 2 solutions. This upgrade improved L2 scalability readiness and optimized gas costs for users.
               </p>
             ) : slug === 'london' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 London fundamentally reformed Ethereum's fee market with EIP-1559, introducing dynamic base fees and a burn mechanism. This upgrade revolutionized how transaction fees work, improved user experience, and began Ethereum's deflationary phase.
               </p>
             ) : slug === 'paris' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 The Merge was Ethereum's most significant upgrade, transitioning consensus from Proof-of-Work to Proof-of-Stake. This historic change reduced energy consumption by 99.95% and established validator-based security, marking a fundamental shift in how the network operates.
               </p>
             ) : slug === 'shanghai' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Shanghai enabled validators to withdraw accrued staking rewards and exit the validator set, fulfilling a critical Proof-of-Stake requirement. This upgrade unlocked staking functionality and completed the core capabilities needed for validator participation.
               </p>
             ) : slug === 'cancun' ? (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Cancun delivered proto-danksharding through EIP-4844 (blobs), enabling Layer 2 solutions to post data more economically. This upgrade reduced rollup costs by orders of magnitude and laid crucial groundwork for full danksharding scalability.
               </p>
             ) : (
-              <p className="text-sm leading-relaxed text-slate-300">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Ethereum developers are now preparing for the next major network upgrade, known as{' '}
-                <Link href="/eip/7773" className="text-cyan-300 hover:text-cyan-200 underline">
+                <Link href="/eip/7773" className="text-primary hover:text-primary/80 underline">
                   Glamsterdam
                 </Link>
                 . This upgrade will introduce key changes to both the{' '}
@@ -482,18 +453,18 @@ export default function UpgradePage() {
                   href="https://www.youtube.com/watch?v=nJ57mkttCH0"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-cyan-300 hover:text-cyan-200 underline"
+                  className="text-primary hover:text-primary/80 underline"
                 >
                   Execution and Consensus layers
                 </a>{' '}
                 on mainnet. The name combines{' '}
-                <span className="font-semibold text-white">Amsterdam</span> (execution layer, from the previous Devconnect location) and{' '}
-                <span className="font-semibold text-white">Gloas</span> (consensus layer, named after a star), highlighting its focus on both core protocol areas. The headliner feature for Glamsterdam is still being decided, with several{' '}
+                <span className="font-semibold text-foreground">Amsterdam</span> (execution layer, from the previous Devconnect location) and{' '}
+                <span className="font-semibold text-foreground">Gloas</span> (consensus layer, named after a star), highlighting its focus on both core protocol areas. The headliner feature for Glamsterdam is still being decided, with several{' '}
                 <a
                   href="https://github.com/ethereum/EIPs/pulls?q=is%3Apr+is%3Aopen+milestone%3A%22Glamsterdam%22"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-cyan-300 hover:text-cyan-200 underline"
+                  className="text-primary hover:text-primary/80 underline"
                 >
                   Ethereum Improvement Proposals (EIPs)
                 </a>{' '}
@@ -521,7 +492,7 @@ export default function UpgradePage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.15 }}
-            className="rounded-lg border border-slate-700/40 bg-slate-950/50 p-4 sm:p-5 mb-6"
+            className="rounded-xl border border-border bg-card/60 p-4 sm:p-5 mb-6"
           >
             <UpgradeEIPsShowcase
               upgradeName={upgrade.name}

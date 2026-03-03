@@ -108,63 +108,79 @@ export const toolsProcedures = {
     .handler(async ({ context, input }) => {
       const repoIds = await getRepoIds(input.repo);
 
-      // Get all EIPs with their requires field from eip_snapshots
-      // The requires info is stored in the raw EIP files; we can parse from eip_status_events
-      // For now, use a simpler approach: get status events that mention related EIPs
-      // Actually, we need to check if there's a requires field somewhere
-
-      // Use PR linkage as a proxy for relationships
-      const results = await prisma.$queryRawUnsafe<Array<{
+      // Use shared PR linkage as dependency/relationship proxy.
+      // pull_request_eips schema is (pr_number, repository_id, eip_number)
+      // so joins must use pr_number + repository_id.
+      const nodesResult = await prisma.$queryRawUnsafe<Array<{
         eip_number: number;
         title: string | null;
         status: string;
         repo_type: string;
-        linked_eips: number[];
       }>>(
         `SELECT
           ei.eip_number,
           ei.title,
           s.status,
-          COALESCE(LOWER(r.type), 'unknown') AS repo_type,
-          COALESCE(
-            ARRAY(
-              SELECT DISTINCT ei2.eip_number
-              FROM pull_request_eips pre1
-              JOIN pull_request_eips pre2 ON pre1.pr_id = pre2.pr_id AND pre1.eip_id != pre2.eip_id
-              JOIN eips ei2 ON pre2.eip_id = ei2.id
-              WHERE pre1.eip_id = ei.id
-            ),
-            '{}'::int[]
-          ) AS linked_eips
+          COALESCE(LOWER(r.type), 'unknown') AS repo_type
         FROM eip_snapshots s
         JOIN eips ei ON s.eip_id = ei.id
         LEFT JOIN repositories r ON s.repository_id = r.id
         WHERE ($1::int[] IS NULL OR s.repository_id = ANY($1))
-          AND ($2::int IS NULL OR ei.eip_number = $2)
+          AND (
+            $2::int IS NULL
+            OR ei.eip_number = $2
+            OR ei.eip_number IN (
+              SELECT DISTINCT
+                CASE
+                  WHEN pre1.eip_number = $2 THEN pre2.eip_number
+                  ELSE pre1.eip_number
+                END
+              FROM pull_request_eips pre1
+              JOIN pull_request_eips pre2
+                ON pre1.pr_number = pre2.pr_number
+               AND pre1.repository_id = pre2.repository_id
+               AND pre1.eip_number <> pre2.eip_number
+              WHERE ($1::int[] IS NULL OR pre1.repository_id = ANY($1))
+                AND (pre1.eip_number = $2 OR pre2.eip_number = $2)
+            )
+          )
         ORDER BY ei.eip_number
-        LIMIT 500`,
+        LIMIT 1200`,
+        repoIds,
+        input.eipNumber ?? null
+      );
+
+      const edgeResult = await prisma.$queryRawUnsafe<Array<{
+        source: number;
+        target: number;
+      }>>(
+        `SELECT DISTINCT
+          LEAST(pre1.eip_number, pre2.eip_number) AS source,
+          GREATEST(pre1.eip_number, pre2.eip_number) AS target
+         FROM pull_request_eips pre1
+         JOIN pull_request_eips pre2
+           ON pre1.pr_number = pre2.pr_number
+          AND pre1.repository_id = pre2.repository_id
+          AND pre1.eip_number <> pre2.eip_number
+         WHERE ($1::int[] IS NULL OR pre1.repository_id = ANY($1))
+           AND ($2::int IS NULL OR pre1.eip_number = $2 OR pre2.eip_number = $2)
+         LIMIT 6000`,
         repoIds,
         input.eipNumber ?? null
       );
 
       // Build nodes and edges
-      const nodes = results.map((r) => ({
+      const nodes = nodesResult.map((r) => ({
         id: r.eip_number,
         title: r.title,
         status: r.status,
         repo: r.repo_type,
       }));
 
-      const edges: Array<{ source: number; target: number }> = [];
-      const nodeIds = new Set(results.map((r) => r.eip_number));
-
-      for (const r of results) {
-        for (const linked of r.linked_eips) {
-          if (nodeIds.has(linked) && r.eip_number < linked) {
-            edges.push({ source: r.eip_number, target: linked });
-          }
-        }
-      }
+      const nodeIds = new Set(nodes.map((r) => r.id));
+      const edges = edgeResult
+        .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
+        .map((e) => ({ source: e.source, target: e.target }));
 
       return { nodes, edges };
     }),
@@ -497,4 +513,3 @@ const { repo, govState, search } = input;
       };
     }),
 };
-
