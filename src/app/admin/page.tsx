@@ -144,7 +144,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     // Scroll spy - update hash based on which section is at the top
-    const sections = ['blogs', 'editors', 'videos'];
+    const sections = ['blogs', 'editors', 'videos', 'feedback'];
     
     const updateActiveSection = () => {
       const scrollPosition = window.scrollY + window.innerHeight * 0.3; // Check at 30% from top
@@ -355,7 +355,7 @@ export default function AdminPage() {
             Admin Console
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            Manage blogs, editors, and videos from a single workspace.
+            Manage blogs, editors, videos, and feedback from a single workspace.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <a
@@ -376,6 +376,12 @@ export default function AdminPage() {
             >
               Videos
             </a>
+            <Link
+              href="/admin/feedback"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50"
+            >
+              Feedback
+            </Link>
           </div>
         </div>
       </section>
@@ -941,6 +947,46 @@ export default function AdminPage() {
               ))}
             </div>
           )}
+        </section>
+
+        <section id="feedback" className="scroll-mt-24 border-t-4 border-amber-500 pt-8">
+          <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700/50">
+            <div className="flex gap-3 items-start justify-between">
+              <div className="flex gap-3 items-start flex-1">
+                <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600">
+                  <FileText className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="dec-title text-2xl font-bold text-slate-800 dark:text-white">
+                    User Feedback
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Review, update status, and manage user feedback submissions.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/admin/feedback"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg hover:from-amber-400 hover:to-orange-400 flex-shrink-0"
+              >
+                <FileText className="h-4 w-4" />
+                View Feedback
+              </Link>
+            </div>
+          </div>
+          <div className="text-center max-w-lg mx-auto py-16">
+            <FileText className="h-14 w-14 text-slate-400 dark:text-slate-600 mx-auto mb-6" />
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              Click the button above to access the feedback dashboard where you can review all user feedback, update statuses, delete items, and export data.
+            </p>
+            <Link
+              href="/admin/feedback"
+              className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg hover:from-amber-400 hover:to-orange-400"
+            >
+              <FileText className="h-4 w-4" />
+              Go to Feedback Dashboard
+            </Link>
+          </div>
         </section>
       </div>
     </div>

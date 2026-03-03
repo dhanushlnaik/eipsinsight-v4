@@ -1016,9 +1016,9 @@ export default function EIPsHomePage() {
                 recentEditorActivities.slice(0, 5).map((item, idx) => (
                   <a
                     key={`${item.editor}-${item.prNumber}-${idx}`}
-                    href={item.eventUrl || `https://github.com/${githubRepoFromShort(item.repoShort)}/pull/${item.prNumber}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={item.eventUrl || `/pr/${githubRepoFromShort(item.repoShort)}/${item.prNumber}`}
+                    target={item.eventUrl ? "_blank" : undefined}
+                    rel={item.eventUrl ? "noopener noreferrer" : undefined}
                     className="block rounded-lg border border-slate-200/80 bg-slate-50/70 p-2.5 transition hover:border-primary/50 hover:bg-slate-50 dark:border-slate-700/50 dark:bg-slate-900/60 dark:hover:bg-slate-900/75"
                   >
                     <div className="mb-1 flex items-center gap-2">

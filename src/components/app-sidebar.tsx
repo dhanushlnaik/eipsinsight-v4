@@ -232,6 +232,7 @@ const sidebarSections: SidebarSection[] = [
           { title: "Blogs", href: "/admin#blogs" },
           { title: "Editors", href: "/admin#editors" },
           { title: "Videos", href: "/admin#videos" },
+          { title: "Feedback", href: "/admin#feedback" },
         ],
       },
     ],
