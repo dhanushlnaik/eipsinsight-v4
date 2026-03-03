@@ -232,9 +232,10 @@ const sidebarSections: SidebarSection[] = [
         icon: Shield,
         href: "/admin?tab=blogs",
         items: [
-          { title: "Blogs", href: "/admin?tab=blogs" },
-          { title: "Editors", href: "/admin?tab=editors" },
-          { title: "Videos", href: "/admin?tab=videos" },
+          { title: "Blogs", href: "/admin#blogs" },
+          { title: "Editors", href: "/admin#editors" },
+          { title: "Videos", href: "/admin#videos" },
+          { title: "Feedback", href: "/admin#feedback" },
         ],
       },
     ],

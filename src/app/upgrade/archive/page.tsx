@@ -8,6 +8,7 @@ import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 
 type UpgradeType = 'Hard Fork' | 'Merge';
+type LayerType = 'execution' | 'consensus' | 'beacon_genesis';
 
 interface HistoricalUpgrade {
   name: string;
@@ -15,6 +16,7 @@ interface HistoricalUpgrade {
   date: string;
   eipCount: number;
   type: UpgradeType;
+  layer: LayerType;
   summary: string;
   description: string;
   impact: string;
@@ -28,6 +30,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2015-07-30',
     eipCount: 0,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Ethereum mainnet launch and foundational protocol activation.',
     description:
       'Frontier was the first Ethereum mainnet release, enabling the deployment of smart contracts and the beginning of decentralized applications on the network.',
@@ -40,6 +43,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2016-03-14',
     eipCount: 3,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'First planned protocol upgrade focused on stability and safety.',
     description:
       'Homestead introduced critical safety improvements including the DELEGATECALL opcode and fixes to the contract creation process.',
@@ -52,6 +56,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2016-07-20',
     eipCount: 1,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Emergency state transition to recover funds after The DAO exploit.',
     description:
       'Following the DAO hack, the community coordinated an irregular state change to recover stolen funds, establishing precedent for protocol governance.',
@@ -64,6 +69,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2016-10-18',
     eipCount: 1,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'DoS mitigation via gas repricing of state-heavy operations.',
     description:
       'This upgrade addressed denial-of-service vulnerabilities by repricing gas for state-access operations, making attacks economically infeasible.',
@@ -76,6 +82,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2016-11-22',
     eipCount: 4,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Further anti-DoS hardening and state cleanup improvements.',
     description:
       'Spurious Dragon continued security improvements with EXP gas repricing, contract code size limits, and transaction replay protection via ChainID.',
@@ -88,6 +95,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2017-10-16',
     eipCount: 9,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Major Metropolis phase with privacy and VM upgrades.',
     description:
       'Byzantium was a significant upgrade introducing the REVERT opcode, zk-SNARKs precompiles, and block rewards reduction toward Proof-of-Stake.',
@@ -100,6 +108,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2019-02-28',
     eipCount: 5,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'EVM efficiency improvements and delayed difficulty bomb updates.',
     description:
       'Constantinople optimized EVM operations (SSTORE gas cost, CREATE2, bitwise shifting) and further delayed the difficulty bomb.',
@@ -112,6 +121,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2019-12-07',
     eipCount: 6,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Interoperability and gas model updates for scalability readiness.',
     description:
       'Istanbul introduced gas repricing for state-rent preparation (EIP-1679), privacy-enabling precompiles, and STATICCALL optimizations.',
@@ -124,6 +134,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2021-04-15',
     eipCount: 4,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Gas repricing and transaction format improvements.',
     description:
       'Berlin optimized gas accounting for state-access operations and introduced transaction access lists to enable more efficient L2 solutions.',
@@ -136,6 +147,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2021-08-05',
     eipCount: 5,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Introduced EIP-1559 fee market and burn mechanism.',
     description:
       "London fundamentally reformed Ethereum's fee market with dynamic base fees, burn mechanics, and the BASEFEE opcode, improving UX and reducing inflation.",
@@ -148,6 +160,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2022-09-15',
     eipCount: 2,
     type: 'Merge',
+    layer: 'execution',
     summary: 'Transition from Proof-of-Work to Proof-of-Stake consensus.',
     description:
       "The Merge was Ethereum's highest-stakes upgrade, transitioning consensus from PoW to PoS, reducing energy consumption by 99.95% and establishing validator-based security.",
@@ -160,6 +173,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2023-04-12',
     eipCount: 4,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Enabled staked ETH withdrawals and execution-layer refinements.',
     description:
       'Shanghai allowed validators to withdraw accrued staking rewards and exited stake, fulfilling a critical Proof-of-Stake requirement.',
@@ -172,6 +186,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2024-03-13',
     eipCount: 6,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Delivered proto-danksharding groundwork for L2 scaling.',
     description:
       'Cancun introduced EIP-4844 (blobs), enabling Layer 2 solutions to post data more economically and reducing rollup costs by orders of magnitude.',

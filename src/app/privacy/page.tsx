@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
+import { PageComments } from '@/components/page-comments';
 import { Shield, Mail, Database, Lock, Eye, UserCheck, Cookie, Bell, FileText } from 'lucide-react';
 
 const sections = [
@@ -468,6 +469,11 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Comments Section */}
+      <div className="mt-12 pt-8 border-t border-slate-200/80 dark:border-slate-700/50">
+        <PageComments />
+      </div>
     </div>
     </div>
   );

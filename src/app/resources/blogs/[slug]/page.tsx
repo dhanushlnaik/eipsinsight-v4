@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { client } from "@/lib/orpc";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
+import { PageComments } from "@/components/page-comments";
 import { toast } from "sonner";
 
 type Author = {
@@ -444,96 +445,9 @@ export default function BlogPostPage() {
             </div>
 
             {/* Comments section */}
-            <section className="mt-16 pt-10 border-t border-slate-200 dark:border-slate-800">
-              <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
-                <MessageCircle className="h-5 w-5" />
-                Comments ({comments.length})
-              </h2>
-
-              {currentUser ? (
-                <form onSubmit={handleSubmitComment} className="space-y-4 mb-8">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Commenting as {currentUser.name}</p>
-                  <textarea
-                    value={commentContent}
-                    onChange={(e) => setCommentContent(e.target.value)}
-                    placeholder="Write a comment..."
-                    required
-                    rows={4}
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 placeholder-slate-400 text-sm resize-y"
-                  />
-                  <button
-                    type="submit"
-                    disabled={submittingComment}
-                    className="px-4 py-2.5 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-700 dark:text-cyan-300 font-medium text-sm hover:bg-cyan-500/30 disabled:opacity-50"
-                  >
-                    {submittingComment ? "Posting..." : "Post comment"}
-                  </button>
-                </form>
-              ) : (
-                <div className="mb-8 rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/30 p-6 text-center">
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">Sign in to leave a comment.</p>
-                  <Link
-                    href="/login"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-700 dark:text-cyan-300 font-medium text-sm hover:bg-cyan-500/30"
-                  >
-                    Sign in
-                  </Link>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                {comments.map((c) => {
-                  const displayName = c.user?.name ?? c.authorName;
-                  const avatarUrl = c.user?.image ?? null;
-                  return (
-                    <div
-                      key={c.id}
-                      className="rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/30 p-4"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="relative h-10 w-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0">
-                          {avatarUrl ? (
-                            <Image src={avatarUrl} alt={`${c.authorName} avatar`} fill className="object-cover" />
-                          ) : (
-                            <div className="absolute inset-0 flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm font-semibold">
-                              {displayName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-medium text-slate-800 dark:text-slate-100 text-sm">{displayName}</p>
-                            {isAdmin && (
-                              <button
-                                onClick={() => handleDeleteComment(c.id)}
-                                disabled={deletingId === c.id}
-                                className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                                title="Delete comment"
-                              >
-                                {deletingId === c.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-wrap">{c.content}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
-                            {new Date(c.createdAt).toLocaleDateString(undefined, {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {comments.length === 0 && (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 py-6">No comments yet. Be the first to share your thoughts!</p>
-                )}
-              </div>
-            </section>
+            <div className="mt-16">
+              <PageComments />
+            </div>
           </article>
 
           {/* Sidebar - Table of contents */}

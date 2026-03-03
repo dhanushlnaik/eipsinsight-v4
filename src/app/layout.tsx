@@ -8,6 +8,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import Navbar from "@/components/navbar";
 import Footer from "@/components/footer";
+import { GlobalPageFeedback } from "@/components/global-page-feedback";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/providers/Providers";
 import { buildMetadata } from "@/lib/seo";
@@ -73,7 +74,12 @@ export default function RootLayout({
                 <Navbar />
               </div>
               <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                <main className="min-h-full w-full">{children}</main>
+                <main className="min-h-full w-full">
+                  {children}
+                  <section className="w-full max-w-none px-0 pt-2 pb-6">
+                    <GlobalPageFeedback />
+                  </section>
+                </main>
                 <Footer />
               </div>
             </SidebarInset>
