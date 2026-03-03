@@ -8,6 +8,7 @@ import { motion } from 'motion/react';
 import { useState } from 'react';
 
 type UpgradeType = 'Hard Fork' | 'Merge';
+type LayerType = 'execution' | 'consensus' | 'beacon_genesis';
 
 interface HistoricalUpgrade {
   name: string;
@@ -15,6 +16,7 @@ interface HistoricalUpgrade {
   date: string;
   eipCount: number;
   type: UpgradeType;
+  layer: LayerType;
   summary: string;
   description: string;
   impact: string;
@@ -28,6 +30,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2015-07-30',
     eipCount: 0,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Ethereum mainnet launch and foundational protocol activation.',
     description: 'Frontier was the first Ethereum mainnet release, enabling the deployment of smart contracts and the beginning of decentralized applications on the network.',
     impact: 'Genesis of Ethereum network; established core protocol functionality.',
@@ -39,6 +42,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2016-03-14',
     eipCount: 3,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'First planned protocol upgrade focused on stability and safety.',
     description: 'Homestead introduced critical safety improvements including the DELEGATECALL opcode and fixes to the contract creation process.',
     impact: 'Improved protocol safety and enabled complex contract interactions.',
@@ -50,6 +54,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2016-07-20',
     eipCount: 1,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Emergency state transition to recover funds after The DAO exploit.',
     description: 'Following the DAO hack, the community coordinated an irregular state change to recover stolen funds, establishing precedent for protocol governance.',
     impact: 'Protected network integrity; demonstrated community coordination.',
@@ -61,6 +66,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2016-10-18',
     eipCount: 1,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'DoS mitigation via gas repricing of state-heavy operations.',
     description: 'This upgrade addressed denial-of-service vulnerabilities by repricing gas for state-access operations, making attacks economically infeasible.',
     impact: 'Enhanced network resilience against spam attacks.',
@@ -72,6 +78,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2016-11-22',
     eipCount: 4,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Further anti-DoS hardening and state cleanup improvements.',
     description: 'Spurious Dragon continued security improvements with EXP gas repricing, contract code size limits, and transaction replay protection via ChainID.',
     impact: 'Hardened against further DoS vectors; enabled cross-chain transaction safety.',
@@ -83,6 +90,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2017-10-16',
     eipCount: 9,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Major Metropolis phase with privacy and VM upgrades.',
     description: 'Byzantium was a significant upgrade introducing the REVERT opcode, zk-SNARKs precompiles, and block rewards reduction toward Proof-of-Stake.',
     impact: 'Enabled privacy technologies; reduced inflation; modernized EVM.',
@@ -94,6 +102,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2019-02-28',
     eipCount: 5,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'EVM efficiency improvements and delayed difficulty bomb updates.',
     description: 'Constantinople optimized EVM operations (SSTORE gas cost, CREATE2, bitwise shifting) and further delayed the difficulty bomb.',
     impact: 'Reduced smart contract deployment costs; improved EVM performance.',
@@ -105,6 +114,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2019-12-07',
     eipCount: 6,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Interoperability and gas model updates for scalability readiness.',
     description: 'Istanbul introduced gas repricing for state-rent preparation (EIP-1679), privacy-enabling precompiles, and STATICCALL optimizations.',
     impact: 'Prepared network for scalability solutions; enhanced interoperability.',
@@ -116,6 +126,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2021-04-15',
     eipCount: 4,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Gas repricing and transaction format improvements.',
     description: 'Berlin optimized gas accounting for state-access operations and introduced transaction access lists to enable more efficient L2 solutions.',
     impact: 'Improved L2 scalability readiness; optimized gas costs.',
@@ -127,6 +138,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2021-08-05',
     eipCount: 5,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Introduced EIP-1559 fee market and burn mechanism.',
     description: "London fundamentally reformed Ethereum's fee market with dynamic base fees, burn mechanics, and the BASEFEE opcode, improving UX and reducing inflation.",
     impact: 'Revolutionized fee market; began ETH deflation; improved predictability.',
@@ -138,6 +150,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2022-09-15',
     eipCount: 2,
     type: 'Merge',
+    layer: 'execution',
     summary: 'Transition from Proof-of-Work to Proof-of-Stake consensus.',
     description: "The Merge was Ethereum's highest-stakes upgrade, transitioning consensus from PoW to PoS, reducing energy consumption by 99.95% and establishing validator-based security.",
     impact: 'Reduced energy by 99.95%; shifted to Proof-of-Stake; enabled staking.',
@@ -149,6 +162,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2023-04-12',
     eipCount: 4,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Enabled staked ETH withdrawals and execution-layer refinements.',
     description: 'Shanghai allowed validators to withdraw accrued staking rewards and exited stake, fulfilling a critical Proof-of-Stake requirement.',
     impact: 'Unlocked staking; completed PoS functionality; enabled validator exits.',
@@ -160,6 +174,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     date: '2024-03-13',
     eipCount: 6,
     type: 'Hard Fork',
+    layer: 'execution',
     summary: 'Delivered proto-danksharding groundwork for L2 scaling.',
     description: 'Cancun introduced EIP-4844 (blobs), enabling Layer 2 solutions to post data more economically and reducing rollup costs by orders of magnitude.',
     impact: 'Enabled L2 scaling; reduced rollup costs; laid danksharding groundwork.',
@@ -201,7 +216,7 @@ export default function PreviousUpgradesPage() {
             sectionId="comparison"
             className="bg-slate-100/70 dark:bg-slate-950/30"
           />
-          <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-6">
+          <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 pb-6">
             <div className="rounded-xl border border-cyan-400/20 bg-white/85 p-4 dark:bg-slate-950/50">
               <div className="space-y-3">
                 {previousUpgrades.map((upgrade) => {
@@ -234,7 +249,7 @@ export default function PreviousUpgradesPage() {
             sectionId="heatmap"
             className="bg-slate-100/70 dark:bg-slate-950/30"
           />
-          <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-6">
+          <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 pb-6">
             <div className="overflow-x-auto rounded-xl border border-cyan-400/20 bg-white/85 p-4 dark:bg-slate-950/50">
               <div className="grid min-w-max grid-cols-[160px_repeat(13,minmax(72px,1fr))] gap-2">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Upgrade</div>
@@ -277,7 +292,7 @@ export default function PreviousUpgradesPage() {
             sectionId="details"
             className="bg-slate-100/70 dark:bg-slate-950/30"
           />
-          <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-10">
+          <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 pb-10">
             {/* Carousel Navigation */}
             <div className="mb-4 flex items-center justify-between">
               <button
@@ -341,7 +356,7 @@ export default function PreviousUpgradesPage() {
                           <h3 className="text-4xl font-black bg-linear-to-r from-slate-900 via-cyan-800 to-slate-900 bg-clip-text text-transparent dark:from-white dark:via-cyan-300 dark:to-slate-200">
                             {upgrade.name}
                           </h3>
-                          <div className="mt-2 flex items-center gap-2">
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
                             <span className={cn(
                               "px-3 py-1 rounded-full text-xs font-bold tracking-wide",
                               upgrade.type === 'Merge' 
@@ -349,6 +364,20 @@ export default function PreviousUpgradesPage() {
                                 : 'bg-linear-to-r from-emerald-500/20 to-teal-500/20 text-emerald-700 dark:text-emerald-300'
                             )}>
                               {upgrade.type === 'Merge' ? '🔀 Merge' : '🍴 Hard Fork'}
+                            </span>
+                            <span className={cn(
+                              "px-2.5 py-1 rounded text-xs font-semibold",
+                              upgrade.layer === 'execution' 
+                                ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-400/30'
+                                : upgrade.layer === 'consensus'
+                                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-400/30'
+                                  : 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-400/30'
+                            )}>
+                              {upgrade.layer === 'execution' 
+                                ? '⚙️ Execution Layer' 
+                                : upgrade.layer === 'consensus'
+                                  ? '⛓️ Consensus Layer'
+                                  : '🌟 Beacon Genesis'}
                             </span>
                             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                               {upgrade.summary}

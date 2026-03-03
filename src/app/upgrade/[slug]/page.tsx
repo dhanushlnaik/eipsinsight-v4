@@ -220,7 +220,7 @@ export default function UpgradePage() {
       <div className="relative z-10">
         {/* 1. Upgrade Header */}
         <div className="relative w-full bg-background/80 backdrop-blur-xl border-b border-cyan-400/10">
-          <div className="mx-auto max-w-5xl px-4 pt-8 pb-4 sm:px-6 sm:pt-10 sm:pb-6">
+          <div className="mx-auto max-w-7xl px-4 pt-8 pb-4 sm:px-6 sm:pt-10 sm:pb-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 space-y-2">
                 {/* Upgrade name */}
@@ -325,7 +325,7 @@ export default function UpgradePage() {
           </div>
         </div>
 
-        <div className="container mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-8">
           {/* Timeline Chart Section */}
           {timelineData.length > 0 && (
             <motion.div
