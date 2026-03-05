@@ -5,6 +5,7 @@ import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
 import { Loader2, Users, Activity, Zap, Database, AlertCircle } from "lucide-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
+import { ContributorHeatmap } from "@/components/analytics/ContributorHeatmap";
 import {
   ChartContainer,
   ChartTooltip,
@@ -53,6 +54,11 @@ interface LiveFeedItem {
   prNumber: number;
   repo: string | null;
   occurredAt: string;
+}
+
+interface DailyActivityData {
+  date: string;
+  count: number;
 }
 
 function getTimeWindow(timeRange: string): { from: string | undefined; to: string | undefined } {
@@ -113,6 +119,7 @@ export default function ContributorsAnalyticsPage() {
   const [activityByRepo, setActivityByRepo] = useState<ActivityByRepo[]>([]);
   const [rankings, setRankings] = useState<ContributorRanking[]>([]);
   const [liveFeed, setLiveFeed] = useState<LiveFeedItem[]>([]);
+  const [dailyActivity, setDailyActivity] = useState<DailyActivityData[]>([]);
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
   const { from, to } = getTimeWindow(timeRange);
@@ -122,7 +129,7 @@ export default function ContributorsAnalyticsPage() {
       setLoading(true);
       setError(null);
       try {
-        const [kpisData, typeData, repoData, rankingsData, feedData] = await Promise.all([
+        const [kpisData, typeData, repoData, rankingsData, feedData, dailyActivityData] = await Promise.all([
           client.analytics.getContributorKPIs({}),
           client.analytics.getContributorActivityByType({
             repo: repoParam,
@@ -144,6 +151,11 @@ export default function ContributorsAnalyticsPage() {
             hours: 48,
             limit: 50,
           }),
+          client.analytics.getContributorDailyActivity({
+            repo: repoParam,
+            from,
+            to,
+          }),
         ]);
 
         setKPIs(kpisData);
@@ -151,6 +163,7 @@ export default function ContributorsAnalyticsPage() {
         setActivityByRepo(repoData);
         setRankings(rankingsData);
         setLiveFeed(feedData);
+        setDailyActivity(dailyActivityData);
         setDataUpdatedAt(new Date());
       } catch (error) {
         console.error("Failed to fetch contributors analytics:", error);
@@ -307,6 +320,15 @@ export default function ContributorsAnalyticsPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Contributor Activity Heatmap */}
+      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">Contributor Activity</h2>
+          <LastUpdated timestamp={dataUpdatedAt} />
+        </div>
+        <ContributorHeatmap data={dailyActivity} />
       </div>
 
       {/* Activity by Type + Activity by Repo */}
