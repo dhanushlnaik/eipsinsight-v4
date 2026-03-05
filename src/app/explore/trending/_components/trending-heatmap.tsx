@@ -1,7 +1,5 @@
 'use client';
 
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
 import { Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +11,7 @@ interface DailyActivity {
 interface HeatmapRow {
   eipNumber: number;
   title: string;
+  repo: string;
   totalActivity: number;
   dailyActivity: DailyActivity[];
 }
@@ -20,176 +19,83 @@ interface HeatmapRow {
 interface TrendingHeatmapProps {
   data: HeatmapRow[];
   loading: boolean;
+  windowLabel: string;
+  selectedProposal?: string | null;
+  onSelectProposal?: (proposal: string) => void;
 }
 
-function getIntensityColor(value: number, maxValue: number): string {
-  if (value === 0) return 'bg-slate-200 dark:bg-slate-800';
-  const ratio = value / maxValue;
-  if (ratio >= 0.8) return 'bg-cyan-500 dark:bg-cyan-400';
-  if (ratio >= 0.6) return 'bg-cyan-500/80';
-  if (ratio >= 0.4) return 'bg-cyan-600/60';
-  if (ratio >= 0.2) return 'bg-cyan-700/40';
-  return 'bg-cyan-800/30';
+function cellClass(value: number, maxValue: number) {
+  if (value <= 0) return 'bg-muted/60';
+  const ratio = value / Math.max(maxValue, 1);
+  if (ratio >= 0.8) return 'bg-primary';
+  if (ratio >= 0.5) return 'bg-primary/75';
+  if (ratio >= 0.3) return 'bg-primary/55';
+  return 'bg-primary/35';
 }
 
-export function TrendingHeatmap({ data, loading }: TrendingHeatmapProps) {
-  const [hoveredCell, setHoveredCell] = useState<{ eip: number; date: string; value: number } | null>(null);
-
+export function TrendingHeatmap({ data, loading, windowLabel, selectedProposal, onSelectProposal }: TrendingHeatmapProps) {
   if (loading) {
     return (
-      <div className="bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/40 p-6">
-        <div className="animate-pulse">
-          <div className="h-6 w-48 bg-slate-200 dark:bg-slate-800 rounded mb-4" />
-          <div className="h-64 bg-slate-200 dark:bg-slate-800 rounded" />
+      <div className="rounded-xl border border-border bg-card/60 p-4">
+        <div className="animate-pulse space-y-3">
+          <div className="h-6 w-52 rounded bg-muted" />
+          <div className="h-52 rounded bg-muted" />
         </div>
       </div>
     );
   }
 
-  if (data.length === 0) {
+  if (!data.length) {
     return (
-      <div className="bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/40 p-12 text-center">
-        <p className="text-slate-600 dark:text-slate-400">No heatmap data available</p>
+      <div className="rounded-xl border border-border bg-card/60 p-8 text-center text-sm text-muted-foreground">
+        No activity matrix for current filters.
       </div>
     );
   }
 
-  // Find max value for color scaling
-  const maxValue = Math.max(
-    ...data.flatMap(row => row.dailyActivity.map(d => d.value)),
-    1
-  );
-
-  // Get day labels (last 30 days)
-  const dayLabels = data[0]?.dailyActivity.map(d => {
-    const date = new Date(d.date);
-    return date.getDate();
-  }) || [];
+  const maxValue = Math.max(...data.flatMap((row) => row.dailyActivity.map((d) => d.value)), 1);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        "p-6 rounded-xl",
-        "bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/40",
-        "backdrop-blur-sm"
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <Activity className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-          Activity Heatmap (Last 30 Days)
-        </h3>
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-xs text-slate-500">Less</span>
-        <div className="flex gap-1">
-          <div className="h-3 w-3 rounded bg-slate-200 dark:bg-slate-800" />
-          <div className="h-3 w-3 rounded bg-cyan-800/30" />
-          <div className="h-3 w-3 rounded bg-cyan-700/40" />
-          <div className="h-3 w-3 rounded bg-cyan-600/60" />
-          <div className="h-3 w-3 rounded bg-cyan-500/80" />
-          <div className="h-3 w-3 rounded bg-cyan-500 dark:bg-cyan-400" />
+    <section className="rounded-xl border border-border bg-card/60 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Activity className="h-4 w-4 text-primary" />
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Matrix</p>
+          <h3 className="dec-title text-lg font-semibold tracking-tight text-foreground">Trending activity matrix ({windowLabel})</h3>
         </div>
-        <span className="text-xs text-slate-500">More</span>
       </div>
 
-      {/* Heatmap Grid */}
       <div className="overflow-x-auto">
-        <div className="min-w-[600px]">
-          {/* Day labels */}
-          <div className="flex items-center mb-2 pl-32">
-            {dayLabels.map((day, i) => (
-              i % 5 === 0 && (
-                <span
-                  key={i}
-                  className="text-[10px] text-slate-500"
-                  style={{ width: '16px', textAlign: 'center' }}
+        <div className="min-w-[680px] space-y-1.5">
+          {data.map((row) => {
+            const proposalKey = `${row.repo}:${row.eipNumber}`;
+            const selected = selectedProposal === proposalKey;
+            return (
+              <div key={proposalKey} className={cn('flex items-center gap-2 rounded-md px-2 py-1', selected ? 'bg-primary/10' : 'hover:bg-muted/30')}>
+                <button
+                  type="button"
+                  onClick={() => onSelectProposal?.(proposalKey)}
+                  className="w-28 shrink-0 text-left text-xs font-semibold text-primary hover:underline"
                 >
-                  {day}
-                </span>
-              )
-            ))}
-          </div>
-
-          {/* Rows */}
-          <div className="space-y-1">
-            {data.map((row, rowIndex) => (
-              <div key={row.eipNumber} className="flex items-center gap-2">
-                {/* EIP Label */}
-                <div className="w-28 shrink-0 text-right pr-2">
-                  <span className="text-xs font-medium text-cyan-600 dark:text-cyan-400">
-                    EIP-{row.eipNumber}
-                  </span>
-                </div>
-
-                {/* Cells */}
+                  {row.repo.toUpperCase()}-{row.eipNumber}
+                </button>
                 <div className="flex gap-0.5">
-                  {row.dailyActivity.map((day, dayIndex) => (
-                    <motion.div
-                      key={day.date}
-                      initial={{ opacity: 0, scale: 0 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: rowIndex * 0.02 + dayIndex * 0.005 }}
-                      onMouseEnter={() => setHoveredCell({ eip: row.eipNumber, date: day.date, value: day.value })}
-                      onMouseLeave={() => setHoveredCell(null)}
-                      className={cn(
-                        "h-4 w-4 rounded-sm cursor-pointer",
-                        "transition-all duration-150",
-                        getIntensityColor(day.value, maxValue),
-                        hoveredCell?.eip === row.eipNumber && hoveredCell?.date === day.date
-                          ? "ring-1 ring-slate-900 dark:ring-white scale-110"
-                          : ""
-                      )}
+                  {row.dailyActivity.map((day) => (
+                    <button
+                      key={`${proposalKey}-${day.date}`}
+                      type="button"
+                      onClick={() => onSelectProposal?.(proposalKey)}
+                      title={`${day.date}: ${day.value} events`}
+                      className={cn('h-3.5 w-3.5 rounded-[3px] transition-transform hover:scale-110', cellClass(day.value, maxValue))}
                     />
                   ))}
                 </div>
-
-                {/* Total */}
-                <div className="w-12 shrink-0 text-right">
-                  <span className="text-xs text-slate-600 dark:text-slate-500">
-                    {row.totalActivity}
-                  </span>
-                </div>
+                <span className="ml-2 w-12 text-right text-xs text-muted-foreground">{row.totalActivity}</span>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
-
-      {/* Tooltip */}
-      {hoveredCell && (
-        <motion.div
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={cn(
-            "fixed z-50 px-3 py-2 rounded-lg",
-            "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700",
-            "text-xs shadow-xl pointer-events-none"
-          )}
-          style={{
-            top: 'var(--mouse-y, 0)',
-            left: 'var(--mouse-x, 0)',
-          }}
-        >
-          <div className="font-medium text-slate-900 dark:text-white">
-            EIP-{hoveredCell.eip}
-          </div>
-          <div className="text-slate-600 dark:text-slate-400">
-            {new Date(hoveredCell.date).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-            })}
-          </div>
-          <div className="text-cyan-600 dark:text-cyan-400 font-bold">
-            {hoveredCell.value} event{hoveredCell.value !== 1 ? 's' : ''}
-          </div>
-        </motion.div>
-      )}
-    </motion.div>
+    </section>
   );
 }
