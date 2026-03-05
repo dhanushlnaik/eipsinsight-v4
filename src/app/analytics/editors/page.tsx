@@ -4,7 +4,8 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
-import { Loader2, UserCheck, Clock, FileText, Download, AlertCircle } from "lucide-react";
+import { Loader2, UserCheck, Clock, FileText, Download, AlertCircle, FileCheck, Zap } from "lucide-react";
+import { ContributorHeatmap } from "@/components/analytics/ContributorHeatmap";
 import {
   ChartContainer,
   ChartTooltip,
@@ -46,6 +47,11 @@ interface RepoDistribution {
 interface MonthlyTrendPoint {
   month: string;
   [actor: string]: string | number;
+}
+
+interface DailyActivityData {
+  date: string;
+  count: number;
 }
 
 const categoryColors: Record<string, string> = {
@@ -106,6 +112,7 @@ export default function EditorsAnalyticsPage() {
   const [monthlyTrend, setMonthlyTrend] = useState<MonthlyTrendPoint[]>([]);
   const [categoryCoverage, setCategoryCoverage] = useState<CategoryCoverage[]>([]);
   const [repoDistribution, setRepoDistribution] = useState<RepoDistribution[]>([]);
+  const [dailyActivity, setDailyActivity] = useState<DailyActivityData[]>([]);
   const [membershipTier, setMembershipTier] = useState<string>('free');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -157,7 +164,7 @@ export default function EditorsAnalyticsPage() {
       try {
         const months = timeRange === "7d" ? 3 : timeRange === "this_month" || timeRange === "30d" ? 6 : timeRange === "90d" ? 12 : 24;
         
-        const [leaderboardData, trendData, categoryData, repoData] = await Promise.all([
+        const [leaderboardData, trendData, categoryData, repoData, dailyActivityData] = await Promise.all([
           client.analytics.getEditorsLeaderboard({
             repo: repoParam,
             from,
@@ -176,12 +183,18 @@ export default function EditorsAnalyticsPage() {
             from,
             to,
           }),
+          client.analytics.getEditorDailyActivity({
+            repo: repoParam,
+            from,
+            to,
+          }),
         ]);
 
         setLeaderboard(leaderboardData);
         setMonthlyTrend(trendData);
         setCategoryCoverage(categoryData);
         setRepoDistribution(repoData);
+        setDailyActivity(dailyActivityData);
         setDataUpdatedAt(new Date());
       } catch (error) {
         console.error("Failed to fetch editors analytics:", error);
@@ -341,6 +354,77 @@ export default function EditorsAnalyticsPage() {
               <Clock className="h-6 w-6 text-amber-400" />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Editor Performance Overview */}
+      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Editor Performance Overview</h2>
+            <p className="text-sm text-muted-foreground">Activity patterns and key metrics</p>
+          </div>
+          <LastUpdated timestamp={dataUpdatedAt} />
+        </div>
+
+        {/* Velocity Metrics - Compact Row */}
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Average Response Time */}
+          <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 p-4">
+            <div className="rounded-full bg-blue-500/10 p-2.5">
+              <Clock className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Avg Response Time</p>
+              <p className="text-xl font-bold text-foreground">
+                {(() => {
+                  const medians = leaderboard
+                    .map(e => e.medianResponseDays)
+                    .filter((d): d is number => d !== null);
+                  if (medians.length === 0) return "—";
+                  const avg = medians.reduce((a, b) => a + b, 0) / medians.length;
+                  return (
+                    <>
+                      {avg.toFixed(1)}
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">days</span>
+                    </>
+                  );
+                })()}
+              </p>
+            </div>
+          </div>
+
+          {/* Total Reviews */}
+          <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 p-4">
+            <div className="rounded-full bg-emerald-500/10 p-2.5">
+              <FileCheck className="h-5 w-5 text-emerald-500" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Total Reviews</p>
+              <p className="text-xl font-bold text-foreground">
+                {leaderboard.reduce((sum, e) => sum + e.totalReviews, 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {/* PRs Processed */}
+          <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 p-4">
+            <div className="rounded-full bg-purple-500/10 p-2.5">
+              <Zap className="h-5 w-5 text-purple-500" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">PRs Processed</p>
+              <p className="text-xl font-bold text-foreground">
+                {leaderboard.reduce((sum, e) => sum + e.prsTouched, 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Activity Heatmap */}
+        <div>
+          <h3 className="mb-3 text-sm font-medium text-muted-foreground">Daily Activity Pattern</h3>
+          <ContributorHeatmap data={dailyActivity} />
         </div>
       </div>
 
