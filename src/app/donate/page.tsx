@@ -1,106 +1,164 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'motion/react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Heart, DollarSign, Users, ExternalLink } from 'lucide-react';
-import { PageComments } from '@/components/page-comments';
-import { Button } from '@/components/ui/button';
+import Image from 'next/image';
+import { motion } from 'motion/react';
+import { Check, Copy, Heart, Landmark, QrCode, Wallet } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { partners } from '@/data/resources/partners';
+import { grants } from '@/data/resources/grants';
+
+function EthereumIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 256 417" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className={className}>
+      <path fill="currentColor" fillOpacity="0.85" d="M127.9 0L124.7 10.9V278.7L127.9 281.9L255.8 206.3L127.9 0Z" />
+      <path fill="currentColor" d="M127.9 0L0 206.3L127.9 281.9V151.9V0Z" />
+      <path fill="currentColor" fillOpacity="0.85" d="M127.9 306.1L126.1 308.3V403.7L127.9 417L255.9 230.5L127.9 306.1Z" />
+      <path fill="currentColor" d="M127.9 417V306.1L0 230.5L127.9 417Z" />
+      <path fill="currentColor" fillOpacity="0.35" d="M127.9 281.9L255.8 206.3L127.9 151.9V281.9Z" />
+      <path fill="currentColor" fillOpacity="0.5" d="M0 206.3L127.9 281.9V151.9L0 206.3Z" />
+    </svg>
+  );
+}
 
 export default function DonatePage() {
+  const [copied, setCopied] = useState(false);
+  const walletAddress = '0x68B1C495096710Ab5D3aD137F5024221aAf35B7d';
+
+  const topGrants = useMemo(
+    () => [
+      grants.find((g) => g.title.toLowerCase().includes('ecosystem')),
+      grants.find((g) => g.title.toLowerCase().includes('gitcoin')),
+    ].filter(Boolean),
+    []
+  );
+
+  const partnerLogos: Record<string, string> = {
+    EtherWorld: '/brand/partners/ew.png',
+    'ECH (Ethereum Cat Herders)': '/brand/partners/ech.png',
+  };
+
+  const handleCopyAddress = async () => {
+    await navigator.clipboard.writeText(walletAddress);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
   return (
-    <div className="w-full py-8 pl-4 pr-4 sm:pl-6 sm:pr-6 lg:pl-8 lg:pr-8 xl:pl-12 xl:pr-12">
-      <div className="mx-auto max-w-4xl">
+    <div className="w-full py-8 px-3 sm:px-4 lg:px-6">
+      <div className="mx-auto max-w-screen-2xl">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          {/* Hero Section */}
-          <div className="mb-12">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-1.5 ring-1 ring-red-400/30">
-              <Heart className="h-4 w-4 text-red-600 dark:text-red-400" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-red-700 dark:text-red-300">
-                Support Us
+          <section className="mb-6 rounded-xl border border-slate-700/50 bg-slate-900/50 p-5 shadow-sm sm:p-6 lg:p-8">
+            <h1 className="mb-6 text-center text-3xl font-bold text-cyan-400 sm:text-4xl">
+              <span className="inline-flex items-center gap-2">
+                <Heart className="h-7 w-7 text-pink-400" />
+                Donate to Support Our Mission
               </span>
-            </div>
-            <h1 className="mb-4 text-4xl font-bold text-slate-900 dark:text-slate-100">
-              Support EIPsInsight
             </h1>
-            <p className="text-lg text-slate-600 dark:text-slate-400">
-              Your donation helps us maintain and improve tools for the Ethereum community.
-            </p>
-          </div>
 
-          {/* Impact Section */}
-          <section className="mb-12 rounded-xl border border-slate-200/80 bg-white/90 p-6 shadow-sm dark:border-slate-700/50 dark:bg-slate-900/55">
-            <div className="mb-6 inline-flex items-center gap-2">
-              <Heart className="h-5 w-5 text-red-600 dark:text-red-400" />
-              <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Your Impact</h2>
-            </div>
-            <div className="space-y-4 text-slate-700 dark:text-slate-300">
-              <p>
-                EIPsInsight is a community-driven project dedicated to providing transparent, accessible insights into Ethereum governance and protocol development. Your support enables us to:
-              </p>
-              <ul className="space-y-2 pl-4">
-                <li>• Maintain and improve our data analytics infrastructure</li>
-                <li>• Develop new tools for protocol analysis and community engagement</li>
-                <li>• Support ongoing research into Ethereum governance</li>
-                <li>• Keep our platform free and accessible to all</li>
-                <li>• Fund community initiatives and educational programs</li>
-              </ul>
-            </div>
-          </section>
-
-          {/* Donation Methods */}
-          <section className="mb-12 rounded-xl border border-slate-200/80 bg-white/90 p-6 shadow-sm dark:border-slate-700/50 dark:bg-slate-900/55">
-            <div className="mb-6 inline-flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-              <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Donation Methods</h2>
-            </div>
-            <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/30">
-                <h3 className="mb-2 font-semibold text-slate-900 dark:text-slate-100">Ethereum (ETH)</h3>
-                <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-                  Send ETH directly to support development and maintenance.
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-xl border border-slate-800 bg-linear-to-b from-slate-900/70 to-slate-900/40 p-5">
+                <h2 className="mb-2 text-2xl font-semibold text-cyan-400 sm:text-3xl">
+                  <span className="inline-flex items-center gap-2">
+                    <Heart className="h-7 w-7 text-pink-400" /> Send Crypto
+                  </span>
+                </h2>
+                <p className="mb-5 text-base text-slate-200 sm:text-lg">
+                  Your support keeps EIPs Insight free, open-source, and continuously improved. Funds are used for infrastructure, data pipelines, and community features.
                 </p>
-                <Button variant="outline" size="sm">
-                  Donate ETH <ExternalLink className="ml-2 h-3 w-3" />
-                </Button>
+
+                <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-300">Select Network</p>
+                  <div className="mb-4 inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-6 py-2.5 text-lg font-medium text-slate-900 shadow-sm shadow-cyan-200/30">
+                    <EthereumIcon className="h-5 w-5 text-slate-900" />
+                    Ethereum
+                  </div>
+
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-300">Wallet Address</p>
+                  <div className="flex items-center overflow-hidden rounded-lg border border-slate-700 bg-slate-950/70">
+                    <div className="min-w-0 flex-1 px-3 py-3 text-sm font-semibold text-slate-100 sm:text-base">{walletAddress}</div>
+                    <button
+                      onClick={handleCopyAddress}
+                      className="inline-flex items-center gap-1 border-l border-slate-700 bg-cyan-300 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-cyan-200"
+                      type="button"
+                    >
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">All networks use the same address — please confirm network/token compatibility before sending.</p>
+                </div>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/30">
-                <h3 className="mb-2 font-semibold text-slate-900 dark:text-slate-100">Other Cryptocurrencies</h3>
-                <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-                  We accept contributions in various cryptocurrencies. Contact us for details.
-                </p>
-                <Button variant="outline" size="sm">
-                  Other Crypto <ExternalLink className="ml-2 h-3 w-3" />
-                </Button>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/30">
-                <h3 className="mb-2 font-semibold text-slate-900 dark:text-slate-100">Sponsorship</h3>
-                <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-                  Interested in sponsoring EIPsInsight? Reach out to discuss partnership opportunities.
-                </p>
-                <Link href="mailto:support@eipsinsight.com">
-                  <Button variant="outline" size="sm">
-                    Contact Us <ExternalLink className="ml-2 h-3 w-3" />
-                  </Button>
-                </Link>
+              <div className="rounded-xl border border-slate-800 bg-linear-to-b from-slate-900/70 to-slate-900/40 p-5 text-center">
+                <h2 className="mb-3 text-2xl font-semibold text-cyan-400 sm:text-3xl">Scan to Donate</h2>
+                <div className="mx-auto inline-flex rounded-xl border border-cyan-400 bg-white p-3">
+                  <QRCodeSVG value={walletAddress} size={256} includeMargin={true} bgColor="#ffffff" fgColor="#000000" />
+                </div>
+                <p className="mt-3 break-all text-sm font-semibold text-slate-100 sm:text-lg">{walletAddress}</p>
+                <span className="mt-3 inline-flex items-center rounded-full bg-cyan-400/20 px-4 py-1 text-sm font-semibold text-cyan-300">ETHEREUM</span>
               </div>
             </div>
           </section>
 
-          {/* Transparency */}
-          <section className="mb-12 rounded-xl border border-slate-200/80 bg-white/90 p-6 shadow-sm dark:border-slate-700/50 dark:bg-slate-900/55">
-            <div className="mb-6 inline-flex items-center gap-2">
-              <Users className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-              <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Transparency & Accountability</h2>
+          <section className="mb-6 rounded-xl border border-slate-700/50 bg-slate-900/50 p-5 sm:p-6">
+            <div className="mb-4 text-center">
+              <h2 className="text-3xl font-bold text-cyan-400">
+                <span className="inline-flex items-center gap-2"><Landmark className="h-6 w-6" /> Our Partners</span>
+              </h2>
+              <p className="mx-auto mt-2 max-w-3xl text-sm text-slate-300">EIPs Insight is supported by organizations and contributors who share our vision for transparent and accessible Ethereum governance.</p>
             </div>
-            <p className="text-slate-700 dark:text-slate-300">
-              We are committed to transparency in how donations are used. All funds go directly toward development, infrastructure, and community initiatives. We publish regular reports on our resource allocation and goals.
-            </p>
+            <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4">
+              <div className="flex flex-wrap items-center justify-center gap-4">
+                {partners.map((partner) => (
+                  <a key={partner.name} href={partner.website} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-md border border-slate-600 bg-slate-900/60 px-5 py-4 transition hover:border-cyan-400/50">
+                    {partnerLogos[partner.name] ? (
+                      <Image src={partnerLogos[partner.name]} alt={partner.name} width={120} height={44} className="h-11 w-auto object-contain" />
+                    ) : (
+                      <span className="text-sm font-medium text-slate-200">{partner.name}</span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            </div>
           </section>
 
-          {/* Footer Navigation */}
+          <section className="mb-6 rounded-xl border border-slate-700/50 bg-slate-900/50 p-5 sm:p-6">
+            <div className="mb-4 text-center">
+              <h2 className="text-3xl font-bold text-cyan-400">
+                <span className="inline-flex items-center gap-2"><Wallet className="h-6 w-6" /> Funding & Support</span>
+              </h2>
+              <p className="mx-auto mt-2 max-w-3xl text-sm text-slate-300">We transparently publish where support comes from and how it supports the platform.</p>
+            </div>
+
+            <div className="mb-4 flex flex-wrap gap-2">
+              <span className="rounded-full bg-purple-500/20 px-2.5 py-1 text-xs font-semibold text-purple-200">Ethereum</span>
+              <span className="rounded-full bg-sky-500/20 px-2.5 py-1 text-xs font-semibold text-sky-200">Gitcoin</span>
+              <span className="rounded-full bg-cyan-500/20 px-2.5 py-1 text-xs font-semibold text-cyan-200">EIP</span>
+              <span className="rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-200">Infrastructure</span>
+              <span className="rounded-full bg-slate-500/20 px-2.5 py-1 text-xs font-semibold text-slate-200">Open Source</span>
+            </div>
+
+            <div className="space-y-2">
+              {topGrants.map((grant) => (
+                <details key={grant!.id} className="group rounded-md border border-slate-700 bg-slate-900/50">
+                  <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-100">
+                    {grant!.title}
+                  </summary>
+                  <div className="border-t border-slate-700 px-4 py-3 text-sm text-slate-300">
+                    {grant!.description}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+
+          <section className="mb-8 rounded-xl border border-slate-700/50 bg-slate-900/50 p-5 text-center">
+            <h3 className="text-lg font-semibold text-slate-100">Need help or partnership inquiry?</h3>
+            <p className="mt-2 text-sm text-slate-300">Contact us at <a href="mailto:dev@avarch.com" className="text-cyan-300 underline">dev@avarch.com</a></p>
+          </section>
+
           <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-slate-200/80 pt-6 dark:border-slate-700/50">
             <Link href="/" className="text-sm text-cyan-700 hover:underline dark:text-cyan-300">
               ← Back to Home
@@ -112,20 +170,13 @@ export default function DonatePage() {
               >
                 About
               </Link>
-              <Link
-                href="/grants"
-                className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-              >
-                Grants
+              <Link href="https://github.com/AvarchLLC/eipsinsight-v4" target="_blank" rel="noreferrer" className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100">
+                GitHub
               </Link>
             </div>
           </div>
         </motion.div>
 
-        {/* Comments Section */}
-        <div className="mt-12 pt-8 border-t border-slate-200/80 dark:border-slate-700/50">
-          <PageComments />
-        </div>
       </div>
     </div>
   );

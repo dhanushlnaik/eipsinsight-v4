@@ -726,6 +726,7 @@ model Feedback {
   status       String    @default("new")
   is_anonymous Boolean   @default(false)
   user_id      String?
+  github_name  String?
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
   deleted_at   DateTime?

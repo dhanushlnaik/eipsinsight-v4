@@ -360,7 +360,7 @@ export default function ResourcesPage() {
 
           <div className="flex flex-wrap items-center justify-center gap-4">
             <a
-              href="https://github.com/AvarchLLC/EIPsInsight"
+              href="https://github.com/AvarchLLC/eipsinsight-v4"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-200 dark:bg-slate-700/50 hover:border-slate-600 transition-colors"

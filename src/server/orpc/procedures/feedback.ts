@@ -24,6 +24,7 @@ const feedbackSchema = z.object({
   severity: z.enum(['low', 'medium', 'high', 'critical']).optional().default('medium'),
   content: z.string().min(1).max(3000),
   is_anonymous: z.boolean().optional().default(false),
+  github_name: z.string().optional().nullable(),
 })
 
 const feedbackStatusEnum = z.enum(['new', 'in-review', 'resolved'])
@@ -43,6 +44,7 @@ export const feedbackProcedures = {
           severity: input.severity,
           content: input.content,
           is_anonymous: input.is_anonymous,
+          github_name: input.github_name || null,
           user_id: userId,
           status: 'new',
         },
@@ -61,6 +63,7 @@ export const feedbackProcedures = {
         content: feedback.content,
         status: feedback.status,
         is_anonymous: feedback.is_anonymous,
+        github_name: feedback.github_name,
         created_at: feedback.created_at,
       }
     }),
@@ -108,6 +111,7 @@ export const feedbackProcedures = {
           status: f.status,
           is_anonymous: f.is_anonymous,
           user_name: f.is_anonymous ? null : f.user?.name ?? 'Anonymous',
+          github_name: f.github_name,
           created_at: f.created_at,
         })),
         total,
@@ -161,6 +165,7 @@ export const feedbackProcedures = {
           is_anonymous: f.is_anonymous,
           user_name: f.is_anonymous ? null : f.user?.name ?? null,
           user_email: f.is_anonymous ? null : f.user?.email ?? null,
+          github_name: f.github_name,
           created_at: f.created_at,
         })),
         total,

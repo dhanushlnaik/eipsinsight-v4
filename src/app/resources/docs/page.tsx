@@ -203,7 +203,7 @@ export default function DocsPage() {
             Let us know if there&apos;s documentation you&apos;d like to see added.
           </p>
           <a
-            href="https://github.com/AvarchLLC/EIPsInsight/issues/new"
+            href="https://github.com/AvarchLLC/eipsinsight-v4/issues/new"
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-slate-900 dark:text-white bg-cyan-500/20 border border-cyan-500/40 rounded-lg hover:bg-cyan-500/30 hover:border-cyan-400 transition-colors"

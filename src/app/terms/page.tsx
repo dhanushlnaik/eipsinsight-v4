@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
-import { PageComments } from '@/components/page-comments';
 import { 
   FileText, 
   Mail, 
@@ -435,10 +434,6 @@ export default function TermsOfServicePage() {
         </div>
       </div>
 
-      {/* Comments Section */}
-      <div className="mt-12 pt-8 border-t border-slate-200/80 dark:border-slate-700/50">
-        <PageComments />
-      </div>
     </div>
   );
 }

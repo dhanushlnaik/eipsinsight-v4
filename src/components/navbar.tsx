@@ -137,7 +137,7 @@ export default function Navbar() {
           : "shadow-[0_2px_12px_rgb(var(--persona-accent-rgb)/0.08)]"
       )}
     >
-      <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 xl:px-12">
+      <div className="w-full max-w-full px-3 sm:px-4 lg:px-6 xl:px-8">
         <div className="flex h-14 items-center gap-3">
           {/* LEFT: Logo (Desktop) */}
           <Link

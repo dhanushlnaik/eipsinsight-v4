@@ -31,12 +31,12 @@ export default function FAQs() {
         <>
           We welcome contributions from developers, researchers, and community members at all skill levels. You can contribute by opening issues or pull requests in our GitHub repository at{' '}
           <a
-            href="https://github.com/AvarchLLC/EIPsInsight"
+            href="https://github.com/AvarchLLC/eipsinsight-v4"
             target="_blank"
             rel="noopener noreferrer"
             className="text-cyan-700 hover:text-cyan-800 dark:text-cyan-400 dark:hover:text-cyan-300 underline transition-colors"
           >
-            github.com/AvarchLLC/EIPsInsight
+            github.com/AvarchLLC/eipsinsight-v4
           </a>
           . Start with smaller tasks like documentation fixes, typo corrections, UI improvements, or feature suggestions. For larger changes such as new analytics features, API enhancements, or architectural modifications, please open an issue first to discuss scope, design approach, and implementation details with our maintainers. We also appreciate feedback on data accuracy, user experience suggestions, and reports of any inconsistencies you notice in our charts or dashboards.
         </>
@@ -60,12 +60,12 @@ export default function FAQs() {
         <>
           To report bugs or request new features, please visit our GitHub repository at{' '}
           <a
-            href="https://github.com/AvarchLLC/EIPsInsight"
+            href="https://github.com/AvarchLLC/eipsinsight-v4"
             target="_blank"
             rel="noopener noreferrer"
             className="text-cyan-700 hover:text-cyan-800 dark:text-cyan-400 dark:hover:text-cyan-300 underline transition-colors"
           >
-            github.com/AvarchLLC/EIPsInsight
+            github.com/AvarchLLC/eipsinsight-v4
           </a>
           {' '}and create a detailed issue. For bug reports, include specific reproduction steps, screenshots or screen recordings, your browser/device information, expected vs actual behavior, and any console errors you encounter. For feature requests, describe your use case clearly, explain how the feature would benefit the Ethereum community, provide mockups or examples if applicable, and specify any particular data sources or API integrations needed. Our maintainers actively triage issues, typically responding within 48-72 hours with questions, suggestions, or implementation timelines. Priority is given to issues affecting data accuracy, accessibility improvements, and features that enhance community understanding of EIP processes.
         </>
@@ -95,7 +95,7 @@ export default function FAQs() {
               <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                 Can&apos;t find what you&apos;re looking for? Visit our{' '}
                 <a
-                  href="https://github.com/AvarchLLC/EIPsInsight"
+                  href="https://github.com/AvarchLLC/eipsinsight-v4"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-cyan-700 dark:text-cyan-400 font-medium hover:text-cyan-800 dark:hover:text-cyan-300 transition-colors underline"
