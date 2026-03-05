@@ -14,6 +14,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
+import { StatusTransitionStackedChart } from "@/components/analytics/StatusTransitionStackedChart";
 
 const STATUS_COLORS: Record<string, string> = {
   Draft: "#64748b",
@@ -61,6 +62,7 @@ function DrilldownPageContent() {
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [data, setData] = useState<Awaited<ReturnType<typeof client.insights.getMonthlyDrilldown>> | null>(null);
   const [editors, setEditors] = useState<Array<{ editor: string; reviews: number; prsTouched: number; comments: number }>>([]);
+  const [statusTransitionData, setStatusTransitionData] = useState<Array<Record<string, string | number>>>([]);
   const [columnSearch, setColumnSearch] = useState<Record<string, string>>({});
   const [tableStatusFilter, setTableStatusFilter] = useState<string | null>(null);
   const [tableRepoFilter, setTableRepoFilter] = useState<"eips" | "ercs" | "rips" | null>(null);
@@ -74,7 +76,7 @@ function DrilldownPageContent() {
     const run = async () => {
       setLoading(true);
       try {
-        const [drilldown, editorRows] = await Promise.all([
+        const [drilldown, editorRows, statusData] = await Promise.all([
           client.insights.getMonthlyDrilldown({
             repo: tableRepoFilter ?? repo,
             month,
@@ -90,10 +92,15 @@ function DrilldownPageContent() {
             month,
             repo: repo === "all" ? undefined : repo,
           }),
+          client.insights.getStatusTransitionData({
+            repo: repo === "all" ? undefined : repo,
+            month,
+          }),
         ]);
 
         setData(drilldown);
         setEditors(editorRows);
+        setStatusTransitionData(statusData);
         setDataUpdatedAt(new Date());
       } catch (err) {
         console.error("Monthly insight load failed", err);
@@ -511,6 +518,15 @@ function DrilldownPageContent() {
                   </div>
                 </div>
               </div>
+
+              {statusTransitionData.length > 0 && (
+                <StatusTransitionStackedChart
+                  data={statusTransitionData}
+                  colors={STATUS_COLORS}
+                  title="Proposal Status Distribution"
+                  description={`Current snapshot of proposal counts across all statuses for ${monthLabel(month)}`}
+                />
+              )}
 
               <div className="rounded-xl border border-border bg-card p-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
