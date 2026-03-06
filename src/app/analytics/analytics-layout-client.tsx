@@ -140,7 +140,7 @@ function AnalyticsLayoutInner({
   const searchParams = useSearchParams();
 
   const [timeRange, setTimeRangeState] = useState<TimeRange>(
-    (searchParams.get("range") as TimeRange) || "this_month"
+    (searchParams.get("range") as TimeRange) || "all"
   );
   const [repoFilter, setRepoFilterState] = useState<RepoFilter>(
     (searchParams.get("repo") as RepoFilter) || "all"
@@ -152,7 +152,7 @@ function AnalyticsLayoutInner({
   const setTimeRange = useCallback((range: TimeRange) => {
     setTimeRangeState(range);
     const params = new URLSearchParams(searchParams.toString());
-    if (range === "this_month") {
+    if (range === "all") {
       params.delete("range");
     } else {
       params.set("range", range);

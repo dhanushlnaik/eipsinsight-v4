@@ -1310,69 +1310,153 @@ export const exploreProcedures = {
   // Get trending proposals
   getTrendingProposals: optionalAuthProcedure
     .input(z.object({
-      limit: z.number().min(1).max(50).default(20),
+      limit: z.number().min(1).max(100).default(30),
+      windowDays: z.number().min(1).max(365).default(7),
+      repo: z.enum(['all', 'eips', 'ercs', 'rips']).default('all'),
+      status: z.string().trim().optional(),
+      sort: z.enum(['score_desc', 'recent_desc', 'delta_desc']).default('score_desc'),
+      q: z.string().trim().optional(),
     }))
-    .handler(async ({ input }) => {const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    .handler(async ({ input }) => {
+      const windowStart = new Date();
+      windowStart.setDate(windowStart.getDate() - input.windowDays);
+      const prevWindowStart = new Date(windowStart);
+      prevWindowStart.setDate(prevWindowStart.getDate() - input.windowDays);
+      const repoFilter = input.repo === 'all' ? null : input.repo;
+      const statusFilter = input.status?.trim() ? input.status.trim() : null;
+      const searchLike = input.q?.trim() ? `%${input.q.trim().toLowerCase()}%` : null;
 
-      // Calculate trending score:
-      // (# of pr_events in last 7 days * 2) + (# of comments) + (if status changed in last 7 days ? 10 : 0)
-      let trendingData = await prisma.$queryRaw<Array<{
+      const sortClause =
+        input.sort === 'recent_desc'
+          ? 'last_activity DESC NULLS LAST'
+          : input.sort === 'delta_desc'
+            ? 'score_delta DESC, score DESC'
+            : 'score DESC, last_activity DESC NULLS LAST';
+
+      let trendingData = await prisma.$queryRawUnsafe<Array<{
         eip_id: number;
         eip_number: number;
         title: string | null;
         status: string;
         pr_events_count: bigint;
-        comments_count: bigint;
-        had_status_change: boolean;
-        last_activity: Date;
-      }>>`
-        WITH recent_pr_events AS (
+        review_events_count: bigint;
+        comment_events_count: bigint;
+        commit_events_count: bigint;
+        status_changes_count: bigint;
+        prev_pr_events_count: bigint;
+        prev_status_changes_count: bigint;
+        last_activity: Date | null;
+        repo_name: string | null;
+        category: string | null;
+        score: number;
+        score_delta: number;
+      }>>(
+        `
+        WITH current_pr_events AS (
           SELECT 
-            e.id as eip_id,
-            COUNT(*) as pr_events_count
+            e.id AS eip_id,
+            COUNT(*)::bigint AS pr_events_count,
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(pe.event_type, '')) IN ('APPROVED','CHANGES_REQUESTED','REVIEWED'))::bigint AS review_events_count,
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(pe.event_type, '')) = 'COMMENTED')::bigint AS comment_events_count,
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(pe.event_type, '')) = 'COMMITTED')::bigint AS commit_events_count,
+            MAX(pe.created_at) AS last_pr_activity
           FROM pull_request_eips pre
           JOIN eips e ON e.eip_number = pre.eip_number
-          JOIN pr_events pe ON pre.pr_number = pe.pr_number AND pre.repository_id = pe.repository_id
-          WHERE pe.created_at >= ${sevenDaysAgo}
+          JOIN pr_events pe ON pe.pr_number = pre.pr_number AND pe.repository_id = pre.repository_id
+          LEFT JOIN repositories r ON r.id = pe.repository_id
+          WHERE pe.created_at >= $1
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = $2)
           GROUP BY e.id
         ),
-        pr_comments AS (
+        previous_pr_events AS (
           SELECT 
-            e.id as eip_id,
-            SUM(COALESCE(pr.num_comments, 0)) as comments_count
+            e.id AS eip_id,
+            COUNT(*)::bigint AS prev_pr_events_count
           FROM pull_request_eips pre
           JOIN eips e ON e.eip_number = pre.eip_number
-          JOIN pull_requests pr ON pre.pr_number = pr.pr_number AND pre.repository_id = pr.repository_id
+          JOIN pr_events pe ON pe.pr_number = pre.pr_number AND pe.repository_id = pre.repository_id
+          LEFT JOIN repositories r ON r.id = pe.repository_id
+          WHERE pe.created_at >= $3
+            AND pe.created_at < $1
+            AND ($2::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = $2)
           GROUP BY e.id
         ),
-        recent_status_changes AS (
-          SELECT DISTINCT eip_id
+        current_status_changes AS (
+          SELECT eip_id, COUNT(*)::bigint AS status_changes_count, MAX(changed_at) AS last_status_activity
           FROM eip_status_events
-          WHERE changed_at >= ${sevenDaysAgo} AND eip_id IS NOT NULL
+          WHERE changed_at >= $1 AND eip_id IS NOT NULL
+          GROUP BY eip_id
+        ),
+        previous_status_changes AS (
+          SELECT eip_id, COUNT(*)::bigint AS prev_status_changes_count
+          FROM eip_status_events
+          WHERE changed_at >= $3 AND changed_at < $1 AND eip_id IS NOT NULL
+          GROUP BY eip_id
         )
-        SELECT 
-          e.id as eip_id,
+        SELECT
+          e.id AS eip_id,
           e.eip_number,
           e.title,
-          COALESCE(es.status, 'Unknown') as status,
-          COALESCE(rpe.pr_events_count, 0) as pr_events_count,
-          COALESCE(pc.comments_count, 0) as comments_count,
-          rsc.eip_id IS NOT NULL as had_status_change,
-          COALESCE(es.updated_at, e.created_at) as last_activity
+          COALESCE(es.status, 'Unknown') AS status,
+          COALESCE(cpe.pr_events_count, 0) AS pr_events_count,
+          COALESCE(cpe.review_events_count, 0) AS review_events_count,
+          COALESCE(cpe.comment_events_count, 0) AS comment_events_count,
+          COALESCE(cpe.commit_events_count, 0) AS commit_events_count,
+          COALESCE(csc.status_changes_count, 0) AS status_changes_count,
+          COALESCE(ppe.prev_pr_events_count, 0) AS prev_pr_events_count,
+          COALESCE(psc.prev_status_changes_count, 0) AS prev_status_changes_count,
+          GREATEST(
+            COALESCE(cpe.last_pr_activity, '1970-01-01'::timestamp),
+            COALESCE(csc.last_status_activity, '1970-01-01'::timestamp),
+            COALESCE(es.updated_at, '1970-01-01'::timestamp),
+            COALESCE(e.created_at, '1970-01-01'::timestamp)
+          ) AS last_activity,
+          repo.name AS repo_name,
+          es.category,
+          (
+            (COALESCE(cpe.pr_events_count, 0) * 2) +
+            (COALESCE(cpe.comment_events_count, 0) * 1) +
+            (COALESCE(cpe.review_events_count, 0) * 2) +
+            (COALESCE(cpe.commit_events_count, 0) * 1) +
+            (COALESCE(csc.status_changes_count, 0) * 3)
+          )::int AS score,
+          (
+            (
+              (COALESCE(cpe.pr_events_count, 0) * 2) +
+              (COALESCE(cpe.comment_events_count, 0) * 1) +
+              (COALESCE(cpe.review_events_count, 0) * 2) +
+              (COALESCE(cpe.commit_events_count, 0) * 1) +
+              (COALESCE(csc.status_changes_count, 0) * 3)
+            ) -
+            (
+              (COALESCE(ppe.prev_pr_events_count, 0) * 2) +
+              (COALESCE(psc.prev_status_changes_count, 0) * 3)
+            )
+          )::int AS score_delta
         FROM eips e
-        LEFT JOIN eip_snapshots es ON e.id = es.eip_id
-        LEFT JOIN recent_pr_events rpe ON e.id = rpe.eip_id
-        LEFT JOIN pr_comments pc ON e.id = pc.eip_id
-        LEFT JOIN recent_status_changes rsc ON e.id = rsc.eip_id
-        WHERE (rpe.pr_events_count > 0 OR pc.comments_count > 0 OR rsc.eip_id IS NOT NULL)
-        ORDER BY (
-          COALESCE(rpe.pr_events_count, 0) * 2 + 
-          COALESCE(pc.comments_count, 0) + 
-          CASE WHEN rsc.eip_id IS NOT NULL THEN 10 ELSE 0 END
-        ) DESC
-        LIMIT ${input.limit}
-      `;
+        LEFT JOIN eip_snapshots es ON es.eip_id = e.id
+        LEFT JOIN repositories repo ON repo.id = es.repository_id
+        LEFT JOIN current_pr_events cpe ON cpe.eip_id = e.id
+        LEFT JOIN previous_pr_events ppe ON ppe.eip_id = e.id
+        LEFT JOIN current_status_changes csc ON csc.eip_id = e.id
+        LEFT JOIN previous_status_changes psc ON psc.eip_id = e.id
+        WHERE e.eip_number <> 0
+          AND (
+            COALESCE(cpe.pr_events_count, 0) > 0
+            OR COALESCE(csc.status_changes_count, 0) > 0
+          )
+          AND ($4::text IS NULL OR COALESCE(es.status, 'Unknown') = $4)
+          AND ($2::text IS NULL OR LOWER(SPLIT_PART(COALESCE(repo.name, ''), '/', 2)) = $2)
+          AND (
+            $5::text IS NULL
+            OR LOWER(COALESCE(e.title, '')) LIKE $5
+            OR LOWER(CONCAT('eip-', e.eip_number::text)) LIKE $5
+          )
+        ORDER BY ${sortClause}
+        LIMIT $6
+      `,
+        windowStart, repoFilter, prevWindowStart, statusFilter, searchLike, input.limit
+      );
 
       // Fallback: when no 7-day activity, show recently updated EIPs (last 90 days)
       if (trendingData.length === 0) {
@@ -1384,21 +1468,38 @@ export const exploreProcedures = {
           title: string | null;
           status: string;
           pr_events_count: bigint;
-          comments_count: bigint;
-          had_status_change: boolean;
-          last_activity: Date;
-        }>>`
+            review_events_count: bigint;
+            comment_events_count: bigint;
+            commit_events_count: bigint;
+            status_changes_count: bigint;
+            prev_pr_events_count: bigint;
+            prev_status_changes_count: bigint;
+            last_activity: Date;
+            repo_name: string | null;
+            category: string | null;
+            score: number;
+            score_delta: number;
+          }>>`
           SELECT 
             e.id as eip_id,
             e.eip_number,
             e.title,
             COALESCE(es.status, 'Unknown') as status,
             0::bigint as pr_events_count,
-            0::bigint as comments_count,
-            false as had_status_change,
+            0::bigint as review_events_count,
+            0::bigint as comment_events_count,
+            0::bigint as commit_events_count,
+            0::bigint as status_changes_count,
+            0::bigint as prev_pr_events_count,
+            0::bigint as prev_status_changes_count,
             COALESCE(es.updated_at, e.created_at) as last_activity
+            ,repo.name as repo_name
+            ,es.category
+            ,0::int as score
+            ,0::int as score_delta
           FROM eips e
           LEFT JOIN eip_snapshots es ON e.id = es.eip_id
+          LEFT JOIN repositories repo ON repo.id = es.repository_id
           WHERE es.updated_at >= ${ninetyDaysAgo} OR (e.created_at >= ${ninetyDaysAgo})
           ORDER BY COALESCE(es.updated_at, e.created_at) DESC NULLS LAST
           LIMIT ${input.limit}
@@ -1413,48 +1514,115 @@ export const exploreProcedures = {
           title: string | null;
           status: string;
           pr_events_count: bigint;
-          comments_count: bigint;
-          had_status_change: boolean;
-          last_activity: Date;
-        }>>`
+            review_events_count: bigint;
+            comment_events_count: bigint;
+            commit_events_count: bigint;
+            status_changes_count: bigint;
+            prev_pr_events_count: bigint;
+            prev_status_changes_count: bigint;
+            last_activity: Date;
+            repo_name: string | null;
+            category: string | null;
+            score: number;
+            score_delta: number;
+          }>>`
           SELECT 
             e.id as eip_id,
             e.eip_number,
             e.title,
             COALESCE(es.status, 'Unknown') as status,
             0::bigint as pr_events_count,
-            0::bigint as comments_count,
-            false as had_status_change,
+            0::bigint as review_events_count,
+            0::bigint as comment_events_count,
+            0::bigint as commit_events_count,
+            0::bigint as status_changes_count,
+            0::bigint as prev_pr_events_count,
+            0::bigint as prev_status_changes_count,
             COALESCE(es.updated_at, e.created_at) as last_activity
+            ,repo.name as repo_name
+            ,es.category
+            ,0::int as score
+            ,0::int as score_delta
           FROM eips e
           LEFT JOIN eip_snapshots es ON e.id = es.eip_id
+          LEFT JOIN repositories repo ON repo.id = es.repository_id
           ORDER BY e.eip_number DESC
           LIMIT ${input.limit}
         `;
       }
 
-      return trendingData.map(t => {
-        const score = Number(t.pr_events_count) * 2 + Number(t.comments_count) + (t.had_status_change ? 10 : 0);
-        
-        const trendingReason = [];
-        if (Number(t.pr_events_count) > 0) {
-          trendingReason.push(`${t.pr_events_count} PR events this week`);
+      const ids = trendingData.map((t) => t.eip_id);
+      const linkedPrRows = ids.length
+        ? await prisma.$queryRaw<Array<{
+            eip_id: number;
+            pr_number: number;
+            pr_title: string | null;
+            pr_state: string | null;
+            events_count: bigint;
+          }>>`
+            SELECT
+              e.id AS eip_id,
+              pre.pr_number,
+              pr.title AS pr_title,
+              pr.state AS pr_state,
+              COUNT(pe.id)::bigint AS events_count
+            FROM pull_request_eips pre
+            JOIN eips e ON e.eip_number = pre.eip_number
+            LEFT JOIN pull_requests pr ON pr.pr_number = pre.pr_number AND pr.repository_id = pre.repository_id
+            LEFT JOIN pr_events pe ON pe.pr_number = pre.pr_number AND pe.repository_id = pre.repository_id AND pe.created_at >= ${windowStart}
+            WHERE e.id = ANY(${ids})
+            GROUP BY e.id, pre.pr_number, pr.title, pr.state
+            ORDER BY e.id, events_count DESC
+          `
+        : [];
+
+      const linkedMap = new Map<number, Array<{ prNumber: number; title: string; state: string }>>();
+      for (const row of linkedPrRows) {
+        if (!linkedMap.has(row.eip_id)) linkedMap.set(row.eip_id, []);
+        const arr = linkedMap.get(row.eip_id)!;
+        if (arr.length < 3) {
+          arr.push({
+            prNumber: row.pr_number,
+            title: row.pr_title || `PR #${row.pr_number}`,
+            state: row.pr_state || 'open',
+          });
         }
-        if (t.had_status_change) {
-          trendingReason.push('Status changed this week');
-        }
-        if (Number(t.comments_count) > 0) {
-          trendingReason.push(`${t.comments_count} comments`);
-        }
+      }
+
+      return trendingData.map((t) => {
+        const topEvents = [
+          { type: 'reviews', count: Number(t.review_events_count) },
+          { type: 'comments', count: Number(t.comment_events_count) },
+          { type: 'commits', count: Number(t.commit_events_count) },
+          { type: 'status', count: Number(t.status_changes_count) },
+        ].filter((event) => event.count > 0);
+
+        const reasons: string[] = [];
+        if (Number(t.review_events_count) > 0) reasons.push(`${t.review_events_count} reviews`);
+        if (Number(t.comment_events_count) > 0) reasons.push(`${t.comment_events_count} comments`);
+        if (Number(t.commit_events_count) > 0) reasons.push(`${t.commit_events_count} commits`);
+        if (Number(t.status_changes_count) > 0) reasons.push(`${t.status_changes_count} status changes`);
+
+        const shortRepo = (t.repo_name || '').split('/')[1]?.toLowerCase() || '';
+        const kind = shortRepo === 'ercs' || (t.category || '').toUpperCase() === 'ERC'
+          ? 'ERC'
+          : shortRepo === 'rips'
+            ? 'RIP'
+            : 'EIP';
 
         return {
           eipId: t.eip_id,
           number: t.eip_number,
           title: t.title || `EIP-${t.eip_number}`,
           status: t.status,
-          score,
-          trendingReason: trendingReason.join(', ') || 'Recent activity',
+          score: Number(t.score),
+          scoreDelta: Number(t.score_delta),
+          trendingReason: reasons.join(', ') || 'Recent activity',
           lastActivity: t.last_activity?.toISOString() || null,
+          repo: shortRepo || 'eips',
+          kind,
+          topEvents,
+          topLinkedPRs: linkedMap.get(t.eip_id) ?? [],
         };
       });
     }),
@@ -1463,31 +1631,45 @@ export const exploreProcedures = {
   getTrendingHeatmap: optionalAuthProcedure
     .input(z.object({
       topN: z.number().min(5).max(20).default(10),
+      windowDays: z.number().min(7).max(365).default(30),
+      repo: z.enum(['all', 'eips', 'ercs', 'rips']).default('all'),
     }))
-    .handler(async ({ input }) => {const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    .handler(async ({ input }) => {
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - input.windowDays);
+      const repoFilter = input.repo === 'all' ? null : input.repo;
 
       // Get top N most active EIPs in last 30 days
       const topEIPs = await prisma.$queryRaw<Array<{
         eip_id: number;
         eip_number: number;
         title: string | null;
+        repo_name: string | null;
         total_activity: bigint;
       }>>`
         WITH activity_counts AS (
           SELECT 
-            eip_id,
-            COUNT(*) as activity
-          FROM eip_status_events
-          WHERE changed_at >= ${thirtyDaysAgo}
-          GROUP BY eip_id
+            e.id as eip_id,
+            COUNT(pe.id) + COUNT(ese.id) as activity
+          FROM eips e
+          LEFT JOIN pull_request_eips pre ON pre.eip_number = e.eip_number
+          LEFT JOIN pr_events pe ON pe.pr_number = pre.pr_number AND pe.repository_id = pre.repository_id AND pe.created_at >= ${fromDate}
+          LEFT JOIN eip_status_events ese ON ese.eip_id = e.id AND ese.changed_at >= ${fromDate}
+          LEFT JOIN eip_snapshots es ON es.eip_id = e.id
+          LEFT JOIN repositories r ON r.id = es.repository_id
+          WHERE e.eip_number <> 0
+            AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
+          GROUP BY e.id
         )
         SELECT 
           e.id as eip_id,
           e.eip_number,
           e.title,
+          r.name as repo_name,
           COALESCE(ac.activity, 0) as total_activity
         FROM eips e
+        LEFT JOIN eip_snapshots es ON es.eip_id = e.id
+        LEFT JOIN repositories r ON r.id = es.repository_id
         LEFT JOIN activity_counts ac ON e.id = ac.eip_id
         WHERE ac.activity > 0
         ORDER BY ac.activity DESC
@@ -1503,13 +1685,28 @@ export const exploreProcedures = {
         day: Date;
         activity: bigint;
       }>>`
-        SELECT 
-          eip_id,
-          DATE(changed_at) as day,
-          COUNT(*) as activity
-        FROM eip_status_events
-        WHERE eip_id = ANY(${eipIds}) AND changed_at >= ${thirtyDaysAgo}
-        GROUP BY eip_id, DATE(changed_at)
+        WITH status_daily AS (
+          SELECT eip_id, DATE(changed_at) as day, COUNT(*)::bigint as c
+          FROM eip_status_events
+          WHERE eip_id = ANY(${eipIds}) AND changed_at >= ${fromDate}
+          GROUP BY eip_id, DATE(changed_at)
+        ),
+        pr_daily AS (
+          SELECT e.id as eip_id, DATE(pe.created_at) as day, COUNT(*)::bigint as c
+          FROM pull_request_eips pre
+          JOIN eips e ON e.eip_number = pre.eip_number
+          JOIN pr_events pe ON pe.pr_number = pre.pr_number AND pe.repository_id = pre.repository_id
+          WHERE e.id = ANY(${eipIds}) AND pe.created_at >= ${fromDate}
+          GROUP BY e.id, DATE(pe.created_at)
+        ),
+        unioned AS (
+          SELECT * FROM status_daily
+          UNION ALL
+          SELECT * FROM pr_daily
+        )
+        SELECT eip_id, day, SUM(c)::bigint AS activity
+        FROM unioned
+        GROUP BY eip_id, day
         ORDER BY day
       `;
 
@@ -1518,9 +1715,9 @@ export const exploreProcedures = {
         const eipActivity = dailyActivity.filter(d => d.eip_id === eip.eip_id);
         const dailyData: { date: string; value: number }[] = [];
         
-        for (let i = 0; i < 30; i++) {
+        for (let i = 0; i < input.windowDays; i++) {
           const date = new Date();
-          date.setDate(date.getDate() - (29 - i));
+          date.setDate(date.getDate() - ((input.windowDays - 1) - i));
           const dateStr = date.toISOString().split('T')[0];
           const found = eipActivity.find(a => a.day.toISOString().split('T')[0] === dateStr);
           dailyData.push({
@@ -1532,6 +1729,7 @@ export const exploreProcedures = {
         return {
           eipNumber: eip.eip_number,
           title: eip.title || `EIP-${eip.eip_number}`,
+          repo: (eip.repo_name || '').split('/')[1]?.toLowerCase() || 'eips',
           totalActivity: Number(eip.total_activity),
           dailyActivity: dailyData,
         };

@@ -1,66 +1,72 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'motion/react';
-import { Flame, ArrowRight, TrendingUp, Clock } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { Flame, ExternalLink, Clock } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-interface TrendingProposal {
+export interface TrendingProposalRow {
   eipId: number;
   number: number;
   title: string;
   status: string;
   score: number;
+  scoreDelta: number;
   trendingReason: string;
   lastActivity: string | null;
+  repo: string;
+  kind: 'EIP' | 'ERC' | 'RIP';
+  topEvents: Array<{ type: string; count: number }>;
+  topLinkedPRs: Array<{ prNumber: number; title: string; state: string }>;
 }
 
 interface TrendingListProps {
-  proposals: TrendingProposal[];
+  proposals: TrendingProposalRow[];
   loading: boolean;
+  selectedEipId: number | null;
+  onSelect: (proposal: TrendingProposalRow) => void;
+  windowLabel: string;
 }
 
-const statusColors: Record<string, string> = {
-  'Draft': 'bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/30',
-  'Review': 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30',
-  'Last Call': 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30',
-  'Final': 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-  'Stagnant': 'bg-orange-500/20 text-orange-700 dark:text-orange-300 border-orange-500/30',
-  'Withdrawn': 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30',
+const statusClasses: Record<string, string> = {
+  Draft: 'border-slate-500/30 bg-slate-500/15 text-slate-300',
+  Review: 'border-blue-500/30 bg-blue-500/15 text-blue-300',
+  'Last Call': 'border-amber-500/30 bg-amber-500/15 text-amber-300',
+  Final: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300',
+  Living: 'border-cyan-500/30 bg-cyan-500/15 text-cyan-300',
+  Stagnant: 'border-gray-500/30 bg-gray-500/15 text-gray-300',
+  Withdrawn: 'border-rose-500/30 bg-rose-500/15 text-rose-300',
 };
 
 function formatLastActivity(dateStr: string | null): string {
-  if (!dateStr) return 'Recent';
+  if (!dateStr) return 'recent';
   const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffHours < 1) return 'Just now';
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
+  const diffMs = Date.now() - date.getTime();
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (hours < 1) return 'just now';
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function getScoreColor(score: number): string {
-  if (score >= 20) return 'text-orange-600 dark:text-orange-400';
-  if (score >= 10) return 'text-amber-600 dark:text-amber-400';
-  return 'text-slate-600 dark:text-slate-400';
+function proposalHref(row: TrendingProposalRow) {
+  if (row.kind === 'ERC') return `/erc/${row.number}`;
+  if (row.kind === 'RIP') return `/rips/${row.number}`;
+  return `/eips/${row.number}`;
 }
 
-export function TrendingList({ proposals, loading }: TrendingListProps) {
+function timelineHref(row: TrendingProposalRow) {
+  return `/tools/timeline?repo=${row.repo}&proposal=${row.kind}-${row.number}`;
+}
+
+export function TrendingList({ proposals, loading, selectedEipId, onSelect, windowLabel }: TrendingListProps) {
   if (loading) {
     return (
-      <div className="bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/40 overflow-hidden">
-        <div className="p-6">
-          <div className="animate-pulse space-y-4">
-            {[...Array(10)].map((_, i) => (
-              <div key={i} className="h-20 bg-slate-200 dark:bg-slate-800 rounded-lg" />
-            ))}
-          </div>
+      <div className="rounded-xl border border-border bg-card/60 p-4">
+        <div className="animate-pulse space-y-3">
+          {Array.from({ length: 8 }).map((_, idx) => (
+            <div key={idx} className="h-28 rounded-lg bg-muted" />
+          ))}
         </div>
       </div>
     );
@@ -68,86 +74,99 @@ export function TrendingList({ proposals, loading }: TrendingListProps) {
 
   if (proposals.length === 0) {
     return (
-      <div className="bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/40 p-12 text-center">
-        <p className="text-slate-600 dark:text-slate-400">No trending proposals at the moment</p>
+      <div className="rounded-xl border border-border bg-card/60 p-10 text-center text-muted-foreground">
+        No trending proposals for current filters.
       </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/40 overflow-hidden"
-    >
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700/40 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-orange-500 dark:text-orange-400" />
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-            Trending Proposals ({proposals.length})
-          </h3>
-        </div>
-        <span className="text-xs text-slate-500 dark:text-slate-500">Last 7 days</span>
+    <section className="rounded-xl border border-border bg-card/60">
+      <div className="border-b border-border px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Trending</p>
+        <h2 className="dec-title mt-1 text-xl font-semibold tracking-tight text-foreground">What is trending now</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">Ranked proposals in {windowLabel} with explainable activity drivers.</p>
       </div>
-
-      {/* List */}
-      <div className="divide-y divide-slate-200 dark:divide-slate-700/30">
-        {proposals.map((proposal, index) => (
-          <Link key={proposal.eipId} href={`/eips/${proposal.number}`}>
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.03 }}
+      <div className="space-y-2 p-3">
+        {proposals.map((proposal) => {
+          const selected = selectedEipId === proposal.eipId;
+          return (
+            <article
+              key={proposal.eipId}
               className={cn(
-                "px-6 py-4 hover:bg-slate-100 dark:hover:bg-slate-800/30 transition-colors cursor-pointer",
-                "flex items-center gap-4"
+                'rounded-lg border p-3 transition-colors',
+                selected
+                  ? 'border-primary/45 bg-primary/10'
+                  : 'border-border bg-muted/20 hover:border-primary/35 hover:bg-primary/10'
               )}
             >
-              {/* Rank / Score */}
-              <div className="flex flex-col items-center w-16 shrink-0">
-                <div className="flex items-center gap-1">
-                  <Flame className={cn("h-4 w-4", getScoreColor(proposal.score))} />
-                  <span className={cn("font-bold", getScoreColor(proposal.score))}>
-                    {proposal.score}
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-500 uppercase">Score</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => onSelect(proposal)}
+                className="w-full text-left"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-primary">{proposal.kind}-{proposal.number}</span>
+                      <span className={cn('rounded-md border px-2 py-0.5 text-[11px] font-medium', statusClasses[proposal.status] || 'border-border bg-muted/50 text-muted-foreground')}>
+                        {proposal.status}
+                      </span>
+                      <span className="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-[11px] uppercase text-muted-foreground">
+                        {proposal.repo}
+                      </span>
+                    </div>
+                    <h3 className="mt-1 line-clamp-1 text-sm font-semibold text-foreground">{proposal.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{proposal.trendingReason}</p>
+                  </div>
 
-              {/* EIP Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold text-cyan-600 dark:text-cyan-400">
-                    EIP-{proposal.number}
-                  </span>
-                  <span className={cn(
-                    "px-2 py-0.5 rounded-full text-xs font-medium border",
-                    statusColors[proposal.status] || statusColors['Draft']
-                  )}>
-                    {proposal.status}
-                  </span>
+                  <div className="shrink-0 text-right">
+                    <div className="inline-flex items-center gap-1 text-sm font-bold text-primary">
+                      <Flame className="h-4 w-4" />
+                      {proposal.score}
+                    </div>
+                    <p className={cn('text-xs', proposal.scoreDelta >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                      {proposal.scoreDelta >= 0 ? '+' : ''}{proposal.scoreDelta} delta
+                    </p>
+                    <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {formatLastActivity(proposal.lastActivity)}
+                    </p>
+                  </div>
                 </div>
-                <h4 className="text-sm text-slate-900 dark:text-white line-clamp-1 mb-1">
-                  {proposal.title}
-                </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-500">
-                  {proposal.trendingReason}
-                </p>
-              </div>
 
-              {/* Last Activity */}
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="flex items-center gap-1 text-xs text-slate-500">
-                  <Clock className="h-3 w-3" />
-                  {formatLastActivity(proposal.lastActivity)}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {proposal.topEvents.slice(0, 4).map((event) => (
+                    <span key={`${proposal.eipId}-${event.type}`} className="rounded-md border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                      +{event.count} {event.type}
+                    </span>
+                  ))}
                 </div>
-                <ArrowRight className="h-4 w-4 text-slate-500" />
+              </button>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={proposalHref(proposal)} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground">
+                  Open proposal
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+                <Link href={timelineHref(proposal)} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground">
+                  Timeline
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+                {proposal.topLinkedPRs[0] && (
+                  <Link
+                    href={`/pr/${proposal.repo}/${proposal.topLinkedPRs[0].prNumber}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Open PR #{proposal.topLinkedPRs[0].prNumber}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Link>
+                )}
               </div>
-            </motion.div>
-          </Link>
-        ))}
+            </article>
+          );
+        })}
       </div>
-    </motion.div>
+    </section>
   );
 }

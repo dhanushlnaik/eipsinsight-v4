@@ -1,26 +1,27 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
-import { client } from "@/lib/orpc";
-import {
-  Loader2, TrendingUp, FileText, CheckCircle,
-  ArrowRight, Download, Layers, Activity, Timer,
-  Cpu, Network, Code, Boxes, Info, GitCommitHorizontal,
-  Zap, Eye, Bell, Pause, XCircle, AlertCircle,
-} from "lucide-react";
-import {
-  ChartContainer, ChartTooltip, ChartTooltipContent,
-} from "@/components/ui/chart";
-import {
-  BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, LabelList, Legend, Brush,
-} from "recharts";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
-import { LastUpdated } from "@/components/analytics/LastUpdated";
+import ReactECharts from "echarts-for-react";
+import { useTheme } from "next-themes";
+import {
+  Activity,
+  AlertCircle,
+  ArrowRight,
+  CheckCircle,
+  Download,
+  FileText,
+  Layers,
+  Loader2,
+  Pause,
+  Timer,
+  TrendingUp,
+  XCircle,
+} from "lucide-react";
 
-// ─── THEME COLORS (matches governance-over-time.tsx) ─────────────
+import { client } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
+import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 
 const STATUS_COLORS: Record<string, string> = {
   Draft: "#22D3EE",
@@ -29,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
   Final: "#34D399",
   Living: "#A78BFA",
   Stagnant: "#64748B",
-  Withdrawn: "#94A3B8",
+  Withdrawn: "#EF4444",
 };
 
 const CAT_COLORS: Record<string, string> = {
@@ -44,73 +45,43 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 const STATUS_ORDER = ["Draft", "Review", "Last Call", "Final", "Living", "Stagnant", "Withdrawn"];
+const STATUS_RANK: Record<string, number> = STATUS_ORDER.reduce((acc, s, i) => {
+  acc[s] = i;
+  return acc;
+}, {} as Record<string, number>);
 
-const CAT_ICONS: Record<string, React.ReactNode> = {
-  Core: <Cpu className="h-4 w-4" />,
-  ERC: <Code className="h-4 w-4" />,
-  Networking: <Network className="h-4 w-4" />,
-  Interface: <Code className="h-4 w-4" />,
-  Meta: <Boxes className="h-4 w-4" />,
-  Informational: <Info className="h-4 w-4" />,
-  RIPs: <GitCommitHorizontal className="h-4 w-4" />,
-};
-
-const STATUS_ICONS: Record<string, React.ReactNode> = {
-  Draft: <FileText className="h-5 w-5" />,
-  Review: <Eye className="h-5 w-5" />,
-  "Last Call": <Bell className="h-5 w-5" />,
-  Final: <CheckCircle className="h-5 w-5" />,
-  Living: <Zap className="h-5 w-5" />,
-  Stagnant: <Pause className="h-5 w-5" />,
-  Withdrawn: <XCircle className="h-5 w-5" />,
-};
-
-const CAT_DESC: Record<string, string> = {
-  Core: "Changes to the Ethereum protocol requiring a consensus fork.",
-  ERC: "Application-level standards for tokens, accounts, and more.",
-  Networking: "Changes to the Ethereum network protocol.",
-  Interface: "Client API/RPC specs and language-level standards.",
-  Meta: "Process changes outside the protocol itself.",
-  Informational: "General guidelines and information.",
-  RIPs: "Rollup Improvement Proposals for the rollup ecosystem.",
-};
-
-const STATUS_DESC: Record<string, string> = {
-  Draft: "Under initial consideration, open for feedback.",
-  Review: "Actively discussed and evaluated by the community.",
-  "Last Call": "Final review window before moving to Final.",
-  Final: "Formally accepted and implemented.",
-  Living: "Continuously updated, never reaches finality.",
-  Stagnant: "Inactive for 6+ months, not progressing.",
-  Withdrawn: "Removed from consideration.",
-};
-
-// ─── HELPERS ──────────────────────────────────────────────────────
-
-function Section({ title, icon, children, action, className }: {
-  title: string; icon: React.ReactNode; children: React.ReactNode;
-  action?: React.ReactNode; className?: string;
+function Section({
+  title,
+  icon,
+  children,
+  action,
+  className,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className={cn(
-      "rounded-2xl border p-5",
-      "border-border bg-card/60 shadow-sm",
-      className,
-    )}>
-      <div className="mb-4 flex items-center justify-between">
+    <section className={cn("rounded-xl border border-border bg-card/60 p-5", className)}>
+      <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="text-primary">{icon}</span>
-          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">{title}</h2>
         </div>
         {action}
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
 function downloadCSV(headers: string[], rows: string[][], filename: string) {
-  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
+  const csv = [
+    headers.join(","),
+    ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")),
+  ].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -118,221 +89,605 @@ function downloadCSV(headers: string[], rows: string[][], filename: string) {
   a.click();
 }
 
-function CSVBtn({ onClick, label = "CSV" }: { onClick: () => void; label?: string }) {
+function downloadObjectCSV(rows: Array<Record<string, unknown>>, filename: string) {
+  if (!rows.length) return;
+  const headers = Array.from(
+    rows.reduce((acc, row) => {
+      Object.keys(row).forEach((k) => acc.add(k));
+      return acc;
+    }, new Set<string>()),
+  );
+  const dataRows = rows.map((row) => headers.map((h) => String(row[h] ?? "")));
+  downloadCSV(headers, dataRows, filename);
+}
+
+function CSVBtn({ onClick, label = "Download CSV" }: { onClick: () => void; label?: string }) {
   return (
-    <button onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-border/30 bg-primary/10 px-3 py-1 text-[10px] font-medium text-primary/80 hover:bg-primary/15 hover:text-primary transition-colors">
-      <Download className="h-3 w-3" /> {label}
+    <button
+      onClick={onClick}
+      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-primary/25 bg-primary/10 px-3 text-sm text-primary transition-colors hover:border-primary/40 hover:bg-primary/15"
+    >
+      <Download className="h-4 w-4" />
+      {label}
     </button>
   );
 }
 
-// ─── MAIN PAGE ────────────────────────────────────────────────────
+function formatFooterDate(value: Date | null): string {
+  if (!value) return "—";
+  const dd = String(value.getDate()).padStart(2, "0");
+  const mm = String(value.getMonth() + 1).padStart(2, "0");
+  const yyyy = value.getFullYear();
+  const hh = value.toLocaleString("en-US", { hour: "2-digit", hour12: true }).slice(0, 2);
+  const min = value.toLocaleString("en-US", { minute: "2-digit" });
+  const ap = value.toLocaleString("en-US", { hour: "2-digit", hour12: true }).slice(-2).toUpperCase();
+  return `${dd}-${mm}-${yyyy} ${hh}:${min} ${ap}`;
+}
+
+function ChartFooter({ nextUpdateAt }: { nextUpdateAt: Date | null }) {
+  return (
+    <div className="mt-3 border-t border-border/70 pt-2.5">
+      <div className="flex items-center justify-between gap-3 rounded-md bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground/90">EIPsInsight.com</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
+          Next Update: {formatFooterDate(nextUpdateAt)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+type CrossTabRow = { category: string; status: string; repo: string; count: number };
+type RecentChangeRow = {
+  from?: string;
+  to?: string;
+  eip?: string;
+  eip_type?: string;
+  title?: string;
+  days?: number;
+  repository?: string;
+  category?: string;
+  actor?: string;
+  pr_number?: number;
+  changed_at?: string | Date;
+};
 
 export default function EIPsAnalyticsPage() {
   const { timeRange, repoFilter } = useAnalytics();
+  const { resolvedTheme } = useTheme();
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dataUpdatedAt, setDataUpdatedAt] = useState<Date>(new Date());
   const [kpis, setKpis] = useState<{ total?: number } | null>(null);
-  const [ripKpis, setRipKpis] = useState<{ total?: number } | null>(null);
-  const [crossTab, setCrossTab] = useState<Array<{ category: string; status: string; repo: string; count: number }>>([]);
+  const [crossTab, setCrossTab] = useState<CrossTabRow[]>([]);
   const [statusDist, setStatusDist] = useState<Array<{ status: string; count: number }>>([]);
   const [catBreakdown, setCatBreakdown] = useState<Array<{ category: string; count: number }>>([]);
   const [transitions, setTransitions] = useState<Array<{ from: string; to: string; value: number }>>([]);
   const [throughput, setThroughput] = useState<Array<Record<string, unknown>>>([]);
-  const [funnel, setFunnel] = useState<Array<{ stage: string; count: number; color: string }>>([]);
+  const [funnel, setFunnel] = useState<Array<{ stage: string; count: number }>>([]);
   const [velocity, setVelocity] = useState<{
     transitions?: Array<{ from: string; to: string; medianDays?: number | null; count?: number }>;
     draftToFinalMedian?: number;
   } | null>(null);
-  const [recentChanges, setRecentChanges] = useState<Array<Record<string, unknown>>>([]);
-  const [creationTrends, setCreationTrends] = useState<Array<{ year?: number; repo?: string; count?: number }>>([]);
-  const [ripCreationTrends, setRipCreationTrends] = useState<Array<{ year: number; repo: string; count: number }>>([]);
-  const [monthlyDelta, setMonthlyDelta] = useState<Array<{ status: string; count: number }>>([]);
-  const [selectedCat, setSelectedCat] = useState<string>("Core");
-  const [cardsView, setCardsView] = useState<"status" | "category">("status");
+  const [recentChanges, setRecentChanges] = useState<RecentChangeRow[]>([]);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        const [kRes, ripRes, ctRes, sdRes, cbRes] = await Promise.all([
+        const [kRes, ctRes, sdRes, cbRes] = await Promise.all([
           client.standards.getKPIs({ repo: repoParam }),
-          client.standards.getRIPKPIs(),
           client.standards.getCategoryStatusCrosstab(),
           client.standards.getStatusDistribution({ repo: repoParam }),
           client.standards.getCategoryBreakdown({ repo: repoParam }),
         ]);
-        setKpis(kRes); setRipKpis(ripRes); setCrossTab(ctRes);
-        const sMap = new Map<string, number>();
-        sdRes.forEach((r: { status: string; count: number }) => sMap.set(r.status, (sMap.get(r.status) || 0) + r.count));
-        setStatusDist(Array.from(sMap.entries()).map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count));
-        setCatBreakdown(cbRes);
+        setKpis(kRes);
+        setCrossTab(ctRes as CrossTabRow[]);
 
-        const [trRes, tpRes, fnRes, velRes, rcRes, ctTrends, ripTrends, mdRes] = await Promise.all([
+        const sMap = new Map<string, number>();
+        (sdRes as Array<{ status: string; count: number }>).forEach((r) => {
+          sMap.set(r.status, (sMap.get(r.status) || 0) + r.count);
+        });
+        setStatusDist(
+          Array.from(sMap.entries())
+            .map(([status, count]) => ({ status, count }))
+            .sort((a, b) => b.count - a.count),
+        );
+        setCatBreakdown(cbRes as Array<{ category: string; count: number }>);
+
+        const [trRes, tpRes, fnRes, velRes, rcRes] = await Promise.all([
           client.analytics.getEIPStatusTransitions({ repo: repoParam }),
-          client.analytics.getEIPThroughput({ repo: repoParam, months: timeRange === "7d" ? 3 : timeRange === "30d" ? 6 : timeRange === "90d" ? 12 : timeRange === "1y" ? 24 : 60 }),
+          client.analytics.getEIPThroughput({
+            repo: repoParam,
+            months:
+              timeRange === "7d"
+                ? 3
+                : timeRange === "30d"
+                  ? 6
+                  : timeRange === "90d"
+                    ? 12
+                    : timeRange === "1y"
+                      ? 24
+                      : 60,
+          }),
           client.analytics.getLifecycleData({ repo: repoParam }),
           client.analytics.getDecisionVelocity({ repo: repoParam }),
           client.analytics.getRecentChanges({ repo: repoParam, limit: 20 }),
-          client.standards.getCreationTrends({ repo: repoParam }),
-          client.standards.getRIPCreationTrends(),
-          client.standards.getMonthlyDelta({}),
         ]);
-        setTransitions(trRes); setThroughput(tpRes); setFunnel(fnRes);
-        setVelocity(velRes); setRecentChanges(rcRes);
-        setCreationTrends(ctTrends); setRipCreationTrends(ripTrends); setMonthlyDelta(mdRes);
-        setDataUpdatedAt(new Date());
+
+        setTransitions(trRes as Array<{ from: string; to: string; value: number }>);
+        setThroughput(tpRes as Array<Record<string, unknown>>);
+        setFunnel(fnRes as Array<{ stage: string; count: number }>);
+        setVelocity(velRes);
+        setRecentChanges(rcRes as RecentChangeRow[]);
       } catch (err) {
         console.error("Analytics fetch error:", err);
         setError("Failed to load EIP analytics. Please try again.");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
-  }, [timeRange, repoFilter, repoParam]);
+  }, [repoParam, timeRange]);
 
-  // ── Export Handler ──
   useAnalyticsExport(() => {
-    // Combine all analytics data for export
-    const exportData: Record<string, unknown>[] = [];
+    const rows: Record<string, unknown>[] = [];
+    statusDist.forEach((item) => rows.push({ type: "status", ...item }));
+    catBreakdown.forEach((item) => rows.push({ type: "category", ...item }));
+    crossTab.forEach((item) => rows.push({ type: "matrix", ...item }));
+    return rows;
+  }, `analytics-eips-${repoFilter}`);
 
-    // Add status distribution
-    statusDist.forEach(item => {
-      exportData.push({
-        type: 'Status Distribution',
-        status: item.status,
-        count: item.count,
-        percentage: total > 0 ? ((item.count / total) * 100).toFixed(2) + '%' : '0%'
-      });
-    });
-
-    // Add category breakdown
-    catBreakdown.forEach(item => {
-      exportData.push({
-        type: 'Category Breakdown',
-        category: item.category,
-        count: item.count,
-        percentage: total > 0 ? ((item.count / total) * 100).toFixed(2) + '%' : '0%'
-      });
-    });
-
-    // Add cross-tab data
-    crossTab.forEach(item => {
-      exportData.push({
-        type: 'Category-Status Matrix',
-        category: item.category,
-        status: item.status,
-        repo: item.repo,
-        count: item.count
-      });
-    });
-
-    return exportData;
-  }, `eips-analytics-${repoFilter}`);
-
-  // ── Derived ──
   const total = kpis?.total || 0;
+
   const statusCountMap = useMemo(() => {
     const m: Record<string, number> = {};
-    statusDist.forEach(s => { m[s.status] = (m[s.status] || 0) + s.count; });
+    statusDist.forEach((s) => {
+      m[s.status] = (m[s.status] || 0) + s.count;
+    });
     return m;
   }, [statusDist]);
 
-  const categories = useMemo(() => {
-    const set = new Set(crossTab.map(r => r.category));
-    return Array.from(set).filter(c => c).sort();
-  }, [crossTab]);
+  const activeCount = (statusCountMap.Draft || 0) + (statusCountMap.Review || 0) + (statusCountMap["Last Call"] || 0);
+  const finalizedCount = (statusCountMap.Final || 0) + (statusCountMap.Living || 0);
+  const stagnantCount = statusCountMap.Stagnant || 0;
+  const finalizationRate = total > 0 ? (finalizedCount / total) * 100 : 0;
+  const stagnantRate = total > 0 ? (stagnantCount / total) * 100 : 0;
+  const generatedAt = useMemo(() => new Date(), []);
+  const lastUpdatedAt = useMemo(() => {
+    if (!recentChanges.length) return null;
+    const times = recentChanges
+      .map((r) => (r.changed_at ? new Date(r.changed_at) : null))
+      .filter((d): d is Date => !!d && !Number.isNaN(d.getTime()));
+    if (!times.length) return null;
+    return new Date(Math.max(...times.map((d) => d.getTime())));
+  }, [recentChanges]);
+  const nextUpdateAt = useMemo(() => {
+    if (!lastUpdatedAt) return new Date(Date.now() + 24 * 60 * 60 * 1000);
+    return new Date(lastUpdatedAt.getTime() + 24 * 60 * 60 * 1000);
+  }, [lastUpdatedAt]);
 
-  const catStatusMatrix = useMemo(() => {
-    if (!crossTab.length) return null;
-    const matrix: Record<string, Record<string, number>> = {};
-    const catTotals: Record<string, number> = {};
-    const stTotals: Record<string, number> = {};
-    let grand = 0;
-    for (const r of crossTab) {
-      if (!r.category) continue;
-      if (!matrix[r.category]) { matrix[r.category] = {}; catTotals[r.category] = 0; }
-      matrix[r.category][r.status] = (matrix[r.category][r.status] || 0) + r.count;
-      catTotals[r.category] = (catTotals[r.category] || 0) + r.count;
-      stTotals[r.status] = (stTotals[r.status] || 0) + r.count;
-      grand += r.count;
-    }
-    return { matrix, catTotals, stTotals, grand };
-  }, [crossTab]);
-
-  const catDrillDown = useMemo(() => {
-    if (!crossTab.length) return [];
-    return STATUS_ORDER.map(s => {
-      const val = crossTab.filter(r => r.category === selectedCat && r.status === s).reduce((a, b) => a + b.count, 0);
-      return { status: s, count: val, fill: STATUS_COLORS[s] || "#64748b" };
-    }).filter(d => d.count > 0);
-  }, [crossTab, selectedCat]);
-
-  const catPieData = useMemo(() =>
-    catBreakdown.filter(c => c.count > 0).map(c => ({ name: c.category, value: c.count, fill: CAT_COLORS[c.category] || "#64748b" })),
-  [catBreakdown]);
-
-  const statusPieData = useMemo(() =>
-    statusDist.filter(s => s.count > 0).map(s => ({ name: s.status, value: s.count, fill: STATUS_COLORS[s.status] || "#64748b" })),
-  [statusDist]);
-
-  const pivotedTrends = useMemo(() => {
-    const yearMap: Record<number, { year: number; eips: number; ercs: number; rips: number }> = {};
-    for (const t of creationTrends) {
-      const yr = t.year ?? 0;
-      if (!yearMap[yr]) yearMap[yr] = { year: yr, eips: 0, ercs: 0, rips: 0 };
-      const repo = String(t.repo || "").toLowerCase();
-      const cnt = t.count ?? 0;
-      if (repo === "eips") yearMap[yr].eips += cnt;
-      else if (repo === "ercs") yearMap[yr].ercs += cnt;
-      else if (repo === "rips") yearMap[yr].rips += cnt;
-      else yearMap[yr].eips += cnt;
-    }
-    for (const t of ripCreationTrends) {
-      const yr = t.year;
-      if (!yearMap[yr]) yearMap[yr] = { year: yr, eips: 0, ercs: 0, rips: 0 };
-      yearMap[yr].rips += t.count || 0;
-    }
-    return Object.values(yearMap).sort((a, b) => a.year - b.year);
-  }, [creationTrends, ripCreationTrends]);
+  const narrative = useMemo(() => {
+    if (total === 0) return "No governance records available for the selected filter.";
+    const biggest = [...statusDist].sort((a, b) => b.count - a.count)[0];
+    const draftToFinal = velocity?.draftToFinalMedian;
+    const speedCopy = draftToFinal
+      ? `Median draft-to-final is ${draftToFinal} days.`
+      : "Median decision speed is still being computed.";
+    return `${biggest?.status || "Draft"} is the largest bucket (${biggest?.count?.toLocaleString() || 0}). Active pipeline is ${activeCount.toLocaleString()}, with ${stagnantCount.toLocaleString()} stalled proposals (${stagnantRate.toFixed(1)}%). ${speedCopy}`;
+  }, [activeCount, stagnantCount, stagnantRate, statusDist, total, velocity?.draftToFinalMedian]);
 
   const transitionFlows = useMemo(() => {
-    const paths = [
-      { from: "Draft", to: "Review" }, { from: "Review", to: "Last Call" },
-      { from: "Last Call", to: "Final" }, { from: "Draft", to: "Stagnant" },
-      { from: "Draft", to: "Withdrawn" }, { from: "Review", to: "Final" },
-      { from: "Stagnant", to: "Draft" },
-    ];
-    return paths.map(p => {
-      const t = transitions.find(tr => tr.from === p.from && tr.to === p.to);
-      return { ...p, value: t?.value || 0, label: `${p.from} → ${p.to}` };
-    }).filter(t => t.value > 0).sort((a, b) => b.value - a.value);
+    return transitions
+      .filter((t) => {
+        if (!(t.value > 0 && t.from && t.to)) return false;
+        const fromRank = STATUS_RANK[t.from];
+        const toRank = STATUS_RANK[t.to];
+        if (fromRank == null || toRank == null) return false;
+        return toRank > fromRank;
+      })
+      .sort((a, b) => b.value - a.value);
   }, [transitions]);
 
-  const monthLabel = new Date().toLocaleString("en", { month: "long", year: "numeric" });
+  const sankeyOption = useMemo(() => {
+    const nodes = STATUS_ORDER.map((s) => ({ name: s, itemStyle: { color: STATUS_COLORS[s] || "#64748b" } }));
+    return {
+      backgroundColor: "transparent",
+      tooltip: { trigger: "item", confine: true },
+      series: [
+        {
+          type: "sankey",
+          nodeAlign: "justify",
+          layoutIterations: 64,
+          emphasis: { focus: "adjacency" },
+          lineStyle: { color: "gradient", curveness: 0.5, opacity: 0.55 },
+          itemStyle: { borderWidth: 0 },
+          label: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
+          data: nodes,
+          links: transitionFlows.map((f) => ({ source: f.from, target: f.to, value: f.value })),
+        },
+      ],
+    };
+  }, [transitionFlows]);
+
+  const pipelineOption = useMemo(() => {
+    const ordered = STATUS_ORDER.map((status) => ({ status, value: statusCountMap[status] || 0 }));
+    return {
+      backgroundColor: "transparent",
+      grid: { top: 14, left: 92, right: 36, bottom: 14, containLabel: false },
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      xAxis: {
+        type: "value",
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.16)", type: "dashed" } },
+      },
+      yAxis: {
+        type: "category",
+        data: ordered.map((d) => d.status),
+        inverse: true,
+        axisLabel: { color: "var(--foreground)", fontSize: 12, fontWeight: 500 },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      series: [
+        {
+          type: "bar",
+          showBackground: true,
+          backgroundStyle: { color: "rgba(148,163,184,0.08)", borderRadius: 8 },
+          data: ordered.map((d) => ({
+            value: d.value,
+            itemStyle: {
+              color: STATUS_COLORS[d.status] || "#64748b",
+              borderRadius: 8,
+              shadowBlur: 8,
+              shadowColor: `${STATUS_COLORS[d.status] || "#64748b"}40`,
+            },
+          })),
+          label: {
+            show: true,
+            position: "right",
+            color: "var(--foreground)",
+            fontWeight: 600,
+            formatter: ({ value }: { value: number }) => Number(value || 0).toLocaleString(),
+          },
+          emphasis: { focus: "series" },
+          barWidth: 18,
+        },
+      ],
+    };
+  }, [statusCountMap]);
+
+  const categoryDonutOption = useMemo(() => {
+    const rows = catBreakdown
+      .filter((c) => c.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .map((c) => ({ name: c.category, value: c.count, itemStyle: { color: CAT_COLORS[c.category] || "#64748b" } }));
+    const pctMap = new Map(rows.map((r) => [r.name, total > 0 ? ((r.value / total) * 100).toFixed(1) : "0.0"]));
+    return {
+      backgroundColor: "transparent",
+      // Clear any previously merged center graphics from older option versions.
+      graphic: [],
+      title: [
+        {
+          text: total.toLocaleString(),
+          subtext: "Total Proposals",
+          left: "34%",
+          top: "46%",
+          textAlign: "center",
+          textStyle: {
+            color: "var(--foreground)",
+            fontSize: 34,
+            fontWeight: 700,
+          },
+          subtextStyle: {
+            color: "var(--muted-foreground)",
+            fontSize: 12,
+            fontWeight: 500,
+          },
+        },
+      ],
+      tooltip: {
+        trigger: "item",
+        confine: true,
+        formatter: (p: { name: string; value: number; percent: number }) => `${p.name}: ${p.value.toLocaleString()} (${p.percent}%)`,
+      },
+      legend: {
+        type: "scroll",
+        orient: "vertical",
+        right: 8,
+        top: "center",
+        itemWidth: 10,
+        itemHeight: 10,
+        itemGap: 12,
+        textStyle: { color: "var(--foreground)", fontSize: 12, fontWeight: 500 },
+        formatter: (name: string) => `${name}  ${pctMap.get(name)}%`,
+      },
+      series: [
+        {
+          type: "pie",
+          radius: ["56%", "76%"],
+          center: ["34%", "50%"],
+          avoidLabelOverlap: true,
+          label: { show: false },
+          itemStyle: { borderColor: "rgba(2,6,23,0.55)", borderWidth: 2 },
+          data: rows,
+        },
+      ],
+    };
+  }, [catBreakdown, total]);
+
+  const throughputOption = useMemo(() => {
+    const months = throughput.map((row) => String(row.month || ""));
+    return {
+      backgroundColor: "transparent",
+      tooltip: { trigger: "axis" },
+      legend: {
+        top: 0,
+        textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+      },
+      grid: { top: 34, left: 42, right: 20, bottom: 26 },
+      xAxis: {
+        type: "category",
+        data: months,
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+        axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.18)" } },
+      },
+      dataZoom: [
+        {
+          type: "inside",
+          xAxisIndex: 0,
+          filterMode: "none",
+          start: 0,
+          end: 100,
+        },
+        {
+          type: "slider",
+          xAxisIndex: 0,
+          height: 18,
+          bottom: 0,
+          borderColor: "rgba(148,163,184,0.22)",
+          backgroundColor: "rgba(148,163,184,0.08)",
+          fillerColor: "rgba(34,211,238,0.22)",
+          handleSize: 10,
+          handleStyle: {
+            color: "#22D3EE",
+            borderColor: "#22D3EE",
+          },
+          moveHandleSize: 0,
+          showDetail: false,
+          start: 0,
+          end: 100,
+        },
+      ],
+      series: [
+        { name: "Draft", type: "line", smooth: true, symbol: "none", data: throughput.map((r) => Number(r.draft || 0)), lineStyle: { width: 2, color: STATUS_COLORS.Draft }, areaStyle: { color: `${STATUS_COLORS.Draft}1A` } },
+        { name: "Review", type: "line", smooth: true, symbol: "none", data: throughput.map((r) => Number(r.review || 0)), lineStyle: { width: 2, color: STATUS_COLORS.Review }, areaStyle: { color: `${STATUS_COLORS.Review}1A` } },
+        { name: "Last Call", type: "line", smooth: true, symbol: "none", data: throughput.map((r) => Number(r.lastCall || 0)), lineStyle: { width: 2, color: STATUS_COLORS["Last Call"] }, areaStyle: { color: `${STATUS_COLORS["Last Call"]}1A` } },
+        { name: "Final", type: "line", smooth: true, symbol: "none", data: throughput.map((r) => Number(r.final || 0)), lineStyle: { width: 2, color: STATUS_COLORS.Final }, areaStyle: { color: `${STATUS_COLORS.Final}1A` } },
+      ],
+    };
+  }, [throughput]);
+
+  const matrixData = useMemo(() => {
+    const categories = Array.from(new Set(crossTab.map((r) => r.category))).filter(Boolean).sort();
+    const heat = categories.flatMap((cat, y) =>
+      STATUS_ORDER.map((status, x) => {
+        const value = crossTab
+          .filter((r) => r.category === cat && r.status === status)
+          .reduce((sum, r) => sum + r.count, 0);
+        return [x, y, value];
+      }),
+    );
+    const maxValue = Math.max(...heat.map((v) => Number(v[2])), 0);
+    return { categories, heat, maxValue };
+  }, [crossTab]);
+
+  const matrixOption = useMemo(() => {
+    const isDark = resolvedTheme === "dark";
+    const visualRamp = isDark
+      ? ["#1f2937", "#334155", "#60A5FA", "#22D3EE", "#34D399"]
+      : ["#E2E8F0", "#BFDBFE", "#93C5FD", "#22D3EE", "#10B981"];
+    return {
+      backgroundColor: "transparent",
+      tooltip: {
+        position: "top",
+        confine: true,
+        formatter: (p: { data: [number, number, number] }) => {
+          const [x, y, value] = p.data;
+          return `${matrixData.categories[y]} × ${STATUS_ORDER[x]}: <b>${Number(value).toLocaleString()}</b>`;
+        },
+      },
+      grid: { top: 12, left: 110, right: 24, bottom: 30 },
+      xAxis: {
+        type: "category",
+        data: STATUS_ORDER,
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 11, interval: 0, fontWeight: 600 },
+        axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+        axisTick: { show: false },
+        splitArea: { show: false },
+      },
+      yAxis: {
+        type: "category",
+        data: matrixData.categories,
+        axisLabel: { color: "var(--foreground)", fontSize: 11, fontWeight: 500 },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      visualMap: {
+        min: 0,
+        max: matrixData.maxValue || 1,
+        calculable: false,
+        orient: "horizontal",
+        left: "center",
+        bottom: 0,
+        textStyle: { color: "var(--muted-foreground)", fontSize: 10 },
+        inRange: { color: visualRamp },
+      },
+      series: [
+        {
+          type: "heatmap",
+          data: matrixData.heat,
+          itemStyle: {
+            borderColor: isDark ? "rgba(15,23,42,0.42)" : "rgba(148,163,184,0.38)",
+            borderWidth: 1,
+            borderRadius: 4,
+          },
+          label: {
+            show: true,
+            fontSize: 10,
+            rich: {
+              hi: { color: isDark ? "#e2e8f0" : "#0f172a", fontWeight: 700 },
+              lo: { color: isDark ? "#94a3b8" : "#64748b", fontWeight: 500 },
+            },
+            formatter: (p: { data: [number, number, number] }) => {
+              const v = Number(p.data[2]);
+              if (v <= 0) return "";
+              return v >= (matrixData.maxValue || 1) * 0.45 ? `{hi|${v}}` : `{lo|${v}}`;
+            },
+          },
+          emphasis: {
+            itemStyle: {
+              borderColor: isDark ? "rgba(226,232,240,0.45)" : "rgba(15,23,42,0.25)",
+              borderWidth: 1.5,
+              shadowBlur: 12,
+              shadowColor: isDark ? "rgba(34,211,238,0.25)" : "rgba(59,130,246,0.18)",
+            },
+          },
+        },
+      ],
+    };
+  }, [matrixData, resolvedTheme]);
+
+  const conversionRows = useMemo(() => {
+    const stageMap = new Map<string, number>();
+    funnel.forEach((f) => stageMap.set(f.stage, f.count));
+    const order = ["Draft", "Review", "Last Call", "Final"];
+    return order.map((stage, idx) => {
+      const current = stageMap.get(stage) || 0;
+      const prev = idx === 0 ? current : stageMap.get(order[idx - 1]) || 0;
+      const conversion = idx === 0 ? 100 : prev > 0 ? (current / prev) * 100 : 0;
+      return { stage, count: current, conversion };
+    });
+  }, [funnel]);
+
+  const withMeta = useCallback(
+    (section: string, rows: Array<Record<string, unknown>>) =>
+      rows.map((row) => ({
+        report_section: section,
+        source: "EIPsInsight.com",
+        generated_at: generatedAt.toISOString(),
+        repo_filter: repoFilter,
+        time_range: timeRange,
+        last_updated_at: lastUpdatedAt ? lastUpdatedAt.toISOString() : "",
+        next_update_at: nextUpdateAt ? nextUpdateAt.toISOString() : "",
+        ...row,
+      })),
+    [generatedAt, lastUpdatedAt, nextUpdateAt, repoFilter, timeRange],
+  );
 
   const exportCrossTab = useCallback(() => {
-    if (!catStatusMatrix) return;
-    const cats = Object.keys(catStatusMatrix.matrix);
-    const headers = ["Category", ...STATUS_ORDER, "Total"];
-    const rows = cats.map(c => [c, ...STATUS_ORDER.map(s => String(catStatusMatrix.matrix[c]?.[s] || 0)), String(catStatusMatrix.catTotals[c] || 0)]);
-    downloadCSV(headers, rows, `category-status-${new Date().toISOString().slice(0, 10)}.csv`);
-  }, [catStatusMatrix]);
+    const categories = matrixData.categories;
+    const rows = categories.map((cat) => {
+      const counts = STATUS_ORDER.map((status) => {
+        return crossTab
+          .filter((r) => r.category === cat && r.status === status)
+          .reduce((sum, r) => sum + r.count, 0);
+      });
+      return {
+        category: cat,
+        draft: counts[0],
+        review: counts[1],
+        last_call: counts[2],
+        final: counts[3],
+        living: counts[4],
+        stagnant: counts[5],
+        withdrawn: counts[6],
+        total: counts.reduce((a, b) => a + b, 0),
+      };
+    });
+    downloadObjectCSV(withMeta("category_status_heatmap", rows), `eips-category-status-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [crossTab, matrixData.categories, withMeta]);
+
+  const exportPipelineCSV = useCallback(() => {
+    const rows = STATUS_ORDER.map((status) => ({
+      status,
+      count: statusCountMap[status] || 0,
+      share_percent: total > 0 ? (((statusCountMap[status] || 0) / total) * 100).toFixed(2) : "0.00",
+    }));
+    downloadObjectCSV(withMeta("pipeline_status", rows), `eips-pipeline-status-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [statusCountMap, total, withMeta]);
+
+  const exportCompositionCSV = useCallback(() => {
+    const rows = catBreakdown.map((c) => ({
+      category: c.category,
+      count: c.count,
+      share_percent: total > 0 ? ((c.count / total) * 100).toFixed(2) : "0.00",
+      color: CAT_COLORS[c.category] || "",
+    }));
+    downloadObjectCSV(withMeta("proposal_composition", rows), `eips-proposal-composition-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [catBreakdown, total, withMeta]);
+
+  const exportLifecycleCSV = useCallback(() => {
+    const rows = conversionRows.map((r) => ({
+      stage: r.stage,
+      count: r.count,
+      conversion_from_previous_percent: r.conversion.toFixed(2),
+    }));
+    downloadObjectCSV(withMeta("lifecycle_conversion", rows), `eips-lifecycle-conversion-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [conversionRows, withMeta]);
+
+  const exportDecisionSpeedCSV = useCallback(() => {
+    const rows = (velocity?.transitions || []).map((t) => ({
+      from_status: t.from,
+      to_status: t.to,
+      median_days: t.medianDays ?? "",
+      transitions_count: t.count ?? 0,
+    }));
+    downloadObjectCSV(withMeta("decision_speed", rows), `eips-decision-speed-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [velocity?.transitions, withMeta]);
+
+  const exportTransitionCSV = useCallback(() => {
+    const rows = transitionFlows.map((t) => ({
+      from_status: t.from,
+      to_status: t.to,
+      transition_count: t.value,
+      flow_direction: "forward_only_for_sankey",
+    }));
+    downloadObjectCSV(withMeta("status_transition_flow", rows), `eips-transition-flow-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [transitionFlows, withMeta]);
+
+  const exportThroughputCSV = useCallback(() => {
+    const rows = throughput.map((r) => ({
+      month: String(r.month || ""),
+      draft: Number(r.draft || 0),
+      review: Number(r.review || 0),
+      last_call: Number(r.lastCall || 0),
+      final: Number(r.final || 0),
+      total_changes:
+        Number(r.draft || 0) + Number(r.review || 0) + Number(r.lastCall || 0) + Number(r.final || 0),
+    }));
+    downloadObjectCSV(withMeta("monthly_throughput", rows), `eips-monthly-throughput-${new Date().toISOString().slice(0, 10)}.csv`);
+  }, [throughput, withMeta]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex min-h-[420px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {error && (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -340,442 +695,167 @@ export default function EIPsAnalyticsPage() {
         </div>
       )}
 
-      {/* ────── 1. STATUS / CATEGORY CARDS (toggle) ────── */}
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            {cardsView === "status" ? "Status" : "Category"} — [{total.toLocaleString()}]
-          </span>
-          <div className="inline-flex rounded-lg border border-border bg-muted/60 p-0.5">
-              <button
-                onClick={() => setCardsView("status")}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                  cardsView === "status"
-                    ? "bg-muted/60 text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Status
-              </button>
-              <button
-                onClick={() => setCardsView("category")}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                  cardsView === "category"
-                    ? "bg-muted/60 text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Category
-              </button>
-            </div>
-        </div>
-        {cardsView === "status" ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
-          {STATUS_ORDER.map(status => {
-            const count = statusCountMap[status] || 0;
-            const pct = total > 0 ? (count / total * 100).toFixed(1) : "0.0";
-            const color = STATUS_COLORS[status];
-            return (
-              <Link key={status} href={`/explore/status?status=${encodeURIComponent(status)}`}
-                className={cn(
-                  "group rounded-xl border p-4 transition-all hover:scale-[1.02] active:scale-[0.98]",
-                  "border-border bg-white  ",
-                  "hover:border-border/70 hover:shadow-md dark:hover:shadow-lg",
-                )}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span style={{ color }} className="opacity-70 group-hover:opacity-100 transition-opacity">
-                    {STATUS_ICONS[status]}
-                  </span>
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{status}</span>
-                </div>
-                <div className="text-2xl tabular-nums font-bold text-foreground">{count.toLocaleString()}</div>
-                <div className="mt-1 flex items-center gap-2">
-                  <div className="flex-1 h-1 rounded-full bg-muted/60 overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, parseFloat(pct))}%`, backgroundColor: color, boxShadow: `0 0 6px ${color}40` }} />
-                  </div>
-                  <span className="text-[10px] tabular-nums font-medium" style={{ color }}>{pct}%</span>
-                </div>
-                <p className="mt-2 text-[10px] text-muted-foreground leading-snug">{STATUS_DESC[status]}</p>
-              </Link>
-            );
-          })}
-        </div>
-        ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
-          {([
-            { key: "Core", count: catBreakdown.find(c => c.category === "Core")?.count || 0 },
-            { key: "ERC", count: catBreakdown.find(c => c.category === "ERC")?.count || 0 },
-            { key: "Networking", count: catBreakdown.find(c => c.category === "Networking")?.count || 0 },
-            { key: "Interface", count: catBreakdown.find(c => c.category === "Interface")?.count || 0 },
-            { key: "Meta", count: catBreakdown.find(c => c.category === "Meta")?.count || 0 },
-            { key: "Informational", count: catBreakdown.find(c => c.category === "Informational")?.count || 0 },
-            { key: "RIPs", count: ripKpis?.total || 0 },
-          ]).map(c => {
-            const pct = total > 0 ? (c.count / total * 100).toFixed(1) : "0.0";
-            const color = CAT_COLORS[c.key];
-            const href = c.key === "RIPs" ? "/standards?tab=rips" : `/explore/status?category=${encodeURIComponent(c.key)}`;
-            return (
-              <Link key={c.key} href={href}
-                className={cn(
-                  "group rounded-xl border p-4 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer",
-                  selectedCat === c.key
-                    ? "border-primary/40 bg-primary/10 bg-primary/10"
-                    : "border-border bg-white  ",
-                  "hover:border-border/70 hover:shadow-md dark:hover:shadow-lg",
-                )}
-                onClick={(e) => { e.preventDefault(); setSelectedCat(c.key); }}
-                onDoubleClick={() => { window.location.href = href; }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span style={{ color }} className="opacity-70 group-hover:opacity-100 transition-opacity">
-                    {CAT_ICONS[c.key]}
-                  </span>
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{c.key}</span>
-                </div>
-                <div className="text-2xl tabular-nums font-bold text-foreground">{c.count.toLocaleString()}</div>
-                <div className="mt-1 flex items-center gap-2">
-                  <div className="flex-1 h-1 rounded-full bg-muted/60 overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, parseFloat(pct))}%`, backgroundColor: color, boxShadow: `0 0 6px ${color}40` }} />
-                  </div>
-                  <span className="text-[10px] tabular-nums font-medium" style={{ color }}>{pct}%</span>
-                </div>
-                <p className="mt-2 text-[10px] text-muted-foreground leading-snug">{CAT_DESC[c.key]}</p>
-              </Link>
-            );
-          })}
-        </div>
-        )}
-      </div>
-
-      {/* ────── 2. COMPOSITION CHARTS (side by side) ────── */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Section title="Category Composition" icon={<Layers className="h-4 w-4" />} action={<LastUpdated timestamp={dataUpdatedAt} />}>
-          <div className="flex flex-col items-center gap-4 md:flex-row">
-            <ChartContainer config={{ value: { label: "Count" } }} className="h-[260px] w-full max-w-[300px]">
-              <PieChart>
-                <Pie data={catPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={40} strokeWidth={0}>
-                  {catPieData.map((e, i) => <Cell key={i} fill={e.fill} fillOpacity={0.75} />)}
-                </Pie>
-                <ChartTooltip content={<ChartTooltipContent formatter={(value) => { const v = typeof value === "number" ? value : Number(value) || 0; return <span className="text-foreground">{v.toLocaleString()} ({total > 0 ? (v / total * 100).toFixed(1) : 0}%)</span>; }} />} />
-              </PieChart>
-            </ChartContainer>
-            <div className="flex-1 space-y-1 w-full">
-              {catBreakdown.sort((a, b) => b.count - a.count).map(c => (
-                <div key={c.category} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-muted/60 text-sm transition-colors">
-                  <span className="h-2 w-2 rounded-sm shrink-0" style={{ background: CAT_COLORS[c.category] || "#64748b", boxShadow: `0 0 4px ${CAT_COLORS[c.category]}30` }} />
-                  <span className="flex-1 text-foreground/80 text-xs">{c.category}</span>
-                  <span className="tabular-nums font-semibold text-foreground/90 text-xs">{c.count.toLocaleString()}</span>
-                  <span className="tabular-nums text-[10px] text-muted-foreground w-10 text-right">{total > 0 ? (c.count / total * 100).toFixed(1) : 0}%</span>
-                </div>
-              ))}
-            </div>
+      <Section title="Governance Health" icon={<Activity className="h-4 w-4" />}>
+        <p className="mb-4 text-sm leading-relaxed text-muted-foreground">{narrative}</p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Total Proposals</p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{total.toLocaleString()}</p>
           </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active Pipeline</p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{activeCount.toLocaleString()}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Finalization Rate</p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">{finalizationRate.toFixed(1)}%</p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Median Time To Final</p>
+            <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+              {velocity?.draftToFinalMedian ? `${velocity.draftToFinalMedian}d` : "—"}
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Section
+          title="Pipeline Status"
+          icon={<TrendingUp className="h-4 w-4" />}
+          action={<CSVBtn onClick={exportPipelineCSV} label="Detailed CSV" />}
+        >
+          <div className="h-[320px] w-full">
+            <ReactECharts option={pipelineOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+            <div className="rounded-md border border-border px-2 py-1">Draft backlog: {(statusCountMap.Draft || 0).toLocaleString()}</div>
+            <div className="rounded-md border border-border px-2 py-1">Review backlog: {(statusCountMap.Review || 0).toLocaleString()}</div>
+            <div className="rounded-md border border-border px-2 py-1">Stagnant: {stagnantRate.toFixed(1)}%</div>
+            <div className="rounded-md border border-border px-2 py-1">Finalized: {finalizedCount.toLocaleString()}</div>
+          </div>
+          <ChartFooter nextUpdateAt={nextUpdateAt} />
         </Section>
 
-        <Section title="Status Composition" icon={<Activity className="h-4 w-4" />} action={<LastUpdated timestamp={dataUpdatedAt} />}>
-          <div className="flex flex-col items-center gap-4 md:flex-row">
-            <ChartContainer config={{ value: { label: "Count" } }} className="h-[260px] w-full max-w-[300px]">
-              <PieChart>
-                <Pie data={statusPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} innerRadius={40} strokeWidth={0}>
-                  {statusPieData.map((e, i) => <Cell key={i} fill={e.fill} fillOpacity={0.75} />)}
-                </Pie>
-                <ChartTooltip content={<ChartTooltipContent formatter={(value) => { const v = typeof value === "number" ? value : Number(value) || 0; return <span className="text-foreground">{v.toLocaleString()} ({total > 0 ? (v / total * 100).toFixed(1) : 0}%)</span>; }} />} />
-              </PieChart>
-            </ChartContainer>
-            <div className="flex-1 space-y-1 w-full">
-              {statusDist.map(s => (
-                <div key={s.status} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-muted/60 text-sm transition-colors">
-                  <span className="h-2 w-2 rounded-sm shrink-0" style={{ background: STATUS_COLORS[s.status] || "#64748b", boxShadow: `0 0 4px ${STATUS_COLORS[s.status]}30` }} />
-                  <span className="flex-1 text-foreground/80 text-xs">{s.status}</span>
-                  <span className="tabular-nums font-semibold text-foreground/90 text-xs">{s.count.toLocaleString()}</span>
-                  <span className="tabular-nums text-[10px] text-muted-foreground w-10 text-right">{total > 0 ? (s.count / total * 100).toFixed(1) : 0}%</span>
-                </div>
-              ))}
-            </div>
+        <Section
+          title="Proposal Composition"
+          icon={<Layers className="h-4 w-4" />}
+          action={<CSVBtn onClick={exportCompositionCSV} label="Detailed CSV" />}
+        >
+          <div className="h-[320px] w-full">
+            <ReactECharts
+              option={categoryDonutOption}
+              style={{ height: "100%", width: "100%" }}
+              opts={{ renderer: "svg" }}
+              notMerge
+            />
           </div>
+          <ChartFooter nextUpdateAt={nextUpdateAt} />
         </Section>
       </div>
 
-      {/* ────── 4. STATUS TRANSITION FLOW ────── */}
-      <Section title="Status Transition Flow" icon={<ArrowRight className="h-4 w-4" />} action={<LastUpdated timestamp={dataUpdatedAt} />}>
+      <Section
+        title="Status Transition Flow"
+        icon={<ArrowRight className="h-4 w-4" />}
+        action={<CSVBtn onClick={exportTransitionCSV} label="Detailed CSV" />}
+      >
         {transitionFlows.length === 0 ? (
           <p className="text-sm text-muted-foreground">No transition data available.</p>
         ) : (
-          <div className="space-y-2">
-            {transitionFlows.map((flow, i) => {
-              const maxVal = Math.max(...transitionFlows.map(f => f.value), 1);
-              const color = STATUS_COLORS[flow.to] || "#60a5fa";
-              return (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-40 shrink-0 text-right">
-                    <span className="text-xs text-muted-foreground">{flow.from}</span>
-                    <ArrowRight className="mx-1 inline h-3 w-3 text-muted-foreground" />
-                    <span className="text-xs font-medium" style={{ color }}>{flow.to}</span>
-                  </div>
-                  <div className="relative flex-1 h-7 rounded-lg bg-muted/60 overflow-hidden">
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-lg transition-all duration-500"
-                      style={{ width: `${(flow.value / maxVal) * 100}%`, background: `linear-gradient(90deg, ${color}60, ${color}30)`, boxShadow: `inset 0 0 12px ${color}20` }}
-                    />
-                    <span className="relative z-10 flex h-full items-center px-3 text-[11px] tabular-nums font-bold text-foreground">
-                      {flow.value.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="h-[360px] w-full">
+            <ReactECharts option={sankeyOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
           </div>
         )}
+        <ChartFooter nextUpdateAt={nextUpdateAt} />
       </Section>
 
-      {/* ────── 5. LIFECYCLE FUNNEL + GOVERNANCE VELOCITY ────── */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Section title="Lifecycle Funnel" icon={<TrendingUp className="h-4 w-4" />}>
-          <ChartContainer config={{ count: { label: "Count", color: "#22c55e" } }} className="h-[260px] w-full">
-            <BarChart data={funnel.filter(f => f.count > 0)} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" />
-              <XAxis type="number" stroke="#94a3b8" fontSize={11} />
-              <YAxis dataKey="stage" type="category" stroke="#94a3b8" width={75} fontSize={11} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="count" radius={[0, 6, 6, 0]}>
-                {funnel.filter(f => f.count > 0).map((entry, index) => (
-                  <Cell key={index} fill={STATUS_COLORS[entry.stage] || entry.color} fillOpacity={0.7} />
-                ))}
-                <LabelList dataKey="count" position="right" fill="#64748b" fontSize={11} />
-              </Bar>
-            </BarChart>
-          </ChartContainer>
-        </Section>
-
-        <Section title="Governance Velocity" icon={<Timer className="h-4 w-4" />}>
-          {!velocity ? (
-            <div className="space-y-2 py-4">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-4 rounded bg-muted/60 animate-pulse" style={{ width: `${60 + ((i * 17) % 35)}%` }} />)}</div>
-          ) : (
-            <div className="space-y-1.5">
-              {velocity.transitions?.map((t: { from: string; to: string; medianDays?: number | null; count?: number }) => {
-                const color = STATUS_COLORS[t.to] || "#60a5fa";
-                return (
-                  <div key={`${t.from}-${t.to}`} className="flex items-center justify-between rounded-lg px-3 py-2.5 hover:bg-muted/60 hover:bg-muted/40 transition-colors">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{t.from}</span>
-                      <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                      <span style={{ color }}>{t.to}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm tabular-nums font-semibold text-foreground/90">
-                        {t.medianDays != null ? `${t.medianDays}d` : "—"}
-                      </span>
-                      <span className="text-[10px] tabular-nums text-muted-foreground">({t.count} transitions)</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {(velocity.draftToFinalMedian ?? 0) > 0 && (
-                <div className="mt-3 rounded-lg border border-emerald-500/15 bg-emerald-500/10 dark:bg-emerald-500/5 px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300/80">Draft → Final (end-to-end)</span>
-                  <span className="text-sm tabular-nums font-bold text-emerald-600 dark:text-emerald-400">{velocity.draftToFinalMedian}d median</span>
-                </div>
-              )}
-            </div>
-          )}
-        </Section>
-      </div>
-
-      {/* ────── 6. CATEGORY × STATUS MATRIX ────── */}
-      <Section title="Category × Status Cross-Tab" icon={<Layers className="h-4 w-4" />}
-        action={<CSVBtn onClick={exportCrossTab} label="Export CSV" />}>
-        {!catStatusMatrix ? (
-          <div className="space-y-2 py-4">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-4 rounded bg-muted/60 animate-pulse" style={{ width: `${60 + ((i * 17) % 35)}%` }} />)}</div>
-        ) : (
-          <div className="overflow-x-auto -mx-2">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border/30">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Category</th>
-                  {STATUS_ORDER.map(s => (
-                    <th key={s} className="px-2 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider" style={{ color: `${STATUS_COLORS[s]}90` }}>{s}</th>
-                  ))}
-                  <th className="px-3 py-2.5 text-right text-[10px] font-bold text-muted-foreground uppercase">Total</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-bold text-muted-foreground uppercase">%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {categories.map(cat => (
-                  <tr key={cat} className="border-b border-border/50  hover:bg-muted/40 transition-colors">
-                    <td className="px-3 py-2 font-medium text-foreground/90 text-xs">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: CAT_COLORS[cat] }} />
-                        {cat}
-                      </span>
-                    </td>
-                    {STATUS_ORDER.map(s => {
-                      const val = catStatusMatrix.matrix[cat]?.[s] || 0;
-                      return (
-                        <td key={s} className="px-2 py-2 text-right tabular-nums">
-                          {val > 0 ? (
-                            <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-medium"
-                              style={{ background: `${STATUS_COLORS[s]}15`, color: STATUS_COLORS[s] }}>
-                              {val.toLocaleString()}
-                            </span>
-                          ) : <span className="text-muted-foreground ">—</span>}
-                        </td>
-                      );
-                    })}
-                    <td className="px-3 py-2 text-right tabular-nums font-bold text-foreground/90 text-xs">{(catStatusMatrix.catTotals[cat] || 0).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[10px] text-muted-foreground">{catStatusMatrix.grand > 0 ? ((catStatusMatrix.catTotals[cat] || 0) / catStatusMatrix.grand * 100).toFixed(1) : 0}%</td>
-                  </tr>
-                ))}
-                <tr className="border-t border-border border-border/30 bg-muted/40">
-                  <td className="px-3 py-2.5 font-bold text-foreground/80 text-xs">Total</td>
-                  {STATUS_ORDER.map(s => (
-                    <td key={s} className="px-2 py-2.5 text-right tabular-nums font-bold text-xs" style={{ color: STATUS_COLORS[s] }}>
-                      {(catStatusMatrix.stTotals[s] || 0).toLocaleString()}
-                    </td>
-                  ))}
-                  <td className="px-3 py-2.5 text-right tabular-nums font-bold text-foreground text-xs">{catStatusMatrix.grand.toLocaleString()}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-[10px] text-muted-foreground">100%</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Section>
-
-      {/* ────── 7. CATEGORY DEEP DIVE ────── */}
       <Section
-        title={`Select Category to View Dashboard — ${selectedCat}`}
-        icon={CAT_ICONS[selectedCat] || <Layers className="h-4 w-4" />}
-        action={
-          <select value={selectedCat} onChange={e => setSelectedCat(e.target.value)}
-            className="rounded-lg border border-border/30 bg-muted/60/60 px-3 py-1.5 text-xs text-foreground/90 outline-none focus:ring-1 focus:ring-ring/40 transition-colors">
-            {[...categories, "RIPs"].filter((v, i, a) => a.indexOf(v) === i).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        }>
-        <div className="grid gap-5 lg:grid-cols-5">
-          <div className="lg:col-span-3">
-            <ChartContainer config={{ count: { label: "Count" } }} className="h-[240px] w-full">
-              <BarChart data={catDrillDown}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" />
-                <XAxis dataKey="status" stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                  {catDrillDown.map((entry, i) => <Cell key={i} fill={entry.fill} fillOpacity={0.7} />)}
-                  <LabelList dataKey="count" position="top" fill="#64748b" fontSize={11} />
-                </Bar>
-              </BarChart>
-            </ChartContainer>
-          </div>
-        </div>
-      </Section>
-
-      {/* ────── 8. DISTRIBUTION OVER YEARS ────── */}
-      <Section title="Distribution Over Year (by Repository)" icon={<Activity className="h-4 w-4" />}>
-        {pivotedTrends.length === 0 ? (
-          <div className="space-y-2 py-4">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-4 rounded bg-muted/60 animate-pulse" style={{ width: `${60 + ((i * 17) % 35)}%` }} />)}</div>
-        ) : (
-          <ChartContainer config={{
-            eips: { label: "EIPs", color: "#34D399" },
-            ercs: { label: "ERCs", color: "#60A5FA" },
-            rips: { label: "RIPs", color: "#FB923C" },
-          }} className="h-[320px] w-full">
-            <BarChart data={pivotedTrends}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" />
-              <XAxis dataKey="year" stroke="#94a3b8" fontSize={11} />
-              <YAxis stroke="#94a3b8" fontSize={11} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="eips" name="EIPs" stackId="a" fill="#34D399" fillOpacity={0.6} />
-              <Bar dataKey="ercs" name="ERCs" stackId="a" fill="#60A5FA" fillOpacity={0.6} />
-              <Bar dataKey="rips" name="RIPs" stackId="a" fill="#FB923C" fillOpacity={0.6} />
-            </BarChart>
-          </ChartContainer>
-        )}
-      </Section>
-
-      {/* ────── 9. MONTHLY THROUGHPUT ────── */}
-      <Section title="Monthly Throughput" icon={<Activity className="h-4 w-4" />}>
+        title="Monthly Governance Throughput"
+        icon={<Activity className="h-4 w-4" />}
+        action={<CSVBtn onClick={exportThroughputCSV} label="Detailed CSV" />}
+      >
         {throughput.length === 0 ? (
-          <div className="space-y-2 py-4">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-4 rounded bg-muted/60 animate-pulse" style={{ width: `${60 + ((i * 17) % 35)}%` }} />)}</div>
+          <p className="text-sm text-muted-foreground">No monthly throughput available.</p>
         ) : (
-          <ChartContainer config={{
-            draft: { label: "Draft", color: STATUS_COLORS.Draft },
-            review: { label: "Review", color: STATUS_COLORS.Review },
-            lastCall: { label: "Last Call", color: STATUS_COLORS["Last Call"] },
-            final: { label: "Final", color: STATUS_COLORS.Final },
-          }} className="h-[340px] w-full">
-            <AreaChart data={throughput}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" className="stroke-border/70" />
-              <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-              <YAxis stroke="#64748b" fontSize={11} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Area type="monotone" dataKey="draft" stroke={STATUS_COLORS.Draft} fill={`${STATUS_COLORS.Draft}20`} strokeWidth={2} />
-              <Area type="monotone" dataKey="review" stroke={STATUS_COLORS.Review} fill={`${STATUS_COLORS.Review}20`} strokeWidth={2} />
-              <Area type="monotone" dataKey="lastCall" stroke={STATUS_COLORS["Last Call"]} fill={`${STATUS_COLORS["Last Call"]}20`} strokeWidth={2} />
-              <Area type="monotone" dataKey="final" stroke={STATUS_COLORS.Final} fill={`${STATUS_COLORS.Final}20`} strokeWidth={2} />
-              <Brush dataKey="month" height={36} stroke="#94a3b8" fill="rgba(148,163,184,0.08)" travellerWidth={8} />
-            </AreaChart>
-          </ChartContainer>
-        )}
-      </Section>
-
-      {/* ────── 10. GOVERNANCE DELTA THIS MONTH ────── */}
-      <Section title={`${monthLabel} — Governance Delta`} icon={<Activity className="h-4 w-4" />}>
-        {monthlyDelta.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No changes this month.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {monthlyDelta.map(d => {
-              const color = STATUS_COLORS[d.status] || "#64748b";
-              return (
-                <div key={d.status} className="rounded-lg border border-border/20 bg-muted/40 px-4 py-3 text-center">
-                  <div className="text-2xl tabular-nums font-bold" style={{ color }}>{d.count}</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5 font-medium">{d.status}</div>
-                </div>
-              );
-            })}
+          <div className="h-[340px] w-full">
+            <ReactECharts option={throughputOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
           </div>
         )}
+        <ChartFooter nextUpdateAt={nextUpdateAt} />
       </Section>
 
-      {/* ────── 11. RECENT GOVERNANCE ACTIVITY ────── */}
+      <Section
+        title="Category × Status Heatmap"
+        icon={<Layers className="h-4 w-4" />}
+        action={<CSVBtn onClick={exportCrossTab} label="Detailed CSV" />}
+      >
+        {matrixData.categories.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No category/status matrix data available.</p>
+        ) : (
+          <div className="h-[420px] w-full">
+            <ReactECharts option={matrixOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+          </div>
+        )}
+        <ChartFooter nextUpdateAt={nextUpdateAt} />
+      </Section>
+
       <Section title="Recent Governance Activity" icon={<Activity className="h-4 w-4" />}>
         {recentChanges.length === 0 ? (
           <p className="text-sm text-muted-foreground">No recent changes.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-border bg-card/40">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border/30">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">#</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Title</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Transition</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-bold text-muted-foreground uppercase tracking-wider">When</th>
+                <tr className="border-b border-border/70">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Proposal</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Category</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Transition</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Actor</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">PR</th>
+                  <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">When</th>
                 </tr>
               </thead>
               <tbody>
-                {recentChanges.slice(0, 15).map((c, i) => {
-                  const item = c as { to?: string; from?: string; eip?: string; eip_type?: string; title?: string; days?: number; repository?: string };
-                  const color = STATUS_COLORS[item.to ?? ""] || "#64748b";
-                  const repo = String(item.repository ?? "").toLowerCase();
-                  const repoPath = repo.includes("ercs") ? "ercs" : repo.includes("rips") ? "rips" : "eips";
+                {recentChanges.slice(0, 15).map((row, idx) => {
+                  const to = row.to || "Draft";
+                  const color = STATUS_COLORS[to] || "#64748b";
+                  const repo = String(row.repository || "").toLowerCase();
+                  const repoPath = repo.includes("erc") ? "ercs" : repo.includes("rip") ? "rips" : "eips";
+                  const eipNo = row.eip ? String(row.eip) : "";
+                  const pfx = (row.eip_type || (repoPath === "ercs" ? "ERC" : repoPath === "rips" ? "RIP" : "EIP")).toUpperCase();
                   return (
-                    <tr key={i} className="border-b border-border/50  hover:bg-muted/40 transition-colors">
-                      <td className="px-3 py-2.5">
-                        <Link href={`/standards/${repoPath}/${item.eip}`} className="text-primary/80 hover:text-primary font-medium transition-colors">
-                          {item.eip_type}-{item.eip}
-                        </Link>
+                    <tr key={`${row.eip || "na"}-${idx}`} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
+                      <td className="px-4 py-3 text-sm text-foreground">
+                        {eipNo ? (
+                          <Link href={`/standards/${repoPath}/${eipNo}`} className="text-primary hover:text-primary/80">
+                            {pfx}-{eipNo}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                        <p className="max-w-[260px] truncate text-xs text-muted-foreground">{row.title || "Untitled"}</p>
                       </td>
-                      <td className="px-3 py-2.5 text-foreground/80 max-w-xs truncate">{item.title}</td>
-                      <td className="px-3 py-2.5">
-                        <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium border"
-                          style={{ background: `${color}10`, color, borderColor: `${color}20` }}>
-                          {item.from} → {item.to}
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{row.category || "—"}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium"
+                          style={{ backgroundColor: `${color}1A`, borderColor: `${color}40`, color }}
+                        >
+                          {row.from || "Unknown"} → {row.to || "Unknown"}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right text-muted-foreground tabular-nums">
-                        {item.days === 0 ? "today" : item.days === 1 ? "1d ago" : `${item.days ?? 0}d ago`}
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{row.actor || "—"}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {row.pr_number ? (
+                          <Link href={`/pr/${repoPath}/${row.pr_number}`} className="text-primary hover:text-primary/80">
+                            #{row.pr_number}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">
+                        {row.days === 0 ? "today" : row.days === 1 ? "1d ago" : `${row.days || 0}d ago`}
                       </td>
                     </tr>
                   );
@@ -785,6 +865,40 @@ export default function EIPsAnalyticsPage() {
           </div>
         )}
       </Section>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Link href="/explore/status" className="rounded-lg border border-border bg-card/60 p-3 text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10">
+          Browse Status Explorer
+        </Link>
+        <Link href="/explore/trending" className="rounded-lg border border-border bg-card/60 p-3 text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10">
+          Open Trending Proposals
+        </Link>
+        <Link href="/explore/years" className="rounded-lg border border-border bg-card/60 p-3 text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10">
+          Explore Yearly Patterns
+        </Link>
+        <Link href="/insights/governance-and-process" className="rounded-lg border border-border bg-card/60 p-3 text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10">
+          View Governance Process Insights
+        </Link>
+      </div>
+
+      <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+        <p className="inline-flex items-center gap-1.5">
+          <Pause className="h-3.5 w-3.5" />
+          Stagnant proposals: <span className="font-semibold text-foreground">{stagnantCount.toLocaleString()}</span>
+        </p>
+        <p className="mt-1 inline-flex items-center gap-1.5">
+          <CheckCircle className="h-3.5 w-3.5" />
+          Final + Living: <span className="font-semibold text-foreground">{finalizedCount.toLocaleString()}</span>
+        </p>
+        <p className="mt-1 inline-flex items-center gap-1.5">
+          <XCircle className="h-3.5 w-3.5" />
+          Withdrawn: <span className="font-semibold text-foreground">{(statusCountMap.Withdrawn || 0).toLocaleString()}</span>
+        </p>
+        <p className="mt-1 inline-flex items-center gap-1.5">
+          <FileText className="h-3.5 w-3.5" />
+          Draft backlog: <span className="font-semibold text-foreground">{(statusCountMap.Draft || 0).toLocaleString()}</span>
+        </p>
+      </div>
     </div>
   );
 }

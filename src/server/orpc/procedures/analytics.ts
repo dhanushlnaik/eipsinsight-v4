@@ -1624,7 +1624,7 @@ export const analyticsProcedures = {
         age_days: number;
         last_activity: string;
       }>>(`
-        WITH open_prs AS (
+        open_prs AS (
           SELECT 
             pr.pr_number,
             r.name as repo,
@@ -1752,6 +1752,7 @@ export const analyticsProcedures = {
   getPROpenClassification: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ input }) => {
 
@@ -1759,31 +1760,47 @@ export const analyticsProcedures = {
         category: string;
         count: bigint;
       }>>(`
-        WITH open_prs AS (
-          SELECT pr.id AS pr_id, pr.pr_number, pr.repository_id, pr.title
+        WITH month_ctx AS (
+          SELECT
+            $2::text AS month_key,
+            ($2::text || '-01')::date AS month_start,
+            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+        ),
+        snapshot_ctx AS (
+          SELECT
+            CASE
+              WHEN $2::text IS NULL THEN NOW()::timestamp
+              WHEN (SELECT month_key FROM month_ctx) = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN NOW()::timestamp
+              ELSE (SELECT month_end FROM month_ctx)
+            END AS snapshot_ts
+        ),
+        open_prs AS (
+          SELECT pr.id AS pr_id, pr.pr_number, pr.repository_id, pr.title, pr.labels
           FROM pull_requests pr
           JOIN repositories r ON pr.repository_id = r.id
-          WHERE pr.state = 'open'
+          CROSS JOIN snapshot_ctx sc
+          WHERE pr.created_at <= sc.snapshot_ts
+            AND (pr.merged_at IS NULL OR pr.merged_at > sc.snapshot_ts)
+            AND (pr.closed_at IS NULL OR pr.closed_at > sc.snapshot_ts)
             AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
         ),
         classified AS (
           SELECT op.pr_id,
             CASE
-              WHEN LOWER(COALESCE(op.title, '')) LIKE '%wip%' OR LOWER(COALESCE(op.title, '')) LIKE '%draft%' THEN 'DRAFT'
               WHEN LOWER(COALESCE(op.title, '')) LIKE '%typo%' OR LOWER(COALESCE(op.title, '')) LIKE '%fix typo%'
                 OR LOWER(COALESCE(op.title, '')) LIKE '%editorial%' OR LOWER(COALESCE(op.title, '')) LIKE '%grammar%' THEN 'TYPO'
+              WHEN COALESCE(op.labels, ARRAY[]::text[]) && ARRAY['c-status', 'c-update']::text[] THEN 'STATUS_CHANGE'
               WHEN EXISTS (
                 SELECT 1 FROM pull_request_eips pre
                 JOIN eips e ON e.eip_number = pre.eip_number
                 JOIN eip_snapshots s ON s.eip_id = e.id
                 WHERE pre.pr_number = op.pr_number AND pre.repository_id = op.repository_id AND s.status = 'Draft'
               ) THEN 'NEW_EIP'
-              WHEN EXISTS (
-                SELECT 1 FROM pull_request_eips pre
-                JOIN eips e ON e.eip_number = pre.eip_number
-                JOIN eip_status_events ese ON ese.eip_id = e.id AND ese.pr_number = op.pr_number
-                WHERE pre.pr_number = op.pr_number AND pre.repository_id = op.repository_id
-              ) THEN 'STATUS_CHANGE'
+              WHEN LOWER(COALESCE(op.title, '')) LIKE '%status%' OR LOWER(COALESCE(op.title, '')) LIKE '%draft%'
+                OR LOWER(COALESCE(op.title, '')) LIKE '%review%' OR LOWER(COALESCE(op.title, '')) LIKE '%last call%'
+                OR LOWER(COALESCE(op.title, '')) LIKE '%final%' OR LOWER(COALESCE(op.title, '')) LIKE '%withdrawn%'
+                OR LOWER(COALESCE(op.title, '')) LIKE '%stagnant%' OR LOWER(COALESCE(op.title, '')) LIKE '%living%'
+                OR LOWER(COALESCE(op.title, '')) LIKE '%wip%' THEN 'DRAFT'
               ELSE 'OTHER'
             END AS category
           FROM open_prs op
@@ -1792,7 +1809,7 @@ export const analyticsProcedures = {
         FROM classified
         GROUP BY category
         ORDER BY count DESC
-      `, input.repo || null);
+      `, input.repo || null, input.month ?? null);
 
       const order = ['DRAFT', 'TYPO', 'NEW_EIP', 'STATUS_CHANGE', 'OTHER'];
       const byCat = Object.fromEntries(results.map(r => [r.category, Number(r.count)]));
@@ -1803,6 +1820,7 @@ export const analyticsProcedures = {
   getPRGovernanceWaitingState: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ input }) => {
 
@@ -1814,19 +1832,40 @@ export const analyticsProcedures = {
         oldest_pr_number: number | null;
         oldest_wait_days: number | null;
       }>>(`
-        WITH open_with_state AS (
+        WITH month_ctx AS (
+          SELECT
+            $2::text AS month_key,
+            ($2::text || '-01')::date AS month_start,
+            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+        ),
+        snapshot_ctx AS (
+          SELECT
+            CASE
+              WHEN $2::text IS NULL THEN NOW()::timestamp
+              WHEN (SELECT month_key FROM month_ctx) = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN NOW()::timestamp
+              ELSE (SELECT month_end FROM month_ctx)
+            END AS snapshot_ts
+        ),
+        open_with_state AS (
           SELECT pr.pr_number, pr.repository_id, r.name AS repo_name,
                  COALESCE(gs.current_state, 'NO_STATE') AS state,
-                 gs.waiting_since
+                 gs.waiting_since,
+                 sc.snapshot_ts
           FROM pull_requests pr
           JOIN repositories r ON pr.repository_id = r.id
           LEFT JOIN pr_governance_state gs ON pr.pr_number = gs.pr_number AND pr.repository_id = gs.repository_id
-          WHERE pr.state = 'open'
+          CROSS JOIN snapshot_ctx sc
+          WHERE pr.created_at <= sc.snapshot_ts
+            AND (pr.merged_at IS NULL OR pr.merged_at > sc.snapshot_ts)
+            AND (pr.closed_at IS NULL OR pr.closed_at > sc.snapshot_ts)
             AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
         ),
         wait_days AS (
           SELECT state, pr_number,
-                 EXTRACT(DAY FROM (NOW() - COALESCE(waiting_since, NOW())))::int AS wait_days
+                 GREATEST(
+                   0,
+                   EXTRACT(DAY FROM (snapshot_ts - COALESCE(waiting_since, snapshot_ts)))
+                 )::int AS wait_days
           FROM open_with_state
         ),
         by_state AS (
@@ -1851,7 +1890,7 @@ export const analyticsProcedures = {
         FROM by_state bs
         LEFT JOIN oldest_per_state op ON op.state = bs.state
         ORDER BY bs.count DESC
-      `, input.repo || null);
+      `, input.repo || null, input.month ?? null);
 
       return results.map(r => ({
         state: r.state,
@@ -1867,6 +1906,7 @@ export const analyticsProcedures = {
   getPROpenExport: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ context, input }) => {
       await requireTier(context, 'pro');
@@ -1882,6 +1922,20 @@ export const analyticsProcedures = {
         last_event_type: string | null;
         linked_eips: string | null;
       }>>(`
+        WITH month_ctx AS (
+          SELECT
+            $2::text AS month_key,
+            ($2::text || '-01')::date AS month_start,
+            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+        ),
+        snapshot_ctx AS (
+          SELECT
+            CASE
+              WHEN $2::text IS NULL THEN NOW()::timestamp
+              WHEN (SELECT month_key FROM month_ctx) = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN NOW()::timestamp
+              ELSE (SELECT month_end FROM month_ctx)
+            END AS snapshot_ts
+        )
         SELECT pr.pr_number, r.name AS repo, pr.title, pr.author,
                TO_CHAR(pr.created_at, 'YYYY-MM-DD') AS created_at,
                COALESCE(gs.current_state, 'NO_STATE') AS state,
@@ -1891,11 +1945,14 @@ export const analyticsProcedures = {
         FROM pull_requests pr
         JOIN repositories r ON pr.repository_id = r.id
         LEFT JOIN pr_governance_state gs ON pr.pr_number = gs.pr_number AND pr.repository_id = gs.repository_id
-        WHERE pr.state = 'open'
+        CROSS JOIN snapshot_ctx sc
+        WHERE pr.created_at <= sc.snapshot_ts
+          AND (pr.merged_at IS NULL OR pr.merged_at > sc.snapshot_ts)
+          AND (pr.closed_at IS NULL OR pr.closed_at > sc.snapshot_ts)
           AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
         ORDER BY pr.created_at ASC
         LIMIT 5000
-      `, input.repo || null);
+      `, input.repo || null, input.month ?? null);
 
       return rows.map(r => ({
         prNumber: r.pr_number,
