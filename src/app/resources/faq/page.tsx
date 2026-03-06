@@ -169,7 +169,7 @@ export default function FAQPage() {
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
-              href="https://github.com/AvarchLLC/EIPsInsight/issues"
+              href="https://github.com/AvarchLLC/eipsinsight-v4/issues"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 text-sm text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors"

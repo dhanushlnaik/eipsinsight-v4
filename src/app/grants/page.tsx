@@ -4,7 +4,6 @@ import React from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { Zap, Users, Heart, ExternalLink } from 'lucide-react';
-import { PageComments } from '@/components/page-comments';
 
 export default function GrantsPage() {
   return (
@@ -115,9 +114,6 @@ export default function GrantsPage() {
         </motion.div>
 
         {/* Comments Section */}
-        <div className="mt-12 pt-8 border-t border-slate-200/80 dark:border-slate-700/50">
-          <PageComments />
-        </div>
       </div>
     </div>
   );

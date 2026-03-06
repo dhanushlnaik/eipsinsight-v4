@@ -32,9 +32,12 @@ type FeedbackItem = {
   page_path: string;
   category: string;
   severity: string;
+  content: string;
   status: string;
   is_anonymous: boolean;
   user_name: string | null;
+  user_email: string | null;
+  github_name: string | null;
   created_at: string | Date;
 };
 
@@ -146,13 +149,14 @@ export function FeedbackDashboard() {
   };
 
   const exportCsv = () => {
-    const header = ["page_path", "category", "severity", "status", "author", "created_at"];
+    const header = ["page_path", "category", "severity", "status", "author", "github_name", "created_at"];
     const rows = sortedItems.map((item) => [
       item.page_path,
       item.category,
       item.severity,
       item.status,
       item.is_anonymous ? "Anonymous" : item.user_name || "Anonymous",
+      item.github_name || "",
       new Date(item.created_at).toISOString(),
     ]);
 
@@ -222,6 +226,7 @@ export function FeedbackDashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Page Path</TableHead>
+                <TableHead>Feedback</TableHead>
                 <TableHead>
                   <button
                     type="button"
@@ -254,6 +259,7 @@ export function FeedbackDashboard() {
                 </TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Author</TableHead>
+                <TableHead>GitHub Name</TableHead>
                 <TableHead>
                   <button
                     type="button"
@@ -275,7 +281,7 @@ export function FeedbackDashboard() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10">
+                  <TableCell colSpan={9} className="text-center py-10">
                     <div className="inline-flex items-center gap-2 text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Loading feedback...
@@ -284,14 +290,19 @@ export function FeedbackDashboard() {
                 </TableRow>
               ) : sortedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                     No feedback found.
                   </TableCell>
                 </TableRow>
               ) : (
                 sortedItems.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="max-w-70 truncate">{item.page_path}</TableCell>
+                    <TableCell className="max-w-52 truncate">{item.page_path}</TableCell>
+                    <TableCell className="max-w-96">
+                      <p className="line-clamp-3 whitespace-pre-wrap wrap-break-word text-sm">
+                        {item.content}
+                      </p>
+                    </TableCell>
                     <TableCell>{item.category}</TableCell>
                     <TableCell>
                       <Badge variant={severityBadgeVariant(item.severity)}>
@@ -321,6 +332,20 @@ export function FeedbackDashboard() {
                     </TableCell>
                     <TableCell>
                       {item.is_anonymous ? "Anonymous" : item.user_name || "Anonymous"}
+                    </TableCell>
+                    <TableCell>
+                      {item.github_name ? (
+                        <a
+                          href={`https://github.com/${item.github_name}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-cyan-600 hover:underline dark:text-cyan-400"
+                        >
+                          {item.github_name}
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {new Date(item.created_at).toLocaleString()}

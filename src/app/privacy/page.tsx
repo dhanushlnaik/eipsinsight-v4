@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
-import { PageComments } from '@/components/page-comments';
 import { Shield, Mail, Database, Lock, Eye, UserCheck, Cookie, Bell, FileText } from 'lucide-react';
 
 const sections = [
@@ -60,8 +59,8 @@ export default function PrivacyPolicyPage() {
   };
 
   return (
-    <div className="w-full py-8 pl-4 pr-4 sm:pl-6 sm:pr-6 lg:pl-8 lg:pr-8 xl:pl-12 xl:pr-12">
-      <div className="flex max-w-5xl gap-8">
+    <div className="w-full px-3 py-8 sm:px-4 lg:px-6">
+      <div className="mx-auto flex w-full max-w-screen-2xl gap-8">
         {/* Sidebar Table of Contents */}
         <aside className="hidden lg:block lg:w-72">
           <div className="sticky top-24">
@@ -112,24 +111,8 @@ export default function PrivacyPolicyPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="flex-1"
+          className="min-w-0 flex-1"
         >
-        {/* Header */}
-        <div className="mb-8">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-1.5 ring-1 ring-cyan-400/30">
-            <Shield className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-cyan-700 dark:text-cyan-300">
-              Legal Document
-            </span>
-          </div>
-          <h1 className="mb-3 text-4xl font-bold text-slate-900 dark:text-slate-100">
-            Privacy Policy
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400">
-            Last updated: February 27, 2026
-          </p>
-        </div>
-
           {/* Header */}
           <div className="mb-8">
             <div className="mb-4 inline-flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-1.5 ring-1 ring-cyan-400/30">
@@ -444,7 +427,7 @@ export default function PrivacyPolicyPage() {
               </p>
               <div className="rounded-lg bg-white/70 p-4 dark:bg-slate-900/70">
                 <p className="font-medium text-slate-900 dark:text-slate-100">
-                  Email: <a href="mailto:privacy@eipsinsight.com" className="text-cyan-700 hover:underline dark:text-cyan-300">privacy@eipsinsight.com</a>
+                  Email: <a href="mailto:dev@avarch.com" className="text-cyan-700 hover:underline dark:text-cyan-300">dev@avarch.com</a>
                 </p>
               </div>
             </div>
@@ -470,10 +453,6 @@ export default function PrivacyPolicyPage() {
         </div>
       </motion.div>
 
-      {/* Comments Section */}
-      <div className="mt-12 pt-8 border-t border-slate-200/80 dark:border-slate-700/50">
-        <PageComments />
-      </div>
     </div>
     </div>
   );

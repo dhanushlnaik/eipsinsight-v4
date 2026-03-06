@@ -6,6 +6,7 @@ export interface TeamMember {
   bio?: string;
   github?: string;
   twitter?: string;
+  linkedin?: string;
 }
 
 export const team: TeamMember[] = [

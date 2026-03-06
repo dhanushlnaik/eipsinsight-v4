@@ -13,7 +13,7 @@ const productLinks = [
 ];
 
 const supportLinks = [
-  { name: "Found a bug?", href: "https://github.com/Avarch-org/eipsinsight-v4/issues/new" },
+  { name: "Found a bug?", href: "https://github.com/AvarchLLC/eipsinsight-v4/issues/new" },
   { name: "Donate", href: "/donate" },
   { name: "Feedback", href: "/feedback" },
 ];
@@ -30,7 +30,7 @@ export default function Footer() {
     <footer className="relative border-t border-border bg-background">
       <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-primary/50 to-transparent" />
 
-      <div className="w-full px-4 py-10 sm:px-6 lg:px-8 xl:px-12">
+      <div className="w-full px-3 py-10 sm:px-4 lg:px-6 xl:px-8">
         <div className="grid gap-8 lg:grid-cols-12">
           <section className="lg:col-span-4">
             <Link href="/" className="group inline-flex items-center gap-2.5">

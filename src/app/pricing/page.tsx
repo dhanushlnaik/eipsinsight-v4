@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { useSession } from "@/hooks/useSession";
-import { PageComments } from "@/components/page-comments";
 
 interface PricingTier {
   name: string;
@@ -292,10 +291,6 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* Comments Section */}
-        <div className="mt-12 pt-8 border-t border-slate-200/80 dark:border-slate-700/50">
-          <PageComments />
-        </div>
       </div>
     </div>
   );

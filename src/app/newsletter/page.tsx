@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { Mail, CheckCircle2, Zap } from 'lucide-react';
-import { PageComments } from '@/components/page-comments';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -156,10 +155,6 @@ export default function NewsletterPage() {
           </div>
         </motion.div>
 
-        {/* Comments Section */}
-        <div className="mt-12 pt-8 border-t border-slate-200/80 dark:border-slate-700/50">
-          <PageComments />
-        </div>
       </div>
     </div>
   );

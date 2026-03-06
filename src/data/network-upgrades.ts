@@ -169,7 +169,7 @@ export interface UpgradeData {
     "Istanbul": "Privacy & interoperability improvements",
     "Constantinople": "EVM improvements & efficiency",
     "Petersburg": "Constantinople hotfix",
-    "Byzantium": "Privacy & security enhancements",
+    "Byzantium": "Protocol security enhancements",
     "Spurious Dragon": "DoS attack mitigation",
     "Tangerine Whistle": "DoS attack response",
     "DAO Fork": "Irregular state change to recover DAO funds",
