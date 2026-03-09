@@ -49,7 +49,7 @@ const mobileNavItems = [
 ];
 
 const PERSONA_TONE: Record<string, string> = {
-  emerald: "text-emerald-400 border-emerald-400/35 bg-emerald-500/12",
+  emerald: "text-emerald-300 border-emerald-400/35 bg-emerald-500/12",
   baby: "text-sky-300 border-sky-300/35 bg-sky-400/12",
   orange: "text-orange-300 border-orange-300/35 bg-orange-500/12",
   purple: "text-purple-300 border-purple-300/35 bg-purple-500/12",
@@ -173,13 +173,11 @@ export default function Navbar() {
                 <DropdownMenuTrigger asChild>
                   <button
                     className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 transition-all",
-                      "border",
+                      "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-all duration-200",
                       "hover:scale-[1.02]",
-                      "text-xs",
                       hasPersona 
-                        ? cn("text-foreground", currentPersonaTone)
-                        : "border-primary/40 bg-primary/10 text-primary animate-pulse"
+                        ? cn("text-foreground", currentPersonaTone, "hover:border-primary/40")
+                        : "animate-pulse border-primary/40 bg-primary/10 text-primary"
                     )}
                   >
                     {hasPersona && PersonaIcon ? (
@@ -195,7 +193,7 @@ export default function Navbar() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
-                  className="w-64 border-border bg-popover/95 backdrop-blur-xl p-1"
+                  className="w-64 border-border bg-popover/95 p-1 backdrop-blur-xl"
                 >
                   {!hasPersona && (
                     <div className="mb-1 border-b border-border px-2 py-2 text-xs text-muted-foreground">
@@ -214,10 +212,10 @@ export default function Navbar() {
                         key={personaId}
                         onClick={() => handlePersonaChange(personaId)}
                         className={cn(
-                          "flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-2.5 transition-all",
+                          "flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-2.5 transition-all duration-200",
                           isSelected
                             ? cn(tone, "shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.18)]")
-                            : hoverTone
+                            : cn("bg-transparent text-foreground", hoverTone)
                         )}
                       >
                         <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md border", iconTone)}>
@@ -242,7 +240,7 @@ export default function Navbar() {
             {!session?.user ? (
               <Button
                 size="sm"
-                className="rounded-lg persona-gradient text-black h-8 px-3 text-xs hover:opacity-90"
+                className="h-8 rounded-lg persona-gradient px-3 text-xs text-primary-foreground hover:opacity-90"
                 asChild
               >
                 <Link href="/login">Sign in</Link>
@@ -250,7 +248,7 @@ export default function Navbar() {
             ) : (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card p-0 transition-all hover:border-primary/50 hover:bg-muted/60">
+                  <button className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card p-0 transition-all duration-200 hover:border-primary/50 hover:bg-muted/60">
                     <ProfileAvatar user={session.user} size="xs" />
                   </button>
                 </DropdownMenuTrigger>
@@ -342,10 +340,9 @@ export default function Navbar() {
                 type="search"
                 placeholder="Search EIPs, ERCs, authors…"
                 className={cn(
-                  "w-full rounded-lg border border-border bg-muted/50",
-                  "px-10 py-2.5 text-sm text-foreground",
+                  "h-9 w-full rounded-md border border-border bg-muted/60 px-10 text-sm text-foreground",
                   "placeholder:text-muted-foreground",
-                  "focus:outline-none focus:ring-2 focus:ring-ring/40"
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 )}
               />
             </div>
@@ -439,7 +436,7 @@ export default function Navbar() {
               {!session?.user ? (
                 <Button
                   size="sm"
-                  className="rounded-lg persona-gradient text-black h-8 px-3 text-xs hover:opacity-90"
+                  className="h-8 rounded-lg persona-gradient px-3 text-xs text-primary-foreground hover:opacity-90"
                   asChild
                 >
                   <Link href="/login">Sign in</Link>
