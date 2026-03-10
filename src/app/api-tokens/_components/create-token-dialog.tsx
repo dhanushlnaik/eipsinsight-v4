@@ -11,13 +11,13 @@ import { toast } from 'sonner'
 interface CreateTokenDialogProps {
   isOpen: boolean
   onClose: () => void
-  onCreateToken: (input: { name: string; scopes: string[]; expiryDays?: number }) => Promise<{
+  onCreateToken: (input: { name: string; scopes: ApiScope[]; expiryDays?: number }) => Promise<{
     plainToken: string
     createdAt: Date
     expiresAt: Date | null
     name: string
     id: string
-    scopes: string[]
+    scopes: ApiScope[]
   } | undefined>
   isLoading?: boolean
 }
@@ -29,7 +29,7 @@ export function CreateTokenDialog({
   isLoading = false,
 }: CreateTokenDialogProps) {
   const [name, setName] = useState('')
-  const [selectedScopes, setSelectedScopes] = useState<string[]>([])
+  const [selectedScopes, setSelectedScopes] = useState<ApiScope[]>([])
   const [expiryDays, setExpiryDays] = useState(90)
   const [showToken, setShowToken] = useState(false)
   const [createdToken, setCreatedToken] = useState<{
@@ -182,7 +182,7 @@ export function CreateTokenDialog({
                             checked={selectedScopes.includes(scope)}
                             onChange={(e) => {
                               if (e.target.checked) {
-                                setSelectedScopes([...selectedScopes, scope])
+                                setSelectedScopes([...selectedScopes, scope as ApiScope])
                               } else {
                                 setSelectedScopes(selectedScopes.filter((s) => s !== scope))
                               }

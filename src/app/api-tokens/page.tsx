@@ -10,11 +10,12 @@ import { CreateTokenDialog } from './_components/create-token-dialog'
 import { RevokeTokenDialog } from './_components/revoke-token-dialog'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { API_SCOPES, type ApiScope } from '@/lib/apiScopes'
 
 type ApiToken = {
   id: string
   name: string
-  scopes: string[]
+  scopes: ApiScope[]
   lastUsed: Date | null
   expiresAt: Date | null
   createdAt: Date
@@ -28,8 +29,14 @@ type ApiTokenStats = {
 
 type CreateTokenInput = {
   name: string
-  scopes: string[]
+  scopes: ApiScope[]
   expiryDays?: number
+}
+
+const VALID_SCOPES = new Set<ApiScope>(Object.values(API_SCOPES))
+
+function normalizeScopes(scopes: string[]): ApiScope[] {
+  return scopes.filter((scope): scope is ApiScope => VALID_SCOPES.has(scope as ApiScope))
 }
 
 export default function ApiTokensPage() {
@@ -54,7 +61,16 @@ export default function ApiTokensPage() {
         client.account.getTokenStats({}),
         fetch('/api/stripe/subscription').then((res) => res.json()).catch(() => ({ tier: 'free' })),
       ])
-      setTokens(tokensList || [])
+      setTokens(
+        (tokensList || []).map((token) => ({
+          id: token.id,
+          name: token.name,
+          scopes: normalizeScopes(token.scopes),
+          lastUsed: token.lastUsed,
+          expiresAt: token.expiresAt,
+          createdAt: token.createdAt,
+        }))
+      )
       setStats(statsData)
       setMembershipTier(subscription?.tier || 'free')
     } catch (err) {
@@ -79,7 +95,10 @@ export default function ApiTokensPage() {
       if (newToken) {
         toast.success('Token created successfully')
         await fetchTokens()
-        return newToken
+        return {
+          ...newToken,
+          scopes: normalizeScopes(newToken.scopes),
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create token'
