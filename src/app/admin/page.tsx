@@ -378,7 +378,7 @@ export default function AdminPage() {
           <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700/50">
             <div className="flex gap-3 items-start justify-between">
               <div className="flex gap-3 items-start flex-1">
-                <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex-shrink-0">
+                <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-linear-to-br from-emerald-500 to-emerald-600 shrink-0">
                   <FileText className="h-5 w-5 text-white" />
                 </div>
                 <div>

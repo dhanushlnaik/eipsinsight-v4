@@ -154,6 +154,7 @@ Primary utility classes for persona-aware styling:
 | Button lg | `h-10` (40px) | Large buttons |
 | Icon default | `h-4 w-4`, `h-5 w-5` | 16px, 20px icons |
 | Container | `max-w-7xl`, `px-4 sm:px-6` | Main content |
+| Shared shell | `.page-shell` | Use for page bodies, analytics sections, and page feedback wrapper |
 
 ### Border Radius
 
@@ -205,6 +206,12 @@ Primary utility classes for persona-aware styling:
 
 - **Default:** `rounded-xl border border-border bg-card/60`
 - **Hover:** `hover:border-primary/40`
+
+### Page Shell
+
+- Default page body shell: `page-shell` (`mx-auto w-full max-w-7xl px-4 sm:px-6`)
+- Use the same shell for analytics pages, tool pages, and shared footer-level sections like page feedback
+- Do not introduce separate outer `max-w-*` wrappers for feedback cards inside a `page-shell`
 
 ### Collapsible Page Header
 

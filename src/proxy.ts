@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isApiOrRpc = pathname.startsWith('/api/') || pathname.startsWith('/rpc/');
   if (!isApiOrRpc) return NextResponse.next();
@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
   if (isExempt) return NextResponse.next();
 
   // Note: Rate limiting is handled in API routes and RPC procedures
-  // Middleware in Edge Runtime cannot use ioredis
+  // Proxy in Edge Runtime cannot use ioredis
   
   return NextResponse.next();
 }

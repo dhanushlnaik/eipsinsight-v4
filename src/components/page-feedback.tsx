@@ -125,7 +125,7 @@ export function PageFeedback() {
   };
 
   return (
-    <Card className="mx-auto w-full max-w-7xl rounded-xl border border-border bg-card/60">
+    <Card className="w-full rounded-xl border border-border bg-card/60">
       <CardHeader className="px-4 py-4 sm:px-6">
         <div className="flex items-start justify-between gap-3">
           <div>
