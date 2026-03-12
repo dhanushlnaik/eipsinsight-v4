@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Crown,
   Info,
+  ArrowUpRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -128,6 +129,11 @@ export default function Navbar() {
   const PersonaIcon = currentPersona?.icon;
   const hasPersona = persona !== null;
   const currentPersonaTone = currentPersona ? PERSONA_TONE[currentPersona.color] : "";
+  const showPersonaNudge =
+    !session?.user &&
+    !hasPersona &&
+    typeof window !== "undefined" &&
+    window.localStorage.getItem("eipsinsight_persona_nudge_dismissed") !== "1";
 
   const handleSignOut = async () => {
     try {
@@ -185,25 +191,34 @@ export default function Navbar() {
             {FEATURES.PERSONA_SWITCHER && isHydrated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-all duration-200",
-                      "hover:scale-[1.02]",
-                      hasPersona 
-                        ? cn("text-foreground", currentPersonaTone, "hover:border-primary/40")
-                        : "animate-pulse border-primary/40 bg-primary/10 text-primary"
+                  <div className="relative">
+                    {showPersonaNudge && (
+                      <div className="pointer-events-none absolute -right-1 -top-7 z-[999] flex items-center gap-1 rounded-md border border-primary/40 bg-background px-1.5 py-0.5 text-[10px] font-medium text-primary shadow-[0_0_16px_rgb(var(--persona-accent-rgb)/0.24)]">
+                        <ArrowUpRight className="h-3 w-3" />
+                        Persona
+                      </div>
                     )}
-                  >
-                    {hasPersona && PersonaIcon ? (
-                      <>
-                        <PersonaIcon className="h-3.5 w-3.5 text-primary" />
-                        <span className="text-xs leading-none">{currentPersona?.shortLabel}</span>
-                      </>
-                    ) : (
-                      <span className="text-xs font-medium">Select persona</span>
-                    )}
-                    <ChevronDown className={cn("h-3 w-3", hasPersona ? "text-current/80" : "text-muted-foreground")} />
-                  </button>
+                    <button
+                      className={cn(
+                        "relative flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-all duration-200",
+                        "hover:scale-[1.02]",
+                        showPersonaNudge && "persona-glow border-primary/55 bg-primary/12 ring-1 ring-primary/35",
+                        hasPersona
+                          ? cn("text-foreground", currentPersonaTone, "hover:border-primary/40")
+                          : "animate-pulse border-primary/40 bg-primary/10 text-primary"
+                      )}
+                    >
+                      {hasPersona && PersonaIcon ? (
+                        <>
+                          <PersonaIcon className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-xs leading-none">{currentPersona?.shortLabel}</span>
+                        </>
+                      ) : (
+                        <span className="text-xs font-medium">Select persona</span>
+                      )}
+                      <ChevronDown className={cn("h-3 w-3", hasPersona ? "text-current/80" : "text-muted-foreground")} />
+                    </button>
+                  </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="end"
@@ -224,7 +239,10 @@ export default function Navbar() {
                     return (
                       <DropdownMenuItem
                         key={personaId}
-                        onClick={() => handlePersonaChange(personaId)}
+                        onClick={() => {
+                          window.localStorage.setItem("eipsinsight_persona_nudge_dismissed", "1");
+                          void handlePersonaChange(personaId);
+                        }}
                         className={cn(
                           "flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-2.5 transition-all duration-200",
                           isSelected

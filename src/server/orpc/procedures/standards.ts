@@ -751,7 +751,9 @@ const results = await prisma.$queryRawUnsafe<Array<{
               ELSE 'EIPs'
             END AS repo_group
           FROM eip_snapshots s
+          JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
+          WHERE e.eip_number NOT IN (7212, 3297, 2512)
           UNION ALL
           SELECT
             COALESCE(NULLIF(r.status, ''), 'Unknown') AS status,
@@ -866,6 +868,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM eip_snapshots s
           JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
+          WHERE e.eip_number NOT IN (7212, 3297, 2512)
         ),
         unified AS (
           SELECT * FROM eip_rows
@@ -973,6 +976,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM eip_snapshots s
           JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
+          WHERE e.eip_number NOT IN (7212, 3297, 2512)
         ),
         unified AS (
           SELECT * FROM eip_rows
@@ -1052,11 +1056,38 @@ const results = await prisma.$queryRawUnsafe<Array<{
       dimension: z.enum(['status', 'category', 'repo']).default('status'),
       bucket: z.string().optional(),
       search: z.string().optional(),
+      columnSearch: z.object({
+        eip: z.string().optional(),
+        github: z.string().optional(),
+        title: z.string().optional(),
+        author: z.string().optional(),
+        type: z.string().optional(),
+        status: z.string().optional(),
+        category: z.string().optional(),
+        updatedAt: z.string().optional(),
+      }).optional(),
     }))
     .handler(async ({ input }) => {
       const search = input.search?.trim() ?? '';
       const hasSearch = search.length > 0;
       const hasBucket = Boolean(input.bucket);
+      const columnSearch = input.columnSearch ?? {};
+      const eipSearch = columnSearch.eip?.trim() ?? '';
+      const githubSearch = columnSearch.github?.trim() ?? '';
+      const titleSearch = columnSearch.title?.trim() ?? '';
+      const authorSearch = columnSearch.author?.trim() ?? '';
+      const typeSearch = columnSearch.type?.trim() ?? '';
+      const statusSearch = columnSearch.status?.trim() ?? '';
+      const categorySearch = columnSearch.category?.trim() ?? '';
+      const updatedAtSearch = columnSearch.updatedAt?.trim() ?? '';
+      const hasEipSearch = eipSearch.length > 0;
+      const hasGithubSearch = githubSearch.length > 0;
+      const hasTitleSearch = titleSearch.length > 0;
+      const hasAuthorSearch = authorSearch.length > 0;
+      const hasTypeSearch = typeSearch.length > 0;
+      const hasStatusSearch = statusSearch.length > 0;
+      const hasCategorySearch = categorySearch.length > 0;
+      const hasUpdatedAtSearch = updatedAtSearch.length > 0;
       const bucketField = input.dimension === 'category'
         ? 'category'
         : input.dimension === 'repo'
@@ -1067,36 +1098,93 @@ const results = await prisma.$queryRawUnsafe<Array<{
         `
         WITH unified AS (
           SELECT
+            e.eip_number AS number,
+            e.title,
+            e.author,
+            COALESCE(NULLIF(s.type, ''), 'Unknown') AS type,
             COALESCE(NULLIF(s.status, ''), 'Unknown') AS status,
             COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Other') AS category,
             CASE
               WHEN LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = 'ercs' OR s.category = 'ERC' THEN 'ERCs'
               ELSE 'EIPs'
-            END AS repo_group
+            END AS repo_group,
+            COALESCE(r.name, 'ethereum/EIPs') AS repo,
+            COALESCE(s.updated_at, e.created_at, NOW()) AS updated_at
           FROM eip_snapshots s
+          JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
+          WHERE e.eip_number NOT IN (7212, 3297, 2512)
           UNION ALL
           SELECT
+            r.rip_number AS number,
+            r.title,
+            r.author,
+            'RIP'::text AS type,
             COALESCE(NULLIF(r.status, ''), 'Unknown') AS status,
             CASE
               WHEN COALESCE(r.title, '') ~* '\\mRRC[-\\s]?[0-9]+' OR COALESCE(r.title, '') ~* '^RRC\\M'
                 THEN 'RRC'
               ELSE 'RIP'
             END AS category,
-            'RIPs'::text AS repo_group
+            'RIPs'::text AS repo_group,
+            'ethereum/RIPs'::text AS repo,
+            COALESCE(MAX(rc.commit_date), r.created_at, NOW()) AS updated_at
           FROM rips r
+          LEFT JOIN rip_commits rc ON rc.rip_id = r.id
           WHERE r.rip_number <> 0
+          GROUP BY r.rip_number, r.title, r.author, r.status, r.created_at
         )
         SELECT ${bucketField} AS bucket, COUNT(*)::bigint AS count
         FROM unified
+        WHERE (($1::boolean = false)
+          OR (
+            number::text ILIKE '%' || $2 || '%'
+            OR COALESCE(title, '') ILIKE '%' || $2 || '%'
+            OR COALESCE(author, '') ILIKE '%' || $2 || '%'
+            OR COALESCE(type, '') ILIKE '%' || $2 || '%'
+            OR status ILIKE '%' || $2 || '%'
+            OR category ILIKE '%' || $2 || '%'
+            OR repo ILIKE '%' || $2 || '%'
+          ))
+          AND (($3::boolean = false) OR ${bucketField} = $4::text)
+          AND (($5::boolean = false) OR number::text ILIKE '%' || $6 || '%')
+          AND (($7::boolean = false) OR repo ILIKE '%' || $8 || '%')
+          AND (($9::boolean = false) OR COALESCE(title, '') ILIKE '%' || $10 || '%')
+          AND (($11::boolean = false) OR COALESCE(author, '') ILIKE '%' || $12 || '%')
+          AND (($13::boolean = false) OR COALESCE(type, '') ILIKE '%' || $14 || '%')
+          AND (($15::boolean = false) OR status ILIKE '%' || $16 || '%')
+          AND (($17::boolean = false) OR category ILIKE '%' || $18 || '%')
+          AND (($19::boolean = false) OR TO_CHAR(updated_at, 'YYYY-MM-DD') ILIKE '%' || $20 || '%')
         GROUP BY ${bucketField}
         ORDER BY count DESC, bucket ASC
-        `
+        `,
+        hasSearch,
+        search,
+        hasBucket,
+        input.bucket ?? null,
+        hasEipSearch,
+        eipSearch,
+        hasGithubSearch,
+        githubSearch,
+        hasTitleSearch,
+        titleSearch,
+        hasAuthorSearch,
+        authorSearch,
+        hasTypeSearch,
+        typeSearch,
+        hasStatusSearch,
+        statusSearch,
+        hasCategorySearch,
+        categorySearch,
+        hasUpdatedAtSearch,
+        updatedAtSearch
       );
 
       const details = await prisma.$queryRawUnsafe<Array<{
         number: number;
         title: string | null;
+        author: string | null;
+        type: string;
         status: string;
         category: string;
         repo: string;
@@ -1108,6 +1196,8 @@ const results = await prisma.$queryRawUnsafe<Array<{
           SELECT
             r.rip_number AS number,
             r.title,
+            r.author,
+            'RIP'::text AS type,
             COALESCE(NULLIF(r.status, ''), 'Unknown') AS status,
             CASE
               WHEN COALESCE(r.title, '') ~* '\\mRRC[-\\s]?[0-9]+' OR COALESCE(r.title, '') ~* '^RRC\\M'
@@ -1120,12 +1210,14 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM rips r
           LEFT JOIN rip_commits rc ON rc.rip_id = r.id
           WHERE r.rip_number <> 0
-          GROUP BY r.rip_number, r.title, r.status, r.created_at
+          GROUP BY r.rip_number, r.title, r.author, r.status, r.created_at
         ),
         eip_rows AS (
           SELECT
             e.eip_number AS number,
             e.title,
+            e.author,
+            COALESCE(NULLIF(s.type, ''), 'Unknown') AS type,
             COALESCE(NULLIF(s.status, ''), 'Unknown') AS status,
             COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Other') AS category,
             COALESCE(r.name, 'ethereum/EIPs') AS repo,
@@ -1138,13 +1230,14 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM eip_snapshots s
           JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
+          WHERE e.eip_number NOT IN (7212, 3297, 2512)
         ),
         unified AS (
           SELECT * FROM eip_rows
           UNION ALL
           SELECT * FROM rip_rows
         )
-        SELECT number, title, status, category, repo, kind, updated_at
+        SELECT number, title, author, type, status, category, repo, kind, updated_at
         FROM unified
         WHERE (($1::boolean = false)
           OR (
@@ -1156,12 +1249,36 @@ const results = await prisma.$queryRawUnsafe<Array<{
             OR kind ILIKE '%' || $2 || '%'
           ))
           AND (($3::boolean = false) OR ${bucketField} = $4::text)
+          AND (($5::boolean = false) OR number::text ILIKE '%' || $6 || '%')
+          AND (($7::boolean = false) OR repo ILIKE '%' || $8 || '%')
+          AND (($9::boolean = false) OR COALESCE(title, '') ILIKE '%' || $10 || '%')
+          AND (($11::boolean = false) OR COALESCE(author, '') ILIKE '%' || $12 || '%')
+          AND (($13::boolean = false) OR COALESCE(type, '') ILIKE '%' || $14 || '%')
+          AND (($15::boolean = false) OR status ILIKE '%' || $16 || '%')
+          AND (($17::boolean = false) OR category ILIKE '%' || $18 || '%')
+          AND (($19::boolean = false) OR TO_CHAR(updated_at, 'YYYY-MM-DD') ILIKE '%' || $20 || '%')
         ORDER BY updated_at DESC NULLS LAST, number DESC
         `,
         hasSearch,
         search,
         hasBucket,
-        input.bucket ?? null
+        input.bucket ?? null,
+        hasEipSearch,
+        eipSearch,
+        hasGithubSearch,
+        githubSearch,
+        hasTitleSearch,
+        titleSearch,
+        hasAuthorSearch,
+        authorSearch,
+        hasTypeSearch,
+        typeSearch,
+        hasStatusSearch,
+        statusSearch,
+        hasCategorySearch,
+        categorySearch,
+        hasUpdatedAtSearch,
+        updatedAtSearch
       );
 
       const total = summary.reduce((acc, row) => acc + Number(row.count), 0);
@@ -1183,12 +1300,14 @@ const results = await prisma.$queryRawUnsafe<Array<{
       }
 
       lines.push('');
-      lines.push('record_type,proposal_number,title,status,category,kind,repo,updated_at,metadata_note');
+      lines.push('record_type,proposal_number,title,author,type,status,category,kind,repo,updated_at,metadata_note');
       for (const row of details) {
         lines.push([
           'detail',
           row.number,
           safe(row.title),
+          safe(row.author),
+          safe(row.type),
           safe(row.status),
           safe(row.category),
           safe(row.kind),

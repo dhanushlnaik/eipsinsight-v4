@@ -777,7 +777,7 @@ export const exploreProcedures = {
           COUNT(DISTINCT CASE WHEN LOWER(COALESCE(f.action_type, '')) = 'opened' THEN f.pr_number END) AS prs_created,
           COUNT(DISTINCT CASE WHEN LOWER(COALESCE(f.action_type, '')) = 'merged' THEN f.pr_number END) AS prs_merged,
           COUNT(*) FILTER (WHERE LOWER(COALESCE(f.action_type, '')) IN ('commented', 'issue_comment')) AS comments,
-          COUNT(*) FILTER (WHERE LOWER(COALESCE(f.action_type, '')) = 'reviewed' OR UPPER(COALESCE(f.role, '')) IN ('EDITOR', 'REVIEWER')) AS reviews,
+          COUNT(*) FILTER (WHERE LOWER(COALESCE(f.action_type, '')) = 'reviewed') AS reviews,
           MAX(f.occurred_at) AS last_activity
         FROM filtered f
         GROUP BY f.actor
@@ -788,7 +788,12 @@ export const exploreProcedures = {
       return rows.map((entry, index) => ({
         rank: index + 1,
         actor: entry.actor,
-        totalScore: Number(entry.total_actions),
+        totalActions: Number(entry.total_actions),
+        totalScore:
+          Number(entry.prs_touched) +
+          Number(entry.reviews) * 2 +
+          Number(entry.prs_merged) * 3 +
+          Number(entry.prs_created),
         prsReviewed: Number(entry.reviews),
         comments: Number(entry.comments),
         prsCreated: Number(entry.prs_created),

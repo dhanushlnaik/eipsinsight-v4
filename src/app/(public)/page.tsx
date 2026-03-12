@@ -7,11 +7,13 @@ import Image from 'next/image';
 import {
   Activity,
   ArrowDown,
+  ArrowRight,
   ChevronDown,
   ChevronUp,
   ArrowUp,
   ArrowUpDown,
   Bell,
+  BookOpen,
   Boxes,
   CheckCircle2,
   Code,
@@ -34,8 +36,7 @@ import { CopyLinkButton } from '@/components/header';
 import { EIPsPageHeader } from './_components/eips-page-header';
 import HomeFAQs from './_components/home-faqs';
 import SocialCommunityUpdates from './_components/social-community-updates';
-
-const FEB_2026 = '2026-02';
+import { useSession } from '@/hooks/useSession';
 
 type Dimension = 'status' | 'category' | 'repo';
 type SortBy = 'github' | 'eip' | 'title' | 'author' | 'type' | 'category' | 'status' | 'updated_at';
@@ -67,12 +68,12 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_PIE_COLORS: Record<string, string> = {
-  Draft: '#64748b',
+  Draft: '#60a5fa',
   Review: '#f59e0b',
   'Last Call': '#f97316',
   Final: '#10b981',
   Living: '#22d3ee',
-  Stagnant: '#6b7280',
+  Stagnant: '#94a3b8',
   Withdrawn: '#ef4444',
   Unknown: '#94a3b8',
 };
@@ -152,6 +153,31 @@ const BUCKET_THEME_BY_STATUS: Record<string, BucketTheme> = {
   Stagnant: { border: 'border-primary/25', surface: 'bg-primary/5', title: 'text-foreground', iconWrap: 'bg-primary/10', icon: 'text-primary' },
   Withdrawn: { border: 'border-primary/25', surface: 'bg-primary/5', title: 'text-foreground', iconWrap: 'bg-primary/10', icon: 'text-primary' },
 };
+
+const ENTRY_PATHS = [
+  {
+    title: 'Browse',
+    description: 'Scan EIPs, ERCs, and RIPs by status, category, and repository.',
+    href: '/explore',
+    cta: 'Browse proposals',
+    icon: BookOpen,
+  },
+  {
+    title: 'Analyze',
+    description: 'Use live analytics to monitor activity, editorial load, and proposal velocity.',
+    href: '/analytics',
+    cta: 'Open analytics',
+    icon: Activity,
+  },
+  {
+    title: 'Contribute',
+    description: 'Join the project with docs, UX, and analytics contributions.',
+    href: 'https://github.com/AvarchLLC/eipsinsight-v4/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22',
+    cta: 'Good first issues',
+    icon: GitPullRequest,
+    external: true,
+  },
+];
 
 function monthLabel(monthYear: string) {
   const [y, m] = monthYear.split('-').map(Number);
@@ -263,11 +289,13 @@ function getBucketTheme(dimension: Dimension, bucket: string): BucketTheme {
 }
 
 export default function EIPsHomePage() {
+  const { data: session, loading: sessionLoading } = useSession();
   const [dimension, setDimension] = useState<Dimension>('status');
   const [sortBy, setSortBy] = useState<SortBy>('updated_at');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
   const [activeBucket, setActiveBucket] = useState<string | null>(null);
+  const [showNewUserGuide, setShowNewUserGuide] = useState(false);
   const [columnSearch, setColumnSearch] = useState<ColumnSearch>({
     github: '',
     eip: '',
@@ -278,6 +306,7 @@ export default function EIPsHomePage() {
     category: '',
     updatedAt: '',
   });
+  const [autoGithubFilter, setAutoGithubFilter] = useState(false);
 
   const [distribution, setDistribution] = useState<Array<{ bucket: string; count: number }>>([]);
   const [faqCategoryBreakdown, setFaqCategoryBreakdown] = useState<Array<{ category: string; count: number }>>([]);
@@ -323,6 +352,10 @@ export default function EIPsHomePage() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [downloadingLeaderboard, setDownloadingLeaderboard] = useState(false);
+  const currentMonthYear = useMemo(() => {
+    const now = new Date();
+    return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -331,6 +364,16 @@ export default function EIPsHomePage() {
   useEffect(() => {
     setActiveBucket(null);
   }, [dimension]);
+
+  useEffect(() => {
+    if (sessionLoading) return;
+    if (session) {
+      setShowNewUserGuide(false);
+      return;
+    }
+    const dismissed = window.localStorage.getItem('eipsinsight_home_start_here_dismissed') === '1';
+    setShowNewUserGuide(!dismissed);
+  }, [session, sessionLoading]);
 
   useEffect(() => {
     (async () => {
@@ -377,8 +420,8 @@ export default function EIPsHomePage() {
               updatedAt: columnSearch.updatedAt || undefined,
             },
           }),
-          client.standards.getMonthlyDelta({ monthYear: FEB_2026 }),
-          client.analytics.getMonthlyEditorLeaderboard({ monthYear: FEB_2026, limit: 10 }),
+          client.standards.getMonthlyDelta({ monthYear: currentMonthYear }),
+          client.analytics.getMonthlyEditorLeaderboard({ monthYear: currentMonthYear, limit: 10 }),
           client.analytics.getRecentChanges({ limit: 8 }),
           client.analytics.getRecentEditorActivity({ limit: 5, onlyOpenPRs: true }),
         ]);
@@ -395,7 +438,7 @@ export default function EIPsHomePage() {
         setLoading(false);
       }
     })();
-  }, [dimension, page, sortBy, sortDir, activeBucket, columnSearch]);
+  }, [dimension, page, sortBy, sortDir, activeBucket, columnSearch, currentMonthYear]);
 
   const totalCount = useMemo(
     () => distribution.reduce((acc, row) => acc + row.count, 0),
@@ -407,20 +450,12 @@ export default function EIPsHomePage() {
     [distribution]
   );
 
-  const maxInsight = useMemo(
-    () => Math.max(1, ...febDelta.map((d) => d.count)),
-    [febDelta]
-  );
   const febInsightPieData = useMemo(
     () => febDelta.filter((d) => d.count > 0).map((d) => ({
       name: d.status,
       value: d.count,
       fill: STATUS_PIE_COLORS[d.status] || STATUS_PIE_COLORS.Unknown,
     })),
-    [febDelta]
-  );
-  const febInsightTotal = useMemo(
-    () => febDelta.reduce((sum, d) => sum + d.count, 0),
     [febDelta]
   );
   const febInsightDonutOption = useMemo(() => ({
@@ -436,7 +471,7 @@ export default function EIPsHomePage() {
     series: [
       {
         type: 'pie',
-        radius: ['52%', '78%'],
+        radius: ['48%', '74%'],
         center: ['50%', '50%'],
         avoidLabelOverlap: true,
         minAngle: 3,
@@ -445,8 +480,20 @@ export default function EIPsHomePage() {
           borderWidth: 1,
           borderColor: 'rgba(15,23,42,0.12)',
         },
-        label: { show: false },
-        labelLine: { show: false },
+        label: {
+          show: true,
+          color: '#cbd5e1',
+          fontSize: 12,
+          formatter: '{b}: {c}',
+        },
+        labelLine: {
+          show: true,
+          lineStyle: {
+            color: 'rgba(148,163,184,0.55)',
+          },
+          length: 8,
+          length2: 8,
+        },
         data: febInsightPieData.map((d) => ({
           name: d.name,
           value: d.value,
@@ -457,7 +504,7 @@ export default function EIPsHomePage() {
   }), [febInsightPieData]);
 
   const maxEditor = useMemo(
-    () => Math.max(1, ...febEditors.map((e) => e.prsTouched)),
+    () => Math.max(1, ...febEditors.map((e) => e.totalActions)),
     [febEditors]
   );
   const showDistributionSkeleton = loading && distribution.length === 0;
@@ -474,7 +521,38 @@ export default function EIPsHomePage() {
     setSortDir('desc');
   };
 
+  const inferGithubFilterFromProposalId = (raw: string): string | null => {
+    const match = raw.trim().match(/^(eip|erc|rip|rrc)[-\s]*\d+$/i);
+    if (!match) return null;
+    const prefix = match[1].toUpperCase();
+    if (prefix === 'EIP') return '/EIPs';
+    if (prefix === 'ERC') return '/ERCs';
+    return '/RIPs';
+  };
+
   const handleColumnSearch = (key: keyof ColumnSearch, value: string) => {
+    if (key === 'github') {
+      setAutoGithubFilter(false);
+      setColumnSearch((prev) => ({ ...prev, [key]: value }));
+      return;
+    }
+
+    if (key === 'eip') {
+      const inferredGithub = inferGithubFilterFromProposalId(value);
+      setColumnSearch((prev) => {
+        const next: ColumnSearch = { ...prev, eip: value };
+        if (inferredGithub) {
+          next.github = inferredGithub;
+          setAutoGithubFilter(true);
+        } else if (!value.trim() && autoGithubFilter) {
+          next.github = '';
+          setAutoGithubFilter(false);
+        }
+        return next;
+      });
+      return;
+    }
+
     setColumnSearch((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -490,6 +568,7 @@ export default function EIPsHomePage() {
       category: '',
       updatedAt: '',
     });
+    setAutoGithubFilter(false);
   };
 
   const downloadDetailedCSV = async () => {
@@ -499,6 +578,16 @@ export default function EIPsHomePage() {
         dimension,
         bucket: activeBucket ?? undefined,
         search: undefined,
+        columnSearch: {
+          github: columnSearch.github || undefined,
+          eip: columnSearch.eip || undefined,
+          title: columnSearch.title || undefined,
+          author: columnSearch.author || undefined,
+          type: columnSearch.type || undefined,
+          status: columnSearch.status || undefined,
+          category: columnSearch.category || undefined,
+          updatedAt: columnSearch.updatedAt || undefined,
+        },
       });
 
       const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8;' });
@@ -521,7 +610,7 @@ export default function EIPsHomePage() {
     try {
       setDownloadingLeaderboard(true);
       const res = await client.analytics.exportMonthlyEditorLeaderboardDetailedCSV({
-        monthYear: FEB_2026,
+        monthYear: currentMonthYear,
         limit: 10,
       });
       const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8;' });
@@ -546,6 +635,15 @@ export default function EIPsHomePage() {
     'mt-1 text-sm leading-relaxed text-muted-foreground';
   const panelTitleClass =
     'text-base font-semibold tracking-tight text-foreground sm:text-lg';
+  const hasColumnFilters = useMemo(
+    () => Object.values(columnSearch).some((value) => value.trim().length > 0),
+    [columnSearch]
+  );
+  const isTableFiltered = hasColumnFilters || activeBucket !== null;
+  const dismissNewUserGuide = () => {
+    window.localStorage.setItem('eipsinsight_home_start_here_dismissed', '1');
+    setShowNewUserGuide(false);
+  };
 
   return (
     <div className="w-full px-3 py-6 sm:px-6 lg:px-8 xl:px-12">
@@ -554,6 +652,41 @@ export default function EIPsHomePage() {
       </motion.div>
 
       <hr className="mb-6 border-border" />
+
+      {showNewUserGuide && (
+        <section className="mb-5 rounded-xl border border-primary/25 bg-primary/5 p-3 sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Start Here</p>
+              <p className="mt-1 text-sm text-foreground">
+                New to EIPsInsight? Use the side bar:
+                <span className="ml-2 inline-flex items-center gap-1 text-primary">
+                  Explore <ArrowRight className="h-3.5 w-3.5" /> Analytics <ArrowRight className="h-3.5 w-3.5" /> Resources
+                </span>
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {ENTRY_PATHS.map((item) => (
+                  <a
+                    key={item.title}
+                    href={item.href}
+                    target={item.external ? '_blank' : undefined}
+                    rel={item.external ? 'noreferrer' : undefined}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground/85 hover:border-primary/30 hover:text-foreground"
+                  >
+                    {item.title}
+                  </a>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={dismissNewUserGuide}
+              className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="mb-3 space-y-2">
         <div className="flex items-start justify-between gap-3">
@@ -674,6 +807,20 @@ export default function EIPsHomePage() {
       </div>
 
       <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card/60">
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs">
+          <span className="text-muted-foreground">
+            {isTableFiltered ? 'Filtered proposals' : 'Total proposals'}:{' '}
+            <span className="font-semibold text-foreground">{tableData?.total.toLocaleString() || 0}</span>
+          </span>
+          <button
+            onClick={downloadDetailedCSV}
+            disabled={downloading}
+            className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {downloading ? 'Exporting...' : (isTableFiltered ? 'Download Filtered CSV' : 'Download CSV')}
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-[980px] text-sm">
             <thead>
@@ -697,7 +844,7 @@ export default function EIPsHomePage() {
               </tr>
               <tr className="border-b border-border/60 bg-muted/40">
                 <th className="px-2 py-2"><input value={columnSearch.github} onChange={(e) => handleColumnSearch('github', e.target.value)} placeholder="/EIPs" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
-                <th className="px-2 py-2"><input value={columnSearch.eip} onChange={(e) => handleColumnSearch('eip', e.target.value)} placeholder="EIP-1559 / 1559" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-2 py-2"><input value={columnSearch.eip} onChange={(e) => handleColumnSearch('eip', e.target.value)} placeholder="EIP-1559 / RIP-7212 / 1559" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
                 <th className="px-2 py-2"><input value={columnSearch.title} onChange={(e) => handleColumnSearch('title', e.target.value)} placeholder="Title" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
                 <th className="px-2 py-2"><input value={columnSearch.author} onChange={(e) => handleColumnSearch('author', e.target.value)} placeholder="Author" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
                 <th className="px-2 py-2"><input value={columnSearch.type} onChange={(e) => handleColumnSearch('type', e.target.value)} placeholder="Type" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
@@ -765,7 +912,7 @@ export default function EIPsHomePage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          <span>{tableData?.total.toLocaleString() || 0} results</span>
+          <span>{isTableFiltered ? 'Filtered results' : 'Results'}: {tableData?.total.toLocaleString() || 0}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={clearFilters}
@@ -798,7 +945,7 @@ export default function EIPsHomePage() {
             <div>
               <div className="inline-flex items-center gap-2">
                 <Activity className="h-4 w-4 text-primary" />
-                <h3 className={panelTitleClass}>{monthLabel(FEB_2026)} Insight (Status Changes)</h3>
+                <h3 className={panelTitleClass}>{monthLabel(currentMonthYear)} Insight (Status Changes)</h3>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Monthly status transition distribution and totals.
@@ -813,42 +960,17 @@ export default function EIPsHomePage() {
             </button>
           </div>
 
-          <div className="grid items-center gap-4 md:grid-cols-[220px_1fr]">
-            <div className="h-[180px] w-full sm:h-[220px]">
+          <div className="h-[340px] sm:h-[420px]">
+            <div className="h-full w-full">
               {showInsightSkeleton ? (
-                <div className="h-full w-full animate-pulse rounded-full bg-muted" />
+                <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
               ) : (
-                <>
-                  <ReactECharts
-                    option={febInsightDonutOption}
-                    style={{ height: '100%', width: '100%' }}
-                    opts={{ renderer: 'svg' }}
-                  />
-                  <p className="mt-1 text-center text-xs text-muted-foreground">
-                    Total changes: <span className="font-semibold text-foreground">{febInsightTotal}</span>
-                  </p>
-                </>
+                <ReactECharts
+                  option={febInsightDonutOption}
+                  style={{ height: '100%', width: '100%' }}
+                  opts={{ renderer: 'svg' }}
+                />
               )}
-            </div>
-            <div className="space-y-2">
-              {showInsightSkeleton
-                ? Array.from({ length: 5 }).map((_, i) => (
-                    <div key={`insight-skeleton-${i}`} className="rounded-lg bg-muted/40 p-2.5 ring-1 ring-border">
-                      <div className="mb-1 h-4 w-28 animate-pulse rounded bg-muted" />
-                      <div className="h-1.5 animate-pulse rounded-full bg-muted" />
-                    </div>
-                  ))
-                : febDelta.map((row) => (
-                    <div key={row.status} className="rounded-lg bg-muted/40 p-2.5 ring-1 ring-border">
-                      <div className="mb-1 flex items-center justify-between text-sm">
-                        <span className="text-foreground">{row.status}</span>
-                        <span className="font-semibold text-primary">{row.count}</span>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-muted/80">
-                        <div className={`h-full ${STATUS_COLORS[row.status] || 'bg-cyan-500'}`} style={{ width: `${Math.max(8, (row.count / maxInsight) * 100)}%` }} />
-                      </div>
-                    </div>
-                  ))}
             </div>
           </div>
         </div>
@@ -858,7 +980,7 @@ export default function EIPsHomePage() {
             <div>
               <div className="inline-flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-primary" />
-                <h3 className={panelTitleClass}>Editor Leaderboard ({monthLabel(FEB_2026)})</h3>
+                <h3 className={panelTitleClass}>Editor Leaderboard ({monthLabel(currentMonthYear)})</h3>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Ranked by PRs touched and editorial actions in the month.
@@ -899,10 +1021,10 @@ export default function EIPsHomePage() {
                           <p className="text-xs text-muted-foreground">{row.totalActions} actions across {row.prsTouched} PRs</p>
                         </div>
                       </div>
-                      <span className="text-sm font-semibold text-primary">{row.prsTouched}</span>
+                      <span className="text-sm font-semibold text-primary">{row.totalActions}</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted/80">
-                      <div className="h-full bg-primary" style={{ width: `${Math.max(8, (row.prsTouched / maxEditor) * 100)}%` }} />
+                      <div className="h-full bg-primary" style={{ width: `${Math.max(8, (row.totalActions / maxEditor) * 100)}%` }} />
                     </div>
                   </div>
                 ))}

@@ -20,6 +20,7 @@ type TimeRange = '30d' | '90d' | '365d' | 'all';
 interface LeaderboardEntry {
   rank: number;
   actor: string;
+  totalActions: number;
   totalScore: number;
   prsReviewed: number;
   comments: number;

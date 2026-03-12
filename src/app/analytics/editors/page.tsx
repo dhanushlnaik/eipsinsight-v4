@@ -55,6 +55,21 @@ const repoColors: Record<string, string> = {
   "ethereum/RIPs": "#94a3b8",
 };
 
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 function getTimeWindow(timeRange: string): { from: string | undefined; to: string | undefined } {
   const now = new Date();
   const to = now.toISOString().split('T')[0];
@@ -87,6 +102,15 @@ function getTimeWindow(timeRange: string): { from: string | undefined; to: strin
   return { from: from.toISOString().split('T')[0], to };
 }
 
+function getMonthWindow(year: number, month: number): { from: string; to: string } {
+  const from = new Date(Date.UTC(year, month - 1, 1));
+  const to = new Date(Date.UTC(year, month, 0));
+  return {
+    from: from.toISOString().split("T")[0],
+    to: to.toISOString().split("T")[0],
+  };
+}
+
 export default function EditorsAnalyticsPage() {
   const { timeRange, repoFilter } = useAnalytics();
   const [loading, setLoading] = useState(true);
@@ -100,11 +124,29 @@ export default function EditorsAnalyticsPage() {
   const [dailyActivity, setDailyActivity] = useState<DailyActivityData[]>([]);
   const [membershipTier, setMembershipTier] = useState<string>('free');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [leaderboardMode, setLeaderboardMode] = useState<"monthly" | "range">("monthly");
+  const [leaderboardYear, setLeaderboardYear] = useState<number>(() => new Date().getUTCFullYear());
+  const [leaderboardMonth, setLeaderboardMonth] = useState<number>(() => new Date().getUTCMonth() + 1);
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
   const { from, to } = getTimeWindow(timeRange);
   const [exporting, setExporting] = useState(false);
   const isPaidMember = membershipTier !== 'free';
+  const leaderboardWindow = useMemo(
+    () => (leaderboardMode === "monthly" ? getMonthWindow(leaderboardYear, leaderboardMonth) : { from, to }),
+    [leaderboardMode, leaderboardYear, leaderboardMonth, from, to]
+  );
+  const leaderboardLabel = useMemo(() => {
+    if (leaderboardMode === "monthly") {
+      return `${MONTH_NAMES[leaderboardMonth - 1]} ${leaderboardYear}`;
+    }
+    if (!leaderboardWindow.from && !leaderboardWindow.to) return "All-Time Contributions";
+    return "Selected Dashboard Range";
+  }, [leaderboardMode, leaderboardMonth, leaderboardYear, leaderboardWindow.from, leaderboardWindow.to]);
+  const currentYear = new Date().getUTCFullYear();
+  const yearOptions = useMemo(() => {
+    return Array.from({ length: 8 }, (_, idx) => currentYear - idx);
+  }, [currentYear]);
 
   const downloadLeaderboardCSV = useCallback(async () => {
     if (!isPaidMember) {
@@ -152,8 +194,8 @@ export default function EditorsAnalyticsPage() {
         const [leaderboardData, trendData, categoryData, repoData, dailyActivityData] = await Promise.all([
           client.analytics.getEditorsLeaderboard({
             repo: repoParam,
-            from,
-            to,
+            from: leaderboardWindow.from,
+            to: leaderboardWindow.to,
             limit: 30,
           }),
           client.analytics.getEditorsMonthlyTrend({
@@ -190,7 +232,7 @@ export default function EditorsAnalyticsPage() {
     };
 
     fetchData();
-  }, [timeRange, repoFilter, repoParam, from, to]);
+  }, [timeRange, repoFilter, repoParam, from, to, leaderboardWindow.from, leaderboardWindow.to]);
 
   // Aggregate repo distribution into cards
   const repoCards = useMemo(() => {
@@ -513,14 +555,7 @@ export default function EditorsAnalyticsPage() {
           <div className="flex flex-col gap-1">
             <h2 className="text-xl font-semibold text-foreground">
               Editor Leaderboard
-              {timeRange === "this_month" && (
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  — {new Date().toLocaleString('en', { month: 'long', year: 'numeric' })}
-                </span>
-              )}
-              {timeRange === "all" && (
-                <span className="ml-2 text-sm font-normal text-muted-foreground">— All-Time Contributions</span>
-              )}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">— {leaderboardLabel}</span>
             </h2>
           </div>
           <button
@@ -536,6 +571,57 @@ export default function EditorsAnalyticsPage() {
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             {!isPaidMember ? 'Export (Pro+)' : 'Download CSV'}
           </button>
+        </div>
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/30 p-2">
+          <span className="text-xs font-medium text-muted-foreground">Leaderboard filter</span>
+          <button
+            onClick={() => setLeaderboardMode("monthly")}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              leaderboardMode === "monthly"
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => setLeaderboardMode("range")}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              leaderboardMode === "range"
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Use dashboard range
+          </button>
+          {leaderboardMode === "monthly" && (
+            <>
+              <select
+                value={leaderboardYear}
+                onChange={(e) => setLeaderboardYear(Number(e.target.value))}
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+                aria-label="Select leaderboard year"
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={leaderboardMonth}
+                onChange={(e) => setLeaderboardMonth(Number(e.target.value))}
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+                aria-label="Select leaderboard month"
+              >
+                {MONTH_NAMES.map((month, index) => (
+                  <option key={month} value={index + 1}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">

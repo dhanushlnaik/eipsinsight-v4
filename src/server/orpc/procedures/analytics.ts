@@ -4231,8 +4231,8 @@ export const analyticsProcedures = {
     }),
 
   // ——— Monthly Editor Leaderboard ———
-  // PRs where an official editor was last_actor (governance state) AND the PR was updated this month.
-  // Conservative metric: only counts PRs that had governance-state-changing editor action this month.
+  // Activity-based metric for official editors in the selected month:
+  // total_actions = all contributor_activity rows, prs_touched = distinct PRs acted on.
   getMonthlyEditorLeaderboard: optionalAuthProcedure
     .input(z.object({
       limit: z.number().optional().default(10),
@@ -4253,16 +4253,23 @@ export const analyticsProcedures = {
 
       const results = await prisma.$queryRawUnsafe<Array<{
         actor: string;
+        total_actions: bigint;
         prs_touched: bigint;
       }>>(
         `
-        SELECT pg.last_actor AS actor, COUNT(DISTINCT pr.pr_number)::bigint AS prs_touched
-        FROM pull_requests pr
-        JOIN pr_governance_state pg ON pg.pr_number = pr.pr_number AND pg.repository_id = pr.repository_id
-        WHERE pg.last_actor = ANY($1::text[])
-          AND pr.updated_at >= $2::date AND pr.updated_at < $3::date
-        GROUP BY pg.last_actor
-        ORDER BY prs_touched DESC
+        SELECT
+          ca.actor AS actor,
+          COUNT(*)::bigint AS total_actions,
+          COUNT(DISTINCT ca.pr_number)::bigint AS prs_touched
+        FROM contributor_activity ca
+        WHERE LOWER(ca.actor) = ANY(
+          SELECT LOWER(x) FROM UNNEST($1::text[]) AS x
+        )
+          AND ca.occurred_at >= $2::date
+          AND ca.occurred_at < $3::date
+          AND ca.pr_number > 0
+        GROUP BY ca.actor
+        ORDER BY total_actions DESC, prs_touched DESC, ca.actor ASC
         LIMIT $4
         `,
         allEditors, monthStart, nextMonth, input.limit
@@ -4270,7 +4277,7 @@ export const analyticsProcedures = {
 
       return results.map((r) => ({
         actor: r.actor,
-        totalActions: Number(r.prs_touched),
+        totalActions: Number(r.total_actions),
         prsTouched: Number(r.prs_touched),
       }));
     }),
@@ -4299,6 +4306,7 @@ export const analyticsProcedures = {
       const rows = await prisma.$queryRawUnsafe<Array<{
         editor: string;
         rank: number;
+        total_actions: bigint;
         prs_touched: bigint;
         repo: string | null;
         pr_number: number;
@@ -4312,30 +4320,33 @@ export const analyticsProcedures = {
         `
         WITH leaders AS (
           SELECT
-            pg.last_actor AS editor,
-            COUNT(DISTINCT pr.pr_number)::bigint AS prs_touched
-          FROM pull_requests pr
-          JOIN pr_governance_state pg
-            ON pg.pr_number = pr.pr_number
-           AND pg.repository_id = pr.repository_id
-          WHERE pg.last_actor = ANY($1::text[])
-            AND pr.updated_at >= $2::date
-            AND pr.updated_at < $3::date
-          GROUP BY pg.last_actor
-          ORDER BY prs_touched DESC, pg.last_actor ASC
+            ca.actor AS editor,
+            COUNT(*)::bigint AS total_actions,
+            COUNT(DISTINCT ca.pr_number)::bigint AS prs_touched
+          FROM contributor_activity ca
+          WHERE LOWER(ca.actor) = ANY(
+            SELECT LOWER(x) FROM UNNEST($1::text[]) AS x
+          )
+            AND ca.occurred_at >= $2::date
+            AND ca.occurred_at < $3::date
+            AND ca.pr_number > 0
+          GROUP BY ca.actor
+          ORDER BY total_actions DESC, prs_touched DESC, ca.actor ASC
           LIMIT $4
         ),
         ranked AS (
           SELECT
             editor,
+            total_actions,
             prs_touched,
-            ROW_NUMBER() OVER (ORDER BY prs_touched DESC, editor ASC) AS rank
+            ROW_NUMBER() OVER (ORDER BY total_actions DESC, prs_touched DESC, editor ASC) AS rank
           FROM leaders
         ),
         actions AS (
           SELECT
             r.editor,
             r.rank,
+            r.total_actions,
             r.prs_touched,
             repo.name AS repo,
             ca.pr_number,
@@ -4375,6 +4386,7 @@ export const analyticsProcedures = {
         SELECT
           editor,
           rank,
+          total_actions,
           prs_touched,
           repo,
           pr_number,
@@ -4400,6 +4412,7 @@ export const analyticsProcedures = {
         'month',
         'rank',
         'editor',
+        'total_actions_in_month',
         'prs_touched_in_month',
         'repo',
         'pr_number',
@@ -4415,6 +4428,7 @@ export const analyticsProcedures = {
         escapeCsv(monthYear),
         r.rank,
         escapeCsv(r.editor),
+        Number(r.total_actions),
         Number(r.prs_touched),
         escapeCsv(r.repo),
         r.pr_number,

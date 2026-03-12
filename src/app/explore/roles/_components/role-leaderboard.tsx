@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 interface LeaderboardEntry {
   rank: number;
   actor: string;
+  totalActions: number;
   totalScore: number;
   prsReviewed: number;
   comments: number;
@@ -191,7 +192,7 @@ export function RoleLeaderboard({
                   </td>
                   <td className="px-3 py-0 text-center align-middle">
                     <span className="font-semibold text-foreground">
-                      {entry.comments.toLocaleString()}
+                      {entry.totalActions.toLocaleString()}
                     </span>
                   </td>
                   <td className="px-3 py-0 text-center align-middle">

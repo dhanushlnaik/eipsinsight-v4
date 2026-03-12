@@ -37,7 +37,7 @@ export function EIPsPageHeader() {
               transition={{ duration: 0.4 }}
               className="dec-title persona-title text-3xl font-semibold tracking-tight sm:text-4xl"
             >
-              Ethereum Improvement Proposals
+              Track Ethereum Proposals and Governance
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 4 }}
@@ -45,8 +45,7 @@ export function EIPsPageHeader() {
               transition={{ duration: 0.4, delay: 0.05 }}
               className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base"
             >
-              Real-time governance analytics — proposal lifecycle, upgrade progress, and editorial workload.
-              Powered by <span className="text-foreground/80">EIPsInsight</span>.
+              Real-time view of proposal lifecycle, upgrade progress, and editorial activity across EIPs, ERCs, and RIPs.
             </motion.p>
           </div>
 
