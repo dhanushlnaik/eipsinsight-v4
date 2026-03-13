@@ -7,6 +7,8 @@ interface LastUpdatedProps {
   timestamp: string | Date;
   showIcon?: boolean;
   className?: string;
+  prefix?: string;
+  showAbsolute?: boolean;
 }
 
 /**
@@ -45,6 +47,21 @@ function formatRelativeTime(timestamp: string | Date): string {
   }
 }
 
+function formatAbsoluteTime(timestamp: string | Date): string {
+  const date = typeof timestamp === "string" ? new Date(timestamp) : timestamp;
+
+  if (isNaN(date.getTime())) {
+    return "Invalid date";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 /**
  * LastUpdated Component
  *
@@ -63,20 +80,22 @@ export function LastUpdated({
   timestamp,
   showIcon = true,
   className = "",
+  prefix = "Updated",
+  showAbsolute = false,
 }: LastUpdatedProps): React.ReactElement {
-  const [relativeTime, setRelativeTime] = useState<string>("just now");
+  const [refreshTick, setRefreshTick] = useState(0);
+  void refreshTick;
+  const relativeTime = formatRelativeTime(timestamp);
 
   // Format time on client to avoid hydration mismatches
   // Update every minute so "5 minutes ago" becomes "6 minutes ago", etc.
   useEffect(() => {
-    setRelativeTime(formatRelativeTime(timestamp));
-    
     const interval = setInterval(() => {
-      setRelativeTime(formatRelativeTime(timestamp));
+      setRefreshTick((tick) => tick + 1);
     }, 60000); // Update every minute
     
     return () => clearInterval(interval);
-  }, [timestamp]);
+  }, []);
 
   return (
     <div
@@ -84,7 +103,9 @@ export function LastUpdated({
       title={typeof timestamp === "string" ? timestamp : timestamp.toISOString()}
     >
       {showIcon && <Clock className="h-4 w-4 opacity-75" />}
-      <span className="whitespace-nowrap font-medium">Updated {relativeTime}</span>
+      <span className="whitespace-nowrap font-medium">
+        {prefix} {showAbsolute ? `${relativeTime} • ${formatAbsoluteTime(timestamp)}` : relativeTime}
+      </span>
     </div>
   );
 }

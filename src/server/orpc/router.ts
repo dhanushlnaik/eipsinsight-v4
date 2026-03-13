@@ -19,6 +19,7 @@ import { githubProcedures } from './procedures/github'
 import { feedbackProcedures } from './procedures/feedback'
 import { pageCommentProcedures } from './procedures/pageComment'
 import { commentVoteProcedures } from './procedures/commentVote'
+import { subscriptionsProcedures } from './procedures/subscriptions'
 
 export const router = {
   auth: authProcedures,
@@ -42,4 +43,5 @@ export const router = {
   feedback: feedbackProcedures,
   pageComment: pageCommentProcedures,
   commentVote: commentVoteProcedures,
+  subscriptions: subscriptionsProcedures,
 }

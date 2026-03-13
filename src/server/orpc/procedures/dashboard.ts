@@ -22,7 +22,7 @@ export const dashboardProcedures = {
 
       try {
       // Run in batches to avoid exhausting DB connection pool (max ~4 concurrent)
-      const [kpisRes, crosstabRes, statusDistRes, categoryBreakdownRes] = await Promise.all([
+      const [kpisRes, crosstabRes, statusDistRes, categoryBreakdownRes, freshnessRes] = await Promise.all([
         prisma.$queryRawUnsafe<Array<{ total: bigint; in_review: bigint; finalized: bigint; new_this_year: bigint }>>(
           `SELECT COUNT(*)::bigint AS total,
             COUNT(*) FILTER (WHERE s.status IN ('Draft', 'Review', 'Last Call'))::bigint AS in_review,
@@ -58,6 +58,35 @@ export const dashboardProcedures = {
           WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
           GROUP BY CASE WHEN s.category IS NOT NULL AND TRIM(s.category) <> '' THEN s.category
             WHEN TRIM(COALESCE(s.type, '')) <> '' THEN s.type ELSE 'Other' END ORDER BY count DESC`,
+          repo
+        ),
+        prisma.$queryRawUnsafe<Array<{ updated_at: Date | null }>>(
+          `SELECT MAX(updated_at) AS updated_at
+           FROM (
+             SELECT MAX(s.updated_at) AS updated_at
+             FROM eip_snapshots s
+             LEFT JOIN repositories r ON s.repository_id = r.id
+             WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+
+             UNION ALL
+
+             SELECT MAX(se.changed_at) AS updated_at
+             FROM eip_status_events se
+             LEFT JOIN repositories r ON se.repository_id = r.id
+             WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+
+             UNION ALL
+
+             SELECT MAX(pr.updated_at) AS updated_at
+             FROM pull_requests pr
+             JOIN repositories r ON pr.repository_id = r.id
+             WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+
+             UNION ALL
+
+             SELECT MAX(rc.commit_date) AS updated_at
+             FROM rip_commits rc
+           ) freshness`,
           repo
         ),
       ]);
@@ -186,6 +215,7 @@ export const dashboardProcedures = {
       const draftToFinalMedian = draftToFinal?.medianDays ?? 0;
       const previousYearPlaceholder = draftToFinalMedian > 0 ? draftToFinalMedian + 42 : 0;
       const ripRow = ripKpisRes[0];
+      const updatedAt = freshnessRes[0]?.updated_at ?? null;
 
       return {
         kpis: {
@@ -225,6 +255,9 @@ export const dashboardProcedures = {
           change: previousYearPlaceholder > 0 ? Math.round((-15 * draftToFinalMedian) / previousYearPlaceholder) : 0,
         },
         ripKpis: { total: Number(ripRow?.total ?? 0), active: Number(ripRow?.active ?? 0) },
+        meta: {
+          updatedAt: updatedAt?.toISOString() ?? null,
+        },
       };
       } catch (err) {
         console.error('[getDashboardOverview]', err);

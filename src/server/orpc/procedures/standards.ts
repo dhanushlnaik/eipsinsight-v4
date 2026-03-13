@@ -627,10 +627,12 @@ const results = await prisma.$queryRawUnsafe<Array<{
       const results = await prisma.$queryRawUnsafe<Array<{
         to_status: string;
         count: bigint;
+        latest_changed_at: Date | null;
       }>>(
         `SELECT
           se.to_status,
-          COUNT(*)::bigint AS count
+          COUNT(*)::bigint AS count,
+          MAX(se.changed_at) AS latest_changed_at
         FROM eip_status_events se
         WHERE se.changed_at >= $1::date
           AND se.changed_at < $2::date
@@ -640,10 +642,20 @@ const results = await prisma.$queryRawUnsafe<Array<{
         nextMonth
       );
 
-      return results.map(r => ({
+      const items = results.map(r => ({
         status: r.to_status,
         count: Number(r.count),
       }));
+      const updatedAt = results.reduce<Date | null>((latest, row) => {
+        if (!row.latest_changed_at) return latest;
+        if (!latest || row.latest_changed_at > latest) return row.latest_changed_at;
+        return latest;
+      }, null);
+
+      return {
+        items,
+        updatedAt: updatedAt?.toISOString() ?? null,
+      };
     }),
 
   // ——— Repo Distribution (for homepage) ———

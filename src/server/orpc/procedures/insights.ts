@@ -24,6 +24,161 @@ async function getRepoIds(repo?: string): Promise<number[] | null> {
 }
 
 export const insightsProcedures = {
+  getDraftVsFinalHistory: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      fromMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+      toMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const repoIds = await getRepoIds(input.repo);
+      const toMonth = input.toMonth ?? new Date().toISOString().slice(0, 7);
+      const fromMonth = input.fromMonth ?? (() => {
+        const end = new Date(`${toMonth}-01T00:00:00.000Z`);
+        const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1));
+        return `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}`;
+      })();
+      const fromDate = `${fromMonth}-01`;
+      const [toYear, toMon] = toMonth.split('-').map(Number);
+      const toExclusive = new Date(Date.UTC(toYear, toMon, 1)).toISOString().slice(0, 10);
+
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        month: string;
+        draft: bigint;
+        final: bigint;
+        latest_changed_at: Date | null;
+      }>>(
+        `
+        WITH month_series AS (
+          SELECT TO_CHAR(month_start, 'YYYY-MM') AS month
+          FROM generate_series(
+            TO_DATE($2 || '-01', 'YYYY-MM-DD'),
+            TO_DATE($3 || '-01', 'YYYY-MM-DD'),
+            '1 month'::interval
+          ) AS month_start
+        ),
+        monthly AS (
+          SELECT
+            TO_CHAR(date_trunc('month', se.changed_at), 'YYYY-MM') AS month,
+            COUNT(*) FILTER (WHERE se.to_status = 'Draft')::bigint AS draft,
+            COUNT(*) FILTER (WHERE se.to_status = 'Final')::bigint AS final,
+            MAX(se.changed_at) AS latest_changed_at
+          FROM eip_status_events se
+          WHERE se.changed_at >= $4::date
+            AND se.changed_at < $5::date
+            AND ($1::int[] IS NULL OR se.repository_id = ANY($1))
+          GROUP BY 1
+        )
+        SELECT
+          ms.month,
+          COALESCE(m.draft, 0::bigint) AS draft,
+          COALESCE(m.final, 0::bigint) AS final,
+          m.latest_changed_at
+        FROM month_series ms
+        LEFT JOIN monthly m ON m.month = ms.month
+        ORDER BY ms.month ASC
+        `,
+        repoIds,
+        fromMonth,
+        toMonth,
+        fromDate,
+        toExclusive
+      );
+
+      const updatedAt = rows.reduce<Date | null>((latest, row) => {
+        if (!row.latest_changed_at) return latest;
+        if (!latest || row.latest_changed_at > latest) return row.latest_changed_at;
+        return latest;
+      }, null);
+
+      return {
+        rows: rows.map((row) => ({
+          month: row.month,
+          draft: Number(row.draft),
+          final: Number(row.final),
+        })),
+        updatedAt: updatedAt?.toISOString() ?? null,
+      };
+    }),
+
+  getStatusCategoryTrend: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      status: z.string(),
+      fromMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+      toMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const repoIds = await getRepoIds(input.repo);
+      const toMonth = input.toMonth ?? new Date().toISOString().slice(0, 7);
+      const fromMonth = input.fromMonth ?? (() => {
+        const end = new Date(`${toMonth}-01T00:00:00.000Z`);
+        const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1));
+        return `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}`;
+      })();
+      const fromDate = `${fromMonth}-01`;
+      const [toYear, toMon] = toMonth.split('-').map(Number);
+      const toExclusive = new Date(Date.UTC(toYear, toMon, 1)).toISOString().slice(0, 10);
+
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        month: string;
+        category: string;
+        count: bigint;
+        latest_changed_at: Date | null;
+      }>>(
+        `
+        SELECT
+          TO_CHAR(date_trunc('month', se.changed_at), 'YYYY-MM') AS month,
+          COALESCE(
+            NULLIF(latest_category.to_category, ''),
+            NULLIF(s.category, ''),
+            NULLIF(s.type, ''),
+            'Other'
+          ) AS category,
+          COUNT(DISTINCT se.eip_id)::bigint AS count,
+          MAX(se.changed_at) AS latest_changed_at
+        FROM eip_status_events se
+        JOIN eips e
+          ON e.id = se.eip_id
+        LEFT JOIN eip_snapshots s
+          ON s.eip_id = e.id
+        LEFT JOIN LATERAL (
+          SELECT ce.to_category
+          FROM eip_category_events ce
+          WHERE ce.eip_id = se.eip_id
+            AND ce.changed_at <= se.changed_at
+          ORDER BY ce.changed_at DESC
+          LIMIT 1
+        ) latest_category ON TRUE
+        WHERE se.to_status = $1
+          AND se.changed_at >= $2::date
+          AND se.changed_at < $3::date
+          AND ($4::int[] IS NULL OR se.repository_id = ANY($4))
+        GROUP BY 1, 2
+        ORDER BY 1 ASC, 3 DESC, 2 ASC
+        `,
+        input.status,
+        fromDate,
+        toExclusive,
+        repoIds
+      );
+
+      const updatedAt = rows.reduce<Date | null>((latest, row) => {
+        if (!row.latest_changed_at) return latest;
+        if (!latest || row.latest_changed_at > latest) return row.latest_changed_at;
+        return latest;
+      }, null);
+
+      return {
+        rows: rows.map((row) => ({
+          month: row.month,
+          category: row.category,
+          count: Number(row.count),
+        })),
+        updatedAt: updatedAt?.toISOString() ?? null,
+      };
+    }),
+
   // ──── 1) Monthly Status Snapshot ────
   // Uses eip_snapshots (current state — fast) + monthly transition counts for delta
   getMonthlyStatusSnapshot: optionalAuthProcedure

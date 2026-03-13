@@ -33,6 +33,7 @@ import {
 import { client } from '@/lib/orpc';
 import ReactECharts from 'echarts-for-react';
 import { CopyLinkButton } from '@/components/header';
+import { LastUpdated } from '@/components/analytics/LastUpdated';
 import { EIPsPageHeader } from './_components/eips-page-header';
 import HomeFAQs from './_components/home-faqs';
 import SocialCommunityUpdates from './_components/social-community-updates';
@@ -352,6 +353,8 @@ export default function EIPsHomePage() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [downloadingLeaderboard, setDownloadingLeaderboard] = useState(false);
+  const [monthlyDeltaUpdatedAt, setMonthlyDeltaUpdatedAt] = useState<string | null>(null);
+  const [monthlyLeaderboardUpdatedAt, setMonthlyLeaderboardUpdatedAt] = useState<string | null>(null);
   const currentMonthYear = useMemo(() => {
     const now = new Date();
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -428,8 +431,10 @@ export default function EIPsHomePage() {
 
         setDistribution(distRes);
         setTableData({ total: tableRes.total, totalPages: tableRes.totalPages, rows: tableRes.rows });
-        setFebDelta(deltaRes);
-        setFebEditors(editorRes);
+        setFebDelta(deltaRes.items);
+        setMonthlyDeltaUpdatedAt(deltaRes.updatedAt);
+        setFebEditors(editorRes.items);
+        setMonthlyLeaderboardUpdatedAt(editorRes.updatedAt);
         setRecentChanges(recentRes as typeof recentChanges);
         setRecentEditorActivities(editorActivityRes);
       } catch (err) {
@@ -939,8 +944,8 @@ export default function EIPsHomePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card/60 p-4 shadow-sm">
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="self-start rounded-xl border border-border bg-card/60 p-4 shadow-sm">
           <div className="mb-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="inline-flex items-center gap-2">
@@ -960,7 +965,7 @@ export default function EIPsHomePage() {
             </button>
           </div>
 
-          <div className="h-[340px] sm:h-[420px]">
+          <div className="relative h-[340px] sm:h-[420px]">
             <div className="h-full w-full">
               {showInsightSkeleton ? (
                 <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
@@ -972,6 +977,29 @@ export default function EIPsHomePage() {
                 />
               )}
             </div>
+            {!showInsightSkeleton && (
+              <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-border/70 bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80 backdrop-blur-sm">
+                EIPsInsight.com
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+            {monthlyDeltaUpdatedAt ? (
+              <LastUpdated
+                timestamp={monthlyDeltaUpdatedAt}
+                prefix="Updated"
+                showAbsolute
+                className="bg-muted/40 text-xs"
+              />
+            ) : (
+              <span className="rounded-md bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+                No status changes recorded for this period
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">
+              Monthly activity snapshot
+            </span>
           </div>
         </div>
 
@@ -1028,6 +1056,24 @@ export default function EIPsHomePage() {
                     </div>
                   </div>
                 ))}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+            {monthlyLeaderboardUpdatedAt ? (
+              <LastUpdated
+                timestamp={monthlyLeaderboardUpdatedAt}
+                prefix="Updated"
+                showAbsolute
+                className="bg-muted/40 text-xs"
+              />
+            ) : (
+              <span className="rounded-md bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+                No editor activity recorded for this period
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">
+              Monthly editor activity snapshot
+            </span>
           </div>
         </div>
       </div>

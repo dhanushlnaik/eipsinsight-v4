@@ -5,16 +5,18 @@ import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
 import { Loader2, UserCheck, Clock, FileText, Download, AlertCircle, FileCheck, Zap } from "lucide-react";
-import { ContributorHeatmap } from "@/components/analytics/ContributorHeatmap";
 import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
 import ReactECharts from "echarts-for-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
 
 interface EditorLeaderboardRow {
   actor: string;
-  totalReviews: number;
+  totalActions: number;
   prsTouched: number;
+  reviews: number;
+  comments: number;
   medianResponseDays: number | null;
+  updatedAt?: string | null;
 }
 
 interface CategoryCoverage {
@@ -124,7 +126,7 @@ export default function EditorsAnalyticsPage() {
   const [dailyActivity, setDailyActivity] = useState<DailyActivityData[]>([]);
   const [membershipTier, setMembershipTier] = useState<string>('free');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [leaderboardMode, setLeaderboardMode] = useState<"monthly" | "range">("monthly");
+  const [leaderboardMode, setLeaderboardMode] = useState<"all" | "monthly" | "range">("all");
   const [leaderboardYear, setLeaderboardYear] = useState<number>(() => new Date().getUTCFullYear());
   const [leaderboardMonth, setLeaderboardMonth] = useState<number>(() => new Date().getUTCMonth() + 1);
 
@@ -133,10 +135,19 @@ export default function EditorsAnalyticsPage() {
   const [exporting, setExporting] = useState(false);
   const isPaidMember = membershipTier !== 'free';
   const leaderboardWindow = useMemo(
-    () => (leaderboardMode === "monthly" ? getMonthWindow(leaderboardYear, leaderboardMonth) : { from, to }),
+    () => (
+      leaderboardMode === "monthly"
+        ? getMonthWindow(leaderboardYear, leaderboardMonth)
+        : leaderboardMode === "range"
+          ? { from, to }
+          : { from: undefined, to: undefined }
+    ),
     [leaderboardMode, leaderboardYear, leaderboardMonth, from, to]
   );
   const leaderboardLabel = useMemo(() => {
+    if (leaderboardMode === "all") {
+      return "All-Time Activity";
+    }
     if (leaderboardMode === "monthly") {
       return `${MONTH_NAMES[leaderboardMonth - 1]} ${leaderboardYear}`;
     }
@@ -156,11 +167,18 @@ export default function EditorsAnalyticsPage() {
 
     setExporting(true);
     try {
-      const { csv, filename } = await client.analytics.getEditorsLeaderboardExport({
-        repo: repoParam,
-        from,
-        to,
-      });
+      const exportResult = leaderboardMode === "monthly"
+        ? await client.analytics.exportMonthlyEditorLeaderboardDetailedCSV({
+            repo: repoParam,
+            monthYear: `${leaderboardYear}-${String(leaderboardMonth).padStart(2, "0")}`,
+            limit: 30,
+          })
+        : await client.analytics.getEditorsLeaderboardExport({
+            repo: repoParam,
+            from,
+            to,
+          });
+      const { csv, filename } = exportResult;
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -174,7 +192,7 @@ export default function EditorsAnalyticsPage() {
     } finally {
       setExporting(false);
     }
-  }, [repoParam, from, to, isPaidMember]);
+  }, [repoParam, from, to, isPaidMember, leaderboardMode, leaderboardMonth, leaderboardYear]);
 
   // Fetch membership tier on mount
   useEffect(() => {
@@ -192,12 +210,36 @@ export default function EditorsAnalyticsPage() {
         const months = timeRange === "7d" ? 3 : timeRange === "this_month" || timeRange === "30d" ? 6 : timeRange === "90d" ? 12 : 24;
         
         const [leaderboardData, trendData, categoryData, repoData, dailyActivityData] = await Promise.all([
-          client.analytics.getEditorsLeaderboard({
-            repo: repoParam,
-            from: leaderboardWindow.from,
-            to: leaderboardWindow.to,
-            limit: 30,
-          }),
+          leaderboardMode === "monthly"
+            ? client.analytics.getMonthlyEditorLeaderboard({
+                repo: repoParam,
+                monthYear: `${leaderboardYear}-${String(leaderboardMonth).padStart(2, "0")}`,
+                limit: 30,
+              }).then((res) => ({
+                rows: res.items.map((item) => ({
+                  actor: item.actor,
+                  totalActions: item.totalActions,
+                  prsTouched: item.prsTouched,
+                  reviews: 0,
+                  comments: 0,
+                  medianResponseDays: null,
+                  updatedAt: res.updatedAt,
+                })),
+                updatedAt: res.updatedAt,
+              }))
+            : client.analytics.getEditorsLeaderboard({
+                repo: repoParam,
+                from: leaderboardWindow.from,
+                to: leaderboardWindow.to,
+                limit: 30,
+              }).then((rows) => ({
+                rows,
+                updatedAt: rows
+                  .map((row) => row.updatedAt)
+                  .filter((value): value is string => Boolean(value))
+                  .sort()
+                  .at(-1) ?? null,
+              })),
           client.analytics.getEditorsMonthlyTrend({
             repo: repoParam,
             months,
@@ -217,12 +259,18 @@ export default function EditorsAnalyticsPage() {
           }),
         ]);
 
-        setLeaderboard(leaderboardData);
+        setLeaderboard(leaderboardData.rows);
         setMonthlyTrend(trendData);
         setCategoryCoverage(categoryData);
         setRepoDistribution(repoData);
         setDailyActivity(dailyActivityData);
-        setDataUpdatedAt(new Date());
+        if (leaderboardData.updatedAt) {
+          setDataUpdatedAt(new Date(leaderboardData.updatedAt));
+        } else if (dailyActivityData.length > 0) {
+          setDataUpdatedAt(new Date(`${dailyActivityData[dailyActivityData.length - 1]!.date}T00:00:00.000Z`));
+        } else {
+          setDataUpdatedAt(new Date());
+        }
       } catch (error) {
         console.error("Failed to fetch editors analytics:", error);
         setError("Failed to load editor analytics. Please try again.");
@@ -232,7 +280,7 @@ export default function EditorsAnalyticsPage() {
     };
 
     fetchData();
-  }, [timeRange, repoFilter, repoParam, from, to, leaderboardWindow.from, leaderboardWindow.to]);
+  }, [timeRange, repoFilter, repoParam, from, to, leaderboardWindow.from, leaderboardWindow.to, leaderboardMode, leaderboardMonth, leaderboardYear]);
 
   // Aggregate repo distribution into cards
   const repoCards = useMemo(() => {
@@ -279,7 +327,7 @@ export default function EditorsAnalyticsPage() {
     return Array.from(actors).slice(0, 8); // Limit to 8 for readability
   }, [monthlyTrend]);
 
-  const totalReviews = useMemo(() => leaderboard.reduce((sum, e) => sum + e.totalReviews, 0), [leaderboard]);
+  const totalActions = useMemo(() => leaderboard.reduce((sum, e) => sum + e.totalActions, 0), [leaderboard]);
   const totalProcessed = useMemo(() => leaderboard.reduce((sum, e) => sum + e.prsTouched, 0), [leaderboard]);
   const avgResponseDays = useMemo(() => {
     const medians = leaderboard.map(e => e.medianResponseDays).filter((d): d is number => d !== null);
@@ -379,6 +427,32 @@ export default function EditorsAnalyticsPage() {
     ],
   }), [repoCards]);
 
+  const dailyActivityOption = useMemo(() => ({
+    backgroundColor: "transparent",
+    tooltip: { trigger: "axis" },
+    grid: { top: 18, left: 28, right: 20, bottom: 24 },
+    xAxis: {
+      type: "category",
+      data: dailyActivity.map((item) => item.date),
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 10, hideOverlap: true },
+      axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+      splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+    },
+    series: [
+      {
+        name: "Actions",
+        type: "bar",
+        barWidth: "60%",
+        data: dailyActivity.map((item) => item.count),
+        itemStyle: { color: "#60a5fa", borderRadius: [6, 6, 0, 0] },
+      },
+    ],
+  }), [dailyActivity]);
+
   // Export functionality
   useAnalyticsExport(() => {
     const combined: Record<string, unknown>[] = [];
@@ -388,7 +462,9 @@ export default function EditorsAnalyticsPage() {
       combined.push({
         type: 'Leaderboard',
         editor: e.actor,
-        totalReviews: e.totalReviews,
+        totalActions: e.totalActions,
+        totalReviews: e.reviews,
+        totalComments: e.comments,
         prsTouched: e.prsTouched,
         medianResponseDays: e.medianResponseDays,
       });
@@ -452,8 +528,8 @@ export default function EditorsAnalyticsPage() {
         <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Total Reviews</p>
-              <p className="text-3xl font-bold text-foreground">{totalReviews.toLocaleString()}</p>
+              <p className="text-sm text-muted-foreground">Total Actions</p>
+              <p className="text-3xl font-bold text-foreground">{totalActions.toLocaleString()}</p>
             </div>
             <div className="rounded-full bg-blue-500/20 p-3">
               <FileText className="h-6 w-6 text-blue-400" />
@@ -491,7 +567,7 @@ export default function EditorsAnalyticsPage() {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Editorial Health</h2>
-            <p className="text-sm text-muted-foreground">How quickly editors respond and how much load they handle.</p>
+            <p className="text-sm text-muted-foreground">Activity volume, review cadence, and workload across official editors.</p>
           </div>
           <LastUpdated timestamp={dataUpdatedAt} />
         </div>
@@ -512,8 +588,8 @@ export default function EditorsAnalyticsPage() {
               <FileCheck className="h-5 w-5 text-emerald-500" />
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Total Reviews</p>
-              <p className="text-xl font-bold text-foreground">{totalReviews.toLocaleString()}</p>
+              <p className="text-xs font-medium text-muted-foreground">Total Actions</p>
+              <p className="text-xl font-bold text-foreground">{totalActions.toLocaleString()}</p>
             </div>
           </div>
 
@@ -532,20 +608,34 @@ export default function EditorsAnalyticsPage() {
       {/* Monthly Trend + Category Coverage */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Review Load Over Time</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-foreground">Editor Activity Over Time</h2>
+            <span className="rounded-md border border-border/70 bg-background/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">EIPsInsight.com</span>
+          </div>
           <div className="h-72 w-full">
             <ReactECharts option={trendOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+            <LastUpdated timestamp={dataUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+            <span className="text-xs text-muted-foreground">Monthly editor activity trend</span>
           </div>
         </div>
 
         <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Category Coverage</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-foreground">Category Coverage</h2>
+            <span className="rounded-md border border-border/70 bg-background/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">EIPsInsight.com</span>
+          </div>
           <div className="h-64 w-full">
             <ReactECharts option={categoryOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             How many editors are actively covering each standards category.
           </p>
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+            <LastUpdated timestamp={dataUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+            <span className="text-xs text-muted-foreground">Coverage from editor activity</span>
+          </div>
         </div>
       </div>
 
@@ -573,27 +663,17 @@ export default function EditorsAnalyticsPage() {
           </button>
         </div>
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/30 p-2">
-          <span className="text-xs font-medium text-muted-foreground">Leaderboard filter</span>
-          <button
-            onClick={() => setLeaderboardMode("monthly")}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-              leaderboardMode === "monthly"
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+          <span className="text-xs font-medium text-muted-foreground">Leaderboard scope</span>
+          <select
+            value={leaderboardMode}
+            onChange={(e) => setLeaderboardMode(e.target.value as "all" | "monthly" | "range")}
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+            aria-label="Select leaderboard scope"
           >
-            Monthly
-          </button>
-          <button
-            onClick={() => setLeaderboardMode("range")}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-              leaderboardMode === "range"
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Use dashboard range
-          </button>
+            <option value="all">All-time</option>
+            <option value="monthly">Monthly</option>
+            <option value="range">Use dashboard range</option>
+          </select>
           {leaderboardMode === "monthly" && (
             <>
               <select
@@ -629,6 +709,7 @@ export default function EditorsAnalyticsPage() {
               <tr className="border-b border-border/70">
                 <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">Rank</th>
                 <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">Editor</th>
+                <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">Actions</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">Reviews</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">PRs Touched</th>
                 <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">Median Response</th>
@@ -645,7 +726,10 @@ export default function EditorsAnalyticsPage() {
                     <span className="font-medium text-foreground/90">{editor.actor}</span>
                   </td>
                   <td className="py-3 px-4 text-right text-sm text-foreground/85">
-                    {editor.totalReviews.toLocaleString()}
+                    {editor.totalActions.toLocaleString()}
+                  </td>
+                  <td className="py-3 px-4 text-right text-sm text-foreground/85">
+                    {editor.reviews.toLocaleString()}
                   </td>
                   <td className="py-3 px-4 text-right text-sm text-foreground/85">
                     {editor.prsTouched.toLocaleString()}
@@ -657,7 +741,7 @@ export default function EditorsAnalyticsPage() {
               ))}
               {leaderboard.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
                     No editor data found for the current filters.
                   </td>
                 </tr>
@@ -665,23 +749,43 @@ export default function EditorsAnalyticsPage() {
             </tbody>
           </table>
         </div>
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+          <LastUpdated timestamp={dataUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+          <span className="text-xs text-muted-foreground">Official editor activity leaderboard</span>
+        </div>
       </div>
 
       {/* Repo Distribution + Daily Activity */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Repo Distribution</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-foreground">Repo Distribution</h2>
+            <span className="rounded-md border border-border/70 bg-background/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">EIPsInsight.com</span>
+          </div>
           <div className="h-64 w-full">
             <ReactECharts option={repoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+            <LastUpdated timestamp={dataUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+            <span className="text-xs text-muted-foreground">Activity by repository</span>
           </div>
         </div>
 
         <div className="lg:col-span-2 rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
-          <h2 className="mb-3 text-lg font-semibold text-foreground">Daily Editorial Activity</h2>
-          <ContributorHeatmap data={dailyActivity} />
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-foreground">Daily Editorial Activity</h2>
+            <span className="rounded-md border border-border/70 bg-background/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80">EIPsInsight.com</span>
+          </div>
+          <div className="h-64 w-full">
+            <ReactECharts option={dailyActivityOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+          </div>
           <AnalyticsAnnotation>
-            Daily editorial activity across the selected time range. Darker cells indicate higher engagement.
+            Daily editor actions across the selected time range. Higher bars indicate more editorial activity.
           </AnalyticsAnnotation>
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+            <LastUpdated timestamp={dataUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+            <span className="text-xs text-muted-foreground">Daily editor actions</span>
+          </div>
         </div>
       </div>
 

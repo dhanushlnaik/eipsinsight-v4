@@ -20,6 +20,7 @@ import { UpgradeEIPsShowcase } from '@/app/upgrade/_components/upgrade-eips-show
 import { getUpgradeBlogs } from '@/data/upgrade-blogs';
 import { Info } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
+import { UpgradeSubscriptionCard } from '@/components/upgrade-subscription-card';
 
 interface UpgradeData {
   id: number;         
@@ -297,6 +298,10 @@ export default function UpgradePage() {
         </div>
 
         <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-12 pb-8">
+          <div className="mt-4 mb-6">
+            <UpgradeSubscriptionCard slug={upgrade.slug} name={upgrade.name} />
+          </div>
+
           {/* Timeline Chart Section */}
           {timelineData.length > 0 && (
             <motion.div

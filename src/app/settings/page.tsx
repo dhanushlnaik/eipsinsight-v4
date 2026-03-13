@@ -8,6 +8,7 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { client } from "@/lib/orpc";
+import { SubscriptionsPanel } from "@/components/subscriptions-panel";
 import { usePersonaStore } from "@/stores/personaStore";
 import { usePersonaSyncOnChange } from "@/hooks/usePersonaSync";
 import { PERSONAS, PERSONA_LIST, getPersonaMeta, type Persona } from "@/lib/persona";
@@ -129,6 +130,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        <SubscriptionsPanel />
 
         {/* Persona Preferences Section */}
         {FEATURES.PERSONA_SWITCHER && <PersonaPreferencesSection />}

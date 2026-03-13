@@ -77,27 +77,39 @@ const communityDiscussions = [
 const upcomingEvents = [
   {
     id: 1,
-    title: 'All Core Devs Call #184',
-    date: 'Feb 27, 2026',
-    time: '14:00 UTC',
-    url: 'https://github.com/ethereum/pm/issues/',
+    title: 'ACDT #73',
+    date: 'Mar 9, 2026',
+    time: 'Recent meeting',
+    url: 'https://github.com/ethereum/pm/issues/1956',
     icon: Users,
+    type: 'Testing',
   },
   {
     id: 2,
-    title: 'EIP Editors Meeting',
-    date: 'Feb 28, 2026',
-    time: '15:00 UTC',
-    url: 'https://github.com/ethereum/pm/issues/',
+    title: 'ACDT #72',
+    date: 'Mar 2, 2026',
+    time: 'Recent meeting',
+    url: 'https://github.com/ethereum/pm/issues/1948',
     icon: MessageSquare,
+    type: 'Testing',
   },
   {
     id: 3,
-    title: 'Community Office Hours',
-    date: 'Mar 1, 2026',
-    time: '16:00 UTC',
-    url: 'https://ethereum-magicians.org/',
+    title: 'ACDE #231',
+    date: 'Feb 26, 2026',
+    time: 'Recent meeting',
+    url: 'https://github.com/ethereum/pm/issues/1931',
     icon: Calendar,
+    type: 'Execution',
+  },
+  {
+    id: 4,
+    title: 'ACDC #175',
+    date: 'Feb 19, 2026',
+    time: 'Recent meeting',
+    url: 'https://github.com/ethereum/pm/issues/1930',
+    icon: Calendar,
+    type: 'Consensus',
   },
 ];
 
@@ -275,7 +287,24 @@ export default function SocialCommunityUpdates() {
               </a>
             );
           })}
-          <h3 className="pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Upcoming Events</h3>
+          <h3 className="pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Protocol Meetings</h3>
+          <a
+            href="https://calendar.google.com/calendar/embed?src=c_upaofong8mgrmrkegn7ic7hk5s%40group.calendar.google.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 transition hover:border-primary/45"
+          >
+            <div className="rounded-lg border border-primary/30 bg-primary/10 p-2">
+              <Calendar className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">Upcoming protocol calendar</p>
+              <p className="text-xs text-muted-foreground">
+                Track AllCoreDevs, breakout rooms, and protocol coordination calls from the shared Ethereum PM calendar.
+              </p>
+            </div>
+            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+          </a>
           {upcomingEvents.map((event) => {
             const Icon = event.icon;
             return (
@@ -285,7 +314,7 @@ export default function SocialCommunityUpdates() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">{event.title}</p>
-                  <p className="text-xs text-muted-foreground">{event.date} · {event.time}</p>
+                  <p className="text-xs text-muted-foreground">{event.date} · {event.type}</p>
                 </div>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
               </a>
@@ -311,6 +340,15 @@ export default function SocialCommunityUpdates() {
                 className="group flex items-center justify-between text-muted-foreground transition hover:text-primary"
               >
                 <span>EIPs GitHub Repository</span>
+                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+              </a>
+              <a
+                href="https://github.com/ethereum/pm"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center justify-between text-muted-foreground transition hover:text-primary"
+              >
+                <span>Ethereum PM Repository</span>
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
               </a>
               <a

@@ -77,7 +77,7 @@ const upgrades: TimelineUpgrade[] = [
 ];
 
 export function HorizontalUpgradeTimeline({
-  selectedUpgrade = 'fusaka',
+  selectedUpgrade = 'glamsterdam',
   onUpgradeClick,
   className,
 }: HorizontalUpgradeTimelineProps) {

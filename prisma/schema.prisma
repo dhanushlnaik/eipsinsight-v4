@@ -31,8 +31,12 @@ model User {
   blog_comments          blog_comment[]
   blog_editor_profile    blog_editor_profile?
   feedbacks              Feedback[]
+  notification_outbox    NotificationOutbox[]
   page_comments          PageComment[]
+  proposal_subscriptions ProposalSubscription[]
+  repository_subscriptions RepositorySubscription[]
   sessions               Session[]
+  upgrade_subscriptions  UpgradeSubscription[]
   preferences            user_preferences?
 
   @@map("user")
@@ -326,6 +330,7 @@ model eips {
   eip_snapshots       eip_snapshots?
   eip_status_events   eip_status_events[]
   eip_type_events     eip_type_events[]
+  proposal_subscriptions ProposalSubscription[]
 
   @@index([created_at], map: "idx_eips_created_at")
 }
@@ -403,8 +408,103 @@ model repositories {
   pr_label_snapshot    pr_label_snapshot[]
   pr_monthly_snapshot  pr_monthly_snapshot[]
   pr_reviews           pr_reviews[]
+  proposal_subscriptions ProposalSubscription[]
+  repository_subscriptions RepositorySubscription[]
   pull_request_eips    pull_request_eips[]
   pull_requests        pull_requests[]
+}
+
+model ProposalSubscription {
+  id                String               @id @default(cuid())
+  user_id           String
+  eip_id            Int
+  repository_id     Int
+  filter            String               @default("all")
+  created_at        DateTime             @default(now())
+  updated_at        DateTime             @updatedAt
+  notification_outbox NotificationOutbox[]
+  eips              eips                 @relation(fields: [eip_id], references: [id], onDelete: Cascade)
+  repositories      repositories         @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user              User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, eip_id, repository_id], map: "proposal_subscription_unique")
+  @@index([user_id], map: "idx_proposal_subscription_user")
+  @@index([repository_id, eip_id], map: "idx_proposal_subscription_repo_eip")
+  @@index([filter], map: "idx_proposal_subscription_filter")
+  @@map("proposal_subscription")
+}
+
+model RepositorySubscription {
+  id                   String                @id @default(cuid())
+  user_id              String
+  repository_id        Int
+  filter               String                @default("status")
+  created_at           DateTime              @default(now())
+  updated_at           DateTime              @updatedAt
+  notification_outbox  NotificationOutbox[]
+  repositories         repositories          @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user                 User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, repository_id], map: "repository_subscription_unique")
+  @@index([user_id], map: "idx_repository_subscription_user")
+  @@index([repository_id], map: "idx_repository_subscription_repo")
+  @@index([filter], map: "idx_repository_subscription_filter")
+  @@map("repository_subscription")
+}
+
+model UpgradeSubscription {
+  id                   String                @id @default(cuid())
+  user_id              String
+  upgrade_id           Int
+  filter               String                @default("stage")
+  created_at           DateTime              @default(now())
+  updated_at           DateTime              @updatedAt
+  notification_outbox  NotificationOutbox[]
+  upgrades             upgrades              @relation(fields: [upgrade_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user                 User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, upgrade_id], map: "upgrade_subscription_unique")
+  @@index([user_id], map: "idx_upgrade_subscription_user")
+  @@index([upgrade_id], map: "idx_upgrade_subscription_upgrade")
+  @@index([filter], map: "idx_upgrade_subscription_filter")
+  @@map("upgrade_subscription")
+}
+
+model NotificationOutbox {
+  id                  String                @id @default(cuid())
+  user_id             String
+  proposal_subscription_id String?
+  repository_subscription_id String?
+  upgrade_subscription_id String?
+  dedupe_key          String                @unique
+  channel             String                @default("email")
+  template            String
+  subject             String
+  payload             Json
+  status              String                @default("queued")
+  attempts            Int                   @default(0)
+  last_attempt_at     DateTime?
+  sent_at             DateTime?
+  failed_at           DateTime?
+  error               String?
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @updatedAt
+  proposal_subscription ProposalSubscription? @relation(fields: [proposal_subscription_id], references: [id], onDelete: SetNull)
+  repository_subscription RepositorySubscription? @relation(fields: [repository_subscription_id], references: [id], onDelete: SetNull)
+  upgrade_subscription UpgradeSubscription? @relation(fields: [upgrade_subscription_id], references: [id], onDelete: SetNull)
+  user                User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([status, created_at], map: "idx_notification_outbox_status_created")
+  @@index([user_id], map: "idx_notification_outbox_user")
+  @@map("notification_outbox")
+}
+
+model NotifierCheckpoint {
+  key        String   @id
+  cursor     String?
+  updated_at DateTime @updatedAt
+
+  @@map("notifier_checkpoint")
 }
 
 model rip_commits {
@@ -521,6 +621,7 @@ model upgrades {
   file_path                  String?
   created_at                 DateTime?                    @default(now()) @db.Timestamp(6)
   upgrade_composition_events upgrade_composition_events[]
+  upgrade_subscriptions      UpgradeSubscription[]
   upgrade_meta_eip_events    upgrade_meta_eip_events[]
 }
 

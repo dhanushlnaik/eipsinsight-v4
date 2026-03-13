@@ -264,9 +264,16 @@ export const upgradesProcedures = {
         });
       });
 
-      // Add current composition as final state
-      const today = new Date().toISOString().split('T')[0];
-      allDates.add(today);
+      const fallbackFinalDate =
+        upgrade.created_at?.toISOString().split('T')[0] ??
+        new Date().toISOString().split('T')[0];
+      const finalSnapshotDate = events.length > 0
+        ? new Date(events[events.length - 1]!.commit_date!).toISOString().split('T')[0]
+        : fallbackFinalDate;
+
+      if (currentComposition.length > 0 || allDates.size === 0) {
+        allDates.add(finalSnapshotDate);
+      }
 
       // Build cumulative state (each date includes all EIPs up to that point)
       const sortedDates = Array.from(allDates).sort();
@@ -295,8 +302,9 @@ export const upgradesProcedures = {
           }
         });
 
-        // For the final date (today), use current composition
-        if (date === today) {
+        // Anchor the latest composition snapshot to the last real timeline date.
+        if (date === finalSnapshotDate) {
+          cumulativeState.clear();
           currentComposition.forEach((comp) => {
             if (comp.bucket) {
               cumulativeState.set(comp.eip_number, comp.bucket.toLowerCase());
@@ -341,4 +349,3 @@ export const upgradesProcedures = {
       return result;
     }),
 }
-

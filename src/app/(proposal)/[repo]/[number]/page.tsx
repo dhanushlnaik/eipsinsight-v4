@@ -24,6 +24,8 @@ import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ProposalSubscriptionCard } from '@/components/proposal-subscription-card';
+import { RepositorySubscriptionCard } from '@/components/repository-subscription-card';
 
 // Status color mapping for timeline - richer colors
 const statusColors: Record<string, { 
@@ -581,6 +583,16 @@ export default function ProposalDetailPage() {
               </table>
             </div>
           </div>
+
+          <ProposalSubscriptionCard
+            repo={normalizedRepo as 'eip' | 'erc' | 'rip'}
+            number={number}
+            currentStatus={proposal.status}
+          />
+
+          <RepositorySubscriptionCard
+            repo={normalizedRepo as 'eip' | 'erc' | 'rip'}
+          />
 
           {/* 3. Governance Signals + Lifecycle Timeline (Together) */}
           <div className="space-y-8">

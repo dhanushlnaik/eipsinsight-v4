@@ -13,6 +13,7 @@ import ProtocolBento from '@/app/dashboard/_components/protocol-bento';
 import GovernanceOverTime from '@/app/dashboard/_components/governance-over-time';
 import TrendingProposals from '@/app/dashboard/_components/trending-proposals';
 import { DashboardPageHeader } from '@/app/dashboard/_components/dashboard-page-header';
+import { LastUpdated } from '@/components/analytics/LastUpdated';
 import { toast } from 'sonner';
 
 // ────────────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ export default function DashboardPage() {
   const [repoDist, setRepoDist] = useState<RepoRow[] | null>(null);
   const [velocity, setVelocity] = useState<VelocityData | null>(null);
   const [ripKpis, setRipKpis] = useState<{ total: number; active: number } | null>(null);
+  const [dashboardUpdatedAt, setDashboardUpdatedAt] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const toggle = (key: string) => setCollapsed(p => ({ ...p, [key]: !p[key] }));
@@ -148,6 +150,7 @@ export default function DashboardPage() {
         setRepoDist(data.repoDistribution);
         setVelocity(data.decisionVelocity);
         setRipKpis(data.ripKpis);
+        setDashboardUpdatedAt(data.meta?.updatedAt ?? null);
       } catch (err) { console.error('Dashboard fetch error:', err); }
     })();
   }, []);
@@ -468,6 +471,27 @@ export default function DashboardPage() {
             </div>
           </div>
         </motion.div>
+
+        <div className="mt-6 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          {dashboardUpdatedAt ? (
+            <LastUpdated
+              timestamp={dashboardUpdatedAt}
+              prefix="Updated"
+              showAbsolute
+              className="bg-muted/40 text-xs"
+            />
+          ) : (
+            <span className="rounded-md bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+              Dashboard snapshot unavailable
+            </span>
+          )}
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <span className="text-xs text-muted-foreground">Governance dashboard snapshot</span>
+            <span className="rounded-md border border-border/70 bg-background/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80 backdrop-blur-sm">
+              EIPsInsight.com
+            </span>
+          </div>
+        </div>
 
       </div>
     </div>

@@ -12,6 +12,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  TrendingUp,
 } from "lucide-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
 import { StatusTransitionStackedChart } from "@/components/analytics/StatusTransitionStackedChart";
@@ -33,6 +34,16 @@ const CHANGE_LABELS: Record<string, string> = {
   "metadata-change": "Metadata",
 };
 const STATUS_ORDER = ["Draft", "Review", "Last Call", "Living", "Final", "Stagnant", "Withdrawn"] as const;
+const CATEGORY_LINE_COLORS = [
+  "#10b981",
+  "#60a5fa",
+  "#f59e0b",
+  "#f472b6",
+  "#a78bfa",
+  "#22d3ee",
+  "#fb923c",
+  "#94a3b8",
+];
 
 function csvEscape(v: string | number | null | undefined) {
   const s = String(v ?? "");
@@ -46,6 +57,12 @@ function monthLabel(yyyyMm: string) {
     : d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+function availableMonthsDefaultStart(toMonth: string) {
+  const end = new Date(`${toMonth}-01T00:00:00.000Z`);
+  const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1));
+  return `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 function DrilldownPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -55,6 +72,8 @@ function DrilldownPageContent() {
 
   const repo = (searchParams.get("repo") || "all") as "all" | "eips" | "ercs" | "rips";
   const month = searchParams.get("month") || defaultMonth;
+  const historyFrom = searchParams.get("from") || availableMonthsDefaultStart(defaultMonth);
+  const historyTo = searchParams.get("to") || month;
   const page = Math.max(1, Number(searchParams.get("page") || "1"));
   const pageSize = 8;
 
@@ -62,8 +81,13 @@ function DrilldownPageContent() {
   const [dataUpdatedAt, setDataUpdatedAt] = useState<Date>(new Date());
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [data, setData] = useState<Awaited<ReturnType<typeof client.insights.getMonthlyDrilldown>> | null>(null);
-  const [editors, setEditors] = useState<Array<{ editor: string; reviews: number; prsTouched: number; comments: number }>>([]);
+  const [editors, setEditors] = useState<Array<{ editor: string; totalActions: number; prsTouched: number }>>([]);
   const [statusTransitionData, setStatusTransitionData] = useState<Array<Record<string, string | number>>>([]);
+  const [draftFinalHistory, setDraftFinalHistory] = useState<Array<{ month: string; draft: number; final: number }>>([]);
+  const [historyUpdatedAt, setHistoryUpdatedAt] = useState<string | null>(null);
+  const [statusTrendStatus, setStatusTrendStatus] = useState<string>("Review");
+  const [statusCategoryTrend, setStatusCategoryTrend] = useState<Array<{ month: string; category: string; count: number }>>([]);
+  const [statusCategoryUpdatedAt, setStatusCategoryUpdatedAt] = useState<string | null>(null);
   const [columnSearch, setColumnSearch] = useState<Record<string, string>>({});
   const [tableStatusFilter, setTableStatusFilter] = useState<string | null>(null);
   const [tableRepoFilter, setTableRepoFilter] = useState<"eips" | "ercs" | "rips" | null>(null);
@@ -77,7 +101,7 @@ function DrilldownPageContent() {
     const run = async () => {
       setLoading(true);
       try {
-        const [drilldown, editorRows, statusData] = await Promise.all([
+        const [drilldown, editorRows, statusData, draftFinalHistoryRes, statusCategoryTrendRes] = await Promise.all([
           client.insights.getMonthlyDrilldown({
             repo: tableRepoFilter ?? repo,
             month,
@@ -89,20 +113,40 @@ function DrilldownPageContent() {
             page,
             pageSize,
           }),
-          client.insights.getEditorsLeaderboard({
-            month,
+          client.analytics.getMonthlyEditorLeaderboard({
+            monthYear: month,
             repo: repo === "all" ? undefined : repo,
+            limit: 20,
           }),
           client.insights.getStatusTransitionData({
             repo: repo === "all" ? undefined : repo,
             month,
           }),
+          client.insights.getDraftVsFinalHistory({
+            repo: repo === "all" ? undefined : repo,
+            fromMonth: historyFrom,
+            toMonth: historyTo,
+          }),
+          client.insights.getStatusCategoryTrend({
+            repo: repo === "all" ? undefined : repo,
+            status: statusTrendStatus,
+            fromMonth: historyFrom,
+            toMonth: historyTo,
+          }),
         ]);
 
         setData(drilldown);
-        setEditors(editorRows);
+        setEditors(editorRows.items.map((row) => ({
+          editor: row.actor,
+          totalActions: row.totalActions,
+          prsTouched: row.prsTouched,
+        })));
         setStatusTransitionData(statusData);
-        setDataUpdatedAt(new Date());
+        setDraftFinalHistory(draftFinalHistoryRes.rows);
+        setHistoryUpdatedAt(draftFinalHistoryRes.updatedAt);
+        setStatusCategoryTrend(statusCategoryTrendRes.rows);
+        setStatusCategoryUpdatedAt(statusCategoryTrendRes.updatedAt);
+        setDataUpdatedAt(draftFinalHistoryRes.updatedAt ? new Date(draftFinalHistoryRes.updatedAt) : new Date());
       } catch (err) {
         console.error("Monthly insight load failed", err);
       } finally {
@@ -110,7 +154,7 @@ function DrilldownPageContent() {
       }
     };
     run();
-  }, [repo, month, page, pageSize, tableStatusFilter, tableRepoFilter]);
+  }, [repo, month, page, pageSize, tableStatusFilter, tableRepoFilter, historyFrom, historyTo, statusTrendStatus]);
 
   useEffect(() => {
     setTableStatusFilter(null);
@@ -257,7 +301,7 @@ function DrilldownPageContent() {
         {
           name: "Reviews",
           type: "bar",
-          data: top.map((e) => e.reviews),
+          data: top.map((e) => e.totalActions),
           barWidth: 14,
           itemStyle: { color: "#0ea5e9", borderRadius: [0, 6, 6, 0] },
           label: { show: true, position: "right", color: "#cbd5e1", fontSize: 10 },
@@ -265,6 +309,134 @@ function DrilldownPageContent() {
       ],
     };
   }, [editors]);
+
+  const draftVsFinalOption = useMemo(() => {
+    const months = draftFinalHistory.map((row) => monthLabel(row.month));
+    return {
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "rgba(15,23,42,0.96)",
+        borderColor: "rgba(148,163,184,0.28)",
+        textStyle: { color: "#e2e8f0", fontSize: 12 },
+      },
+      legend: {
+        top: 0,
+        right: 0,
+        textStyle: { color: "#94a3b8", fontSize: 11 },
+      },
+      grid: { left: 36, right: 18, top: 40, bottom: 28 },
+      xAxis: {
+        type: "category",
+        data: months,
+        boundaryGap: false,
+        axisLabel: { color: "#94a3b8", fontSize: 11, rotate: months.length > 8 ? 35 : 0 },
+        axisLine: { lineStyle: { color: "#334155" } },
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { color: "#94a3b8", fontSize: 11 },
+        splitLine: { lineStyle: { color: "#1e293b", type: "dashed" } },
+      },
+      series: [
+        {
+          name: "Draft",
+          type: "line",
+          smooth: true,
+          symbol: "circle",
+          symbolSize: 7,
+          data: draftFinalHistory.map((row) => row.draft),
+          lineStyle: { width: 3, color: "#60a5fa" },
+          itemStyle: { color: "#60a5fa" },
+          areaStyle: { color: "rgba(96,165,250,0.14)" },
+        },
+        {
+          name: "Final",
+          type: "line",
+          smooth: true,
+          symbol: "circle",
+          symbolSize: 7,
+          data: draftFinalHistory.map((row) => row.final),
+          lineStyle: { width: 3, color: "#10b981" },
+          itemStyle: { color: "#10b981" },
+          areaStyle: { color: "rgba(16,185,129,0.12)" },
+        },
+      ],
+    };
+  }, [draftFinalHistory]);
+
+  const statusCategoryOption = useMemo(() => {
+    const months = Array.from(new Set(statusCategoryTrend.map((row) => row.month))).sort();
+    const categories = Array.from(new Set(statusCategoryTrend.map((row) => row.category)));
+    const monthLabels = months.map((m) => monthLabel(m));
+    const series = categories.map((category, index) => ({
+      name: category,
+      type: "line",
+      smooth: true,
+      symbol: "circle",
+      symbolSize: 6,
+      data: months.map((monthKey) => (
+        statusCategoryTrend.find((row) => row.month === monthKey && row.category === category)?.count ?? 0
+      )),
+      lineStyle: { width: 2.5, color: CATEGORY_LINE_COLORS[index % CATEGORY_LINE_COLORS.length] },
+      itemStyle: { color: CATEGORY_LINE_COLORS[index % CATEGORY_LINE_COLORS.length] },
+    }));
+
+    return {
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "rgba(15,23,42,0.96)",
+        borderColor: "rgba(148,163,184,0.28)",
+        textStyle: { color: "#e2e8f0", fontSize: 12 },
+      },
+      legend: {
+        top: 0,
+        left: 0,
+        textStyle: { color: "#94a3b8", fontSize: 11 },
+      },
+      grid: { left: 36, right: 18, top: 62, bottom: 28 },
+      xAxis: {
+        type: "category",
+        data: monthLabels,
+        boundaryGap: false,
+        axisLabel: { color: "#94a3b8", fontSize: 11, rotate: monthLabels.length > 8 ? 35 : 0 },
+        axisLine: { lineStyle: { color: "#334155" } },
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { color: "#94a3b8", fontSize: 11 },
+        splitLine: { lineStyle: { color: "#1e293b", type: "dashed" } },
+      },
+      series,
+    };
+  }, [statusCategoryTrend]);
+
+  const exportDraftFinalCsv = () => {
+    const header = ["month", "draft", "final"].join(",");
+    const rows = draftFinalHistory.map((row) =>
+      [row.month, row.draft, row.final].map(csvEscape).join(",")
+    );
+    const blob = new Blob([header, ...rows].join("\n"), { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `draft-vs-final-history-${repo}-${historyFrom}-to-${historyTo}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportStatusCategoryCsv = () => {
+    const header = ["month", "status", "category", "count"].join(",");
+    const rows = statusCategoryTrend.map((row) =>
+      [row.month, statusTrendStatus, row.category, row.count].map(csvEscape).join(",")
+    );
+    const blob = new Blob([header, ...rows].join("\n"), { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `status-category-trend-${statusTrendStatus.toLowerCase().replace(/\s+/g, "-")}-${repo}-${historyFrom}-to-${historyTo}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const exportCsv = async () => {
     try {
@@ -349,8 +521,9 @@ function DrilldownPageContent() {
 
   const exportEditorsDetailedCsv = async () => {
     try {
-      const result = await client.insights.getEditorsLeaderboardDetailedExport({
-        month,
+      const result = await client.analytics.exportMonthlyEditorLeaderboardDetailedCSV({
+        monthYear: month,
+        limit: 20,
         repo: repo === "all" ? undefined : repo,
       });
       const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8;" });
@@ -438,9 +611,6 @@ function DrilldownPageContent() {
             </div>
           ) : (
             <>
-              <div className="flex justify-end mb-2">
-                <LastUpdated timestamp={dataUpdatedAt} />
-              </div>
               <div className="grid items-stretch gap-3 xl:grid-cols-12">
                 <div className="xl:col-span-5 rounded-xl border border-border bg-card p-4">
                   <div className="mx-auto flex h-full w-full max-w-[860px] flex-col justify-center">
@@ -513,8 +683,15 @@ function DrilldownPageContent() {
                         <Download className="h-3 w-3" /> CSV
                       </button>
                     </div>
-                    <div className="h-[280px] min-h-[280px]">
+                    <div className="relative h-[280px] min-h-[280px]">
                       <ReactECharts option={changeBreakdownOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+                      <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-border/70 bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80 backdrop-blur-sm">
+                        EIPsInsight.com
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+                      <LastUpdated timestamp={dataUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+                      <span className="text-xs text-muted-foreground">Monthly change mix</span>
                     </div>
                   </div>
                 </div>
@@ -549,7 +726,12 @@ function DrilldownPageContent() {
                 ) : (
                   <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
                     <div className="h-[280px] rounded-lg border border-border bg-background/50 p-2">
-                      <ReactECharts option={editorBarOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+                      <div className="relative h-full">
+                        <ReactECharts option={editorBarOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+                        <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-border/70 bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80 backdrop-blur-sm">
+                          EIPsInsight.com
+                        </div>
+                      </div>
                     </div>
                     <div className="h-[280px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent">
                       <div className="space-y-2">
@@ -566,7 +748,7 @@ function DrilldownPageContent() {
                             />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-foreground">{ed.editor}</p>
-                              <p className="text-[11px] text-muted-foreground">{ed.reviews} reviews · {ed.prsTouched} PRs · {ed.comments} comments</p>
+                              <p className="text-[11px] text-muted-foreground">{ed.totalActions} actions · {ed.prsTouched} PRs touched</p>
                             </div>
                           </div>
                         ))}
@@ -574,6 +756,123 @@ function DrilldownPageContent() {
                     </div>
                   </div>
                 )}
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+                  <LastUpdated timestamp={dataUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+                  <span className="text-xs text-muted-foreground">Editorial activity snapshot</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4">
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="inline-flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      <h3 className="text-sm font-semibold text-foreground">Draft vs Final History</h3>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Monthly status transitions from {monthLabel(historyFrom)} to {monthLabel(historyTo)}.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={historyFrom}
+                      onChange={(e) => setParams({ from: e.target.value, page: "1" })}
+                      className="h-8 rounded-md border border-border bg-muted px-2 text-xs text-foreground"
+                    >
+                      {availableMonths.map((m) => <option key={`from-${m}`} value={m}>From {monthLabel(m)}</option>)}
+                      {!availableMonths.includes(historyFrom) && <option value={historyFrom}>From {monthLabel(historyFrom)}</option>}
+                    </select>
+                    <select
+                      value={historyTo}
+                      onChange={(e) => setParams({ to: e.target.value, page: "1" })}
+                      className="h-8 rounded-md border border-border bg-muted px-2 text-xs text-foreground"
+                    >
+                      {availableMonths.map((m) => <option key={`to-${m}`} value={m}>To {monthLabel(m)}</option>)}
+                      {!availableMonths.includes(historyTo) && <option value={historyTo}>To {monthLabel(historyTo)}</option>}
+                    </select>
+                    <button
+                      onClick={exportDraftFinalCsv}
+                      className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/35 bg-primary/15 px-2.5 text-xs font-medium text-primary hover:bg-primary/20"
+                    >
+                      <Download className="h-3.5 w-3.5" /> CSV
+                    </button>
+                  </div>
+                </div>
+                <div className="relative h-[320px] rounded-lg border border-border bg-background/40 p-2">
+                  <ReactECharts option={draftVsFinalOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+                  <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-border/70 bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80 backdrop-blur-sm">
+                    EIPsInsight.com
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+                  {historyUpdatedAt ? (
+                    <LastUpdated timestamp={historyUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+                  ) : (
+                    <span className="rounded-md bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">No historical changes in this range</span>
+                  )}
+                  <span className="text-xs text-muted-foreground">Historical monthly trend</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4">
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="inline-flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      <h3 className="text-sm font-semibold text-foreground">Category Trend by Status</h3>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Monthly proposals entering <span className="text-foreground">{statusTrendStatus}</span>, split by category from {monthLabel(historyFrom)} to {monthLabel(historyTo)}.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={historyFrom}
+                      onChange={(e) => setParams({ from: e.target.value, page: "1" })}
+                      className="h-8 rounded-md border border-border bg-muted px-2 text-xs text-foreground"
+                    >
+                      {availableMonths.map((m) => <option key={`trend-from-${m}`} value={m}>From {monthLabel(m)}</option>)}
+                      {!availableMonths.includes(historyFrom) && <option value={historyFrom}>From {monthLabel(historyFrom)}</option>}
+                    </select>
+                    <select
+                      value={historyTo}
+                      onChange={(e) => setParams({ to: e.target.value, page: "1" })}
+                      className="h-8 rounded-md border border-border bg-muted px-2 text-xs text-foreground"
+                    >
+                      {availableMonths.map((m) => <option key={`trend-to-${m}`} value={m}>To {monthLabel(m)}</option>)}
+                      {!availableMonths.includes(historyTo) && <option value={historyTo}>To {monthLabel(historyTo)}</option>}
+                    </select>
+                    <select
+                      value={statusTrendStatus}
+                      onChange={(e) => setStatusTrendStatus(e.target.value)}
+                      className="h-8 rounded-md border border-border bg-muted px-2 text-xs text-foreground"
+                    >
+                      {STATUS_ORDER.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={exportStatusCategoryCsv}
+                      className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/35 bg-primary/15 px-2.5 text-xs font-medium text-primary hover:bg-primary/20"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Detailed CSV
+                    </button>
+                  </div>
+                </div>
+                <div className="relative h-[340px] rounded-lg border border-border bg-background/40 p-2">
+                  <ReactECharts option={statusCategoryOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+                  <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-border/70 bg-background/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/80 backdrop-blur-sm">
+                    EIPsInsight.com
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+                  {statusCategoryUpdatedAt ? (
+                    <LastUpdated timestamp={statusCategoryUpdatedAt} prefix="Updated" showAbsolute className="bg-muted/40 text-xs" />
+                  ) : (
+                    <span className="rounded-md bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">No category activity in this range</span>
+                  )}
+                  <span className="text-xs text-muted-foreground">Category-level historical view</span>
+                </div>
               </div>
 
               <div ref={tableSectionRef} className="overflow-hidden rounded-xl border border-border bg-card">
