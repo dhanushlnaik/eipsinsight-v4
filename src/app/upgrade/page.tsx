@@ -9,10 +9,10 @@ import { CollapsibleHeader } from '@/app/upgrade/_components/collapsible-header'
 import { NetworkUpgradesChart } from '@/app/upgrade/_components/network-upgrades-chart';
 import { HorizontalUpgradeTimeline } from '@/app/upgrade/_components/horizontal-upgrade-timeline';
 import { UpgradeTimelineChart } from '@/app/upgrade/_components/upgrade-timeline-chart';
+import { EipInclusionProcessGraph } from '@/app/upgrade/_components/eip-inclusion-process-graph';
 
 import { client } from '@/lib/orpc';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { eipTitles, rawData, upgradeMetaEIPs, pairedUpgradeNames } from '@/data/network-upgrades';
@@ -217,7 +217,7 @@ export default function UpgradePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Left: Stats Cards */}
             <div className="flex h-full">
-              <div className="w-full h-full min-h-[350px] sm:min-h-[380px] lg:min-h-[420px] flex items-stretch">
+              <div className="w-full h-full min-h-[260px] sm:min-h-[280px] lg:min-h-[300px] flex items-stretch">
                 <UpgradeStatsCards
                   totalUpgrades={totalUpgradeCount}
                   activeTable={activeTable}
@@ -236,18 +236,10 @@ export default function UpgradePage() {
                 "bg-card/60 backdrop-blur-sm overflow-hidden",
                 "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
                 "transition-all duration-200",
-                "h-full min-h-[350px] sm:min-h-[380px] lg:min-h-[420px]"
+                "h-full min-h-[260px] sm:min-h-[280px] lg:min-h-[300px]"
               )}
             >
-              <div className="relative w-full h-full flex items-center justify-center">
-                <Image
-                  src="/upgrade/eip-incl.png"
-                  alt="EIP Inclusion Process Flowchart"
-                  fill
-                  className="object-cover"
-                  draggable={false}
-                />
-              </div>
+              <EipInclusionProcessGraph />
             </motion.div>
           </div>
         </div>
