@@ -2,10 +2,20 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { Rocket, Code, Layers, Network } from 'lucide-react';
+import { Rocket, Code, Layers, Network, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function UpgradeStatsCards() {
+interface UpgradeStatsCardsProps {
+  totalUpgrades?: number;
+  activeTable?: 'core' | 'meta' | 'execution' | 'consensus' | null;
+  onSelectTable?: (mode: 'core' | 'meta' | 'execution' | 'consensus') => void;
+}
+
+export function UpgradeStatsCards({
+  totalUpgrades = 27,
+  activeTable = null,
+  onSelectTable,
+}: UpgradeStatsCardsProps) {
   const cardVariants = {
     hover: {
       y: -4,
@@ -16,15 +26,16 @@ export function UpgradeStatsCards() {
   return (
     <div className="flex flex-col gap-3 w-full h-full justify-between">
       {/* Main Total Upgrades Card */}
-      <motion.div
+      <motion.a
+        href="#network-upgrades-chart"
         variants={cardVariants}
         whileHover="hover"
         transition={{ duration: 0.2 }}
         className={cn(
-          "relative p-5 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
+          'relative block p-5 rounded-xl border border-border bg-card/60 backdrop-blur-sm',
           "shadow-sm",
           "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
-          "transition-all duration-200"
+          'transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
         )}
       >
         <div className="flex items-center gap-2 mb-3">
@@ -35,24 +46,27 @@ export function UpgradeStatsCards() {
             Total Network Upgrades
           </h3>
         </div>
-        <p className="text-4xl font-bold text-foreground mb-1">21</p>
+        <p className="text-4xl font-bold text-foreground mb-1">{totalUpgrades}</p>
         <p className="text-sm text-muted-foreground">
-          Since Frontier Thawing (2015)
+          Mentioned in the distribution chart
         </p>
-      </motion.div>
+      </motion.a>
 
       {/* Two Column Grid */}
       <div className="grid grid-cols-2 gap-3">
         {/* Execution Layer */}
-        <motion.div
+        <motion.button
+          type="button"
           variants={cardVariants}
           whileHover="hover"
           transition={{ duration: 0.2 }}
+          onClick={() => onSelectTable?.('execution')}
           className={cn(
-            "relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
-            "shadow-sm",
-            "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
-            "transition-all duration-200"
+            'relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm text-left',
+            'shadow-sm',
+            'hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15',
+            'transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+            activeTable === 'execution' && 'border-primary/50 shadow-lg shadow-primary/15'
           )}
         >
           <div className="flex items-center gap-1.5 mb-2">
@@ -65,18 +79,21 @@ export function UpgradeStatsCards() {
           </div>
           <p className="text-3xl font-bold text-foreground mb-1">19</p>
           <p className="text-xs text-muted-foreground">Protocol & EVM</p>
-        </motion.div>
+        </motion.button>
 
         {/* Consensus Layer */}
-        <motion.div
+        <motion.button
+          type="button"
           variants={cardVariants}
           whileHover="hover"
           transition={{ duration: 0.2 }}
+          onClick={() => onSelectTable?.('consensus')}
           className={cn(
-            "relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
-            "shadow-sm",
-            "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
-            "transition-all duration-200"
+            'relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm text-left',
+            'shadow-sm',
+            'hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15',
+            'transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+            activeTable === 'consensus' && 'border-primary/50 shadow-lg shadow-primary/15'
           )}
         >
           <div className="flex items-center gap-1.5 mb-2">
@@ -89,32 +106,62 @@ export function UpgradeStatsCards() {
           </div>
           <p className="text-3xl font-bold text-foreground mb-1">6</p>
           <p className="text-xs text-muted-foreground">Beacon Chain</p>
-        </motion.div>
+        </motion.button>
       </div>
 
-      {/* Total Core EIPs */}
-      <motion.div
-        variants={cardVariants}
-        whileHover="hover"
-        transition={{ duration: 0.2 }}
-        className={cn(
-          "relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
-          "shadow-sm",
-          "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
-          "transition-all duration-200"
-        )}
-      >
-        <div className="flex items-center gap-1.5 mb-2">
-          <div className="p-1 rounded-lg bg-primary/10 border border-primary/20">
-            <Network className="h-3.5 w-3.5 text-primary" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <motion.button
+          type="button"
+          variants={cardVariants}
+          whileHover="hover"
+          transition={{ duration: 0.2 }}
+          onClick={() => onSelectTable?.('core')}
+          className={cn(
+            'relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm text-left',
+            'shadow-sm',
+            'hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15',
+            'transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+            activeTable === 'core' && 'border-primary/50 shadow-lg shadow-primary/15'
+          )}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="p-1 rounded-lg bg-primary/10 border border-primary/20">
+              <Network className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              EIPs Deployed
+            </h3>
           </div>
-          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            Total Core EIPs
-          </h3>
-        </div>
-        <p className="text-3xl font-bold text-foreground mb-1">62</p>
-        <p className="text-xs text-muted-foreground">Implemented in upgrades</p>
-      </motion.div>
+          <p className="text-3xl font-bold text-foreground mb-1">62</p>
+          <p className="text-xs text-muted-foreground">Core EIPs deployed in upgrades</p>
+        </motion.button>
+
+        <motion.button
+          type="button"
+          variants={cardVariants}
+          whileHover="hover"
+          transition={{ duration: 0.2 }}
+          onClick={() => onSelectTable?.('meta')}
+          className={cn(
+            'relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm text-left',
+            'shadow-sm',
+            'hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15',
+            'transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+            activeTable === 'meta' && 'border-primary/50 shadow-lg shadow-primary/15'
+          )}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="p-1 rounded-lg bg-primary/10 border border-primary/20">
+              <FileText className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Hard Fork Meta EIPs
+            </h3>
+          </div>
+          <p className="text-3xl font-bold text-foreground mb-1">20</p>
+          <p className="text-xs text-muted-foreground">Meta EIPs paired with upgrades</p>
+        </motion.button>
+      </div>
     </div>
   );
 }

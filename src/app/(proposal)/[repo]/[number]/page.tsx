@@ -128,6 +128,39 @@ interface GovernanceState {
   review_velocity: number | null;
 }
 
+interface UpgradeInclusion {
+  upgrade_id: number;
+  name: string;
+  slug: string;
+  bucket: string;
+  commit_date: string | null;
+}
+
+type ProposalRepo = 'eip' | 'erc' | 'rip';
+
+function formatInclusionBucket(bucket: string | null): string {
+  if (!bucket) return 'Unknown';
+  const normalized = bucket.toLowerCase();
+  const labels: Record<string, string> = {
+    included: 'Included',
+    scheduled: 'SFI',
+    considered: 'CFI',
+    declined: 'DFI',
+    proposed: 'PFI',
+  };
+  return labels[normalized] || bucket.charAt(0).toUpperCase() + bucket.slice(1);
+}
+
+function getBucketBadgeClass(bucket: string | null): string {
+  const normalized = bucket?.toLowerCase();
+  if (normalized === 'included') return 'border-emerald-500/25 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300';
+  if (normalized === 'scheduled') return 'border-cyan-500/25 bg-cyan-500/12 text-cyan-700 dark:text-cyan-300';
+  if (normalized === 'considered') return 'border-amber-500/25 bg-amber-500/12 text-amber-700 dark:text-amber-300';
+  if (normalized === 'declined') return 'border-red-500/25 bg-red-500/12 text-red-700 dark:text-red-300';
+  if (normalized === 'proposed') return 'border-blue-500/25 bg-blue-500/12 text-blue-700 dark:text-blue-300';
+  return 'border-border bg-muted/60 text-muted-foreground';
+}
+
 // Helper to format waiting_on state
 function formatWaitingOn(state: string | null): string {
   if (!state) return '';
@@ -199,7 +232,7 @@ export default function ProposalDetailPage() {
   const [proposal, setProposal] = useState<ProposalData | null>(null);
   const [statusEvents, setStatusEvents] = useState<StatusEvent[]>([]);
   const [governanceState, setGovernanceState] = useState<GovernanceState | null>(null);
-  const [upgrades, setUpgrades] = useState<any[]>([]);
+  const [upgrades, setUpgrades] = useState<UpgradeInclusion[]>([]);
   const [markdownContent, setMarkdownContent] = useState<string | null>(null);
   const [markdownLoading, setMarkdownLoading] = useState(false);
   const [markdownError, setMarkdownError] = useState<string | null>(null);
@@ -216,10 +249,12 @@ export default function ProposalDetailPage() {
 
   // Normalize repo name
   const normalizedRepo = repo.toLowerCase().replace(/s$/, '');
+  const proposalRepo = normalizedRepo as ProposalRepo;
   const repoDisplayName = normalizedRepo === 'eip' ? 'EIP' : normalizedRepo === 'erc' ? 'ERC' : 'RIP';
   const repoPath = normalizedRepo === 'eip' ? 'EIPs' : normalizedRepo === 'erc' ? 'ERCs' : 'RIPs';
   const filePath = normalizedRepo === 'eip' ? 'EIPS' : normalizedRepo === 'erc' ? 'ERCS' : 'RIPS';
   const fileName = `${normalizedRepo}-${number}.md`;
+  const latestUpgrade = upgrades[0] ?? null;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -228,20 +263,26 @@ export default function ProposalDetailPage() {
         setError(null);
 
         const [proposalData, statusData, governanceData, upgradesData] = await Promise.all([
-          client.proposals.getProposal({ repo: normalizedRepo as any, number }),
-          client.proposals.getStatusEvents({ repo: normalizedRepo as any, number }),
-          client.proposals.getGovernanceState({ repo: normalizedRepo as any, number }),
-          client.proposals.getUpgrades({ repo: normalizedRepo as any, number }),
+          client.proposals.getProposal({ repo: proposalRepo, number }),
+          client.proposals.getStatusEvents({ repo: proposalRepo, number }),
+          client.proposals.getGovernanceState({ repo: proposalRepo, number }),
+          client.proposals.getUpgrades({ repo: proposalRepo, number }),
         ]);
 
         setProposal(proposalData);
         setStatusEvents(statusData);
         setGovernanceState(governanceData);
         setUpgrades(upgradesData);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to fetch proposal data:', err);
-        setError(err.message || 'Failed to load proposal');
-        if (err.code === 'NOT_FOUND') {
+        const message = err instanceof Error ? err.message : 'Failed to load proposal';
+        setError(message);
+        if (
+          typeof err === 'object' &&
+          err !== null &&
+          'code' in err &&
+          (err as { code?: string }).code === 'NOT_FOUND'
+        ) {
           setError('Proposal not found');
         }
       } finally {
@@ -252,7 +293,7 @@ export default function ProposalDetailPage() {
     if (number && normalizedRepo) {
       fetchData();
     }
-  }, [number, normalizedRepo]);
+  }, [number, normalizedRepo, proposalRepo]);
 
   // Fetch markdown content lazily via getContent (includes discussions_to, requires from frontmatter)
   useEffect(() => {
@@ -264,14 +305,14 @@ export default function ProposalDetailPage() {
         setMarkdownError(null);
 
         const data = await client.proposals.getContent({
-          repo: normalizedRepo as 'eip' | 'erc' | 'rip',
+          repo: proposalRepo,
           number,
         });
 
         setMarkdownContent(data.content);
         setDiscussionsTo(data.discussions_to ?? null);
         setProposalRequires(data.requires ?? []);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to fetch proposal content:', err);
         setMarkdownError('Failed to load proposal content');
       } finally {
@@ -280,7 +321,7 @@ export default function ProposalDetailPage() {
     };
 
     fetchContent();
-  }, [proposal, normalizedRepo, number, markdownContent]);
+  }, [proposal, proposalRepo, number, markdownContent]);
 
   // Fetch AI summary when markdown content is available
   useEffect(() => {
@@ -556,25 +597,32 @@ export default function ProposalDetailPage() {
                       <tr>
                         <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Inclusion Status</td>
                         <td className="px-6 py-4 text-sm text-foreground">
-                          {upgrades.map((upgrade, idx) => (
-                            <span key={idx}>
-                              {upgrade.bucket 
-                                ? upgrade.bucket.charAt(0).toUpperCase() + upgrade.bucket.slice(1)
-                                : 'Unknown'}
-                              {idx < upgrades.length - 1 && ', '}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', getBucketBadgeClass(latestUpgrade?.bucket || null))}>
+                              {formatInclusionBucket(latestUpgrade?.bucket || null)}
                             </span>
-                          ))}
+                            {latestUpgrade?.name && (
+                              <span className="text-muted-foreground">
+                                Latest: {latestUpgrade.name}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                       <tr>
                         <td className="w-40 bg-muted/50 px-6 py-4 align-top text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Network Upgrade</td>
                         <td className="px-6 py-4 text-sm text-foreground">
-                          {upgrades.map((upgrade, idx) => (
-                            <span key={idx}>
-                              {upgrade.name || `Upgrade ${upgrade.upgrade_id}`}
-                              {idx < upgrades.length - 1 && ', '}
-                            </span>
-                          ))}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {upgrades.map((upgrade) => (
+                              <Link
+                                key={upgrade.upgrade_id}
+                                href={upgrade.slug ? `/upgrade/${upgrade.slug}` : '#'}
+                                className="inline-flex rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-primary hover:border-primary/40 hover:underline"
+                              >
+                                {upgrade.name || `Upgrade ${upgrade.upgrade_id}`}
+                              </Link>
+                            ))}
+                          </div>
                         </td>
                       </tr>
                     </>
@@ -746,9 +794,14 @@ export default function ProposalDetailPage() {
                       <TooltipTrigger asChild>
                         <div className="flex cursor-help items-center justify-between rounded-lg border border-border/70 bg-muted/30 p-3 transition-colors hover:bg-muted/50">
                           <div>
-                            <p className="text-sm font-semibold text-foreground">
-                              Included in {upgrade.name} ({upgrade.bucket})
-                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-foreground">
+                                {upgrade.name}
+                              </p>
+                              <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', getBucketBadgeClass(upgrade.bucket))}>
+                                {formatInclusionBucket(upgrade.bucket)}
+                              </span>
+                            </div>
                             {upgrade.commit_date && (
                               <p className="mt-0.5 text-xs text-muted-foreground">
                                 {new Date(upgrade.commit_date).toLocaleDateString('en-US', {
@@ -759,7 +812,7 @@ export default function ProposalDetailPage() {
                               </p>
                             )}
                           </div>
-                          <Link href={`/upgrade/${upgrade.slug}`}>
+                          <Link href={upgrade.slug ? `/upgrade/${upgrade.slug}` : '#'}>
                             <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
                               View <ArrowRight className="h-3.5 w-3.5 ml-1" />
                             </Button>

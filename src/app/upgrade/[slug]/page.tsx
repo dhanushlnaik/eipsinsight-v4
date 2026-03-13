@@ -17,10 +17,10 @@ import { UpgradeTimelineChart } from '@/app/upgrade/_components/upgrade-timeline
 import { getUpgradeTimelineData } from '@/data/upgrade-timelines';
 import { UpgradeBlogCarousel } from '@/app/upgrade/_components/upgrade-blog-carousel';
 import { UpgradeEIPsShowcase } from '@/app/upgrade/_components/upgrade-eips-showcase';
-import { getUpgradeBlogs } from '@/data/upgrade-blogs';
 import { Info } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import { UpgradeSubscriptionCard } from '@/components/upgrade-subscription-card';
+import type { UpgradeArticle } from '@/lib/upgrade-articles';
 
 interface UpgradeData {
   id: number;         
@@ -56,8 +56,8 @@ export default function UpgradePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
-  
-  const blogPosts = getUpgradeBlogs(slug);
+  const [blogPosts, setBlogPosts] = useState<UpgradeArticle[]>([]);
+  const isPectra = slug === 'pectra';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -150,10 +150,16 @@ export default function UpgradePage() {
           setComposition(compositionData);
           setTimelineData(timelineDataResult);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to fetch upgrade data:', err);
-        setError(err.message || 'Failed to load upgrade');
-        if (err.code === 'NOT_FOUND') {
+        const message = err instanceof Error ? err.message : 'Failed to load upgrade';
+        setError(message);
+        if (
+          typeof err === 'object' &&
+          err !== null &&
+          'code' in err &&
+          (err as { code?: string }).code === 'NOT_FOUND'
+        ) {
           setError('Upgrade not found');
         }
       } finally {
@@ -163,6 +169,26 @@ export default function UpgradePage() {
 
     if (slug) {
       fetchData();
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    const fetchArticles = async () => {
+      try {
+        const response = await fetch(`/api/upgrade-articles/${slug}`);
+        if (!response.ok) {
+          throw new Error('Failed to load related articles');
+        }
+        const posts = (await response.json()) as UpgradeArticle[];
+        setBlogPosts(posts);
+      } catch (err) {
+        console.error('Failed to fetch related articles:', err);
+        setBlogPosts([]);
+      }
+    };
+
+    if (slug) {
+      fetchArticles();
     }
   }, [slug]);
 
@@ -298,21 +324,10 @@ export default function UpgradePage() {
         </div>
 
         <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-12 pb-8">
-          <div className="mt-4 mb-6">
-            <UpgradeSubscriptionCard slug={upgrade.slug} name={upgrade.name} />
-          </div>
-
-          {/* Timeline Chart Section */}
-          {timelineData.length > 0 && (
-            <motion.div
-              id="timeline-chart"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="mt-4 mb-6"
-            >
-              <UpgradeTimelineChart data={timelineData} upgradeName={upgrade.name} />
-            </motion.div>
+          {!['pectra', 'fusaka'].includes(slug) && (
+            <div className="mt-4 mb-6">
+              <UpgradeSubscriptionCard slug={upgrade.slug} name={upgrade.name} />
+            </div>
           )}
 
           {/* About This Upgrade Section */}
@@ -375,7 +390,7 @@ export default function UpgradePage() {
                 <Link href="/eip/7594" className="text-primary hover:text-primary/80 underline">
                   PeerDAS
                 </Link>{' '}
-                (Peer Data Availability Sampling), enabling significant blob throughput scaling. Fusaka also raises the L1 gas limit to 60M and introduces "Blob Parameter Only" (BPO) forks to safely scale blob capacity. Scheduled for Mainnet activation at slot{' '}
+                (Peer Data Availability Sampling), enabling significant blob throughput scaling. Fusaka also raises the L1 gas limit to 60M and introduces &quot;Blob Parameter Only&quot; (BPO) forks to safely scale blob capacity. Scheduled for Mainnet activation at slot{' '}
                 <span className="font-semibold text-foreground">13,164,544</span> (Dec 3, 2025), it includes optimizations for L1 performance and UX improvements.
               </p>
             ) : slug === 'hegota' ? (
@@ -391,13 +406,13 @@ export default function UpgradePage() {
                 </p>
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   Future network upgrade currently in early planning stages. Named after the combination of{' '}
-                  <span className="font-semibold">"Heze"</span> (consensus layer upgrade, named after a star) and{' '}
-                  <span className="font-semibold">"Bogotá"</span> (execution layer upgrade, named after a Devcon location).
+                  <span className="font-semibold">&quot;Heze&quot;</span> (consensus layer upgrade, named after a star) and{' '}
+                  <span className="font-semibold">&quot;Bogotá&quot;</span> (execution layer upgrade, named after a Devcon location).
                 </p>
               </div>
             ) : slug === 'frontier' ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Frontier was Ethereum's genesis release on July 30, 2015, marked the official launch of the Ethereum mainnet. It enabled the deployment of smart contracts and laid the foundation for decentralized applications, establishing the core protocol functionality that Ethereum is built upon today.
+                Frontier was Ethereum&apos;s genesis release on July 30, 2015, marked the official launch of the Ethereum mainnet. It enabled the deployment of smart contracts and laid the foundation for decentralized applications, establishing the core protocol functionality that Ethereum is built upon today.
               </p>
             ) : slug === 'homestead' ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
@@ -413,7 +428,7 @@ export default function UpgradePage() {
               </p>
             ) : slug === 'spurious-dragon' ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Spurious Dragon continued Ethereum's security improvements with EXP gas repricing, contract code size limits, and transaction replay protection via the ChainID parameter (EIP-155). It hardened the network against further DoS vectors and enabled cross-chain transaction safety.
+                Spurious Dragon continued Ethereum&apos;s security improvements with EXP gas repricing, contract code size limits, and transaction replay protection via the ChainID parameter (EIP-155). It hardened the network against further DoS vectors and enabled cross-chain transaction safety.
               </p>
             ) : slug === 'byzantium' ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
@@ -433,11 +448,11 @@ export default function UpgradePage() {
               </p>
             ) : slug === 'london' ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
-                London fundamentally reformed Ethereum's fee market with EIP-1559, introducing dynamic base fees and a burn mechanism. This upgrade revolutionized how transaction fees work, improved user experience, and began Ethereum's deflationary phase.
+                London fundamentally reformed Ethereum&apos;s fee market with EIP-1559, introducing dynamic base fees and a burn mechanism. This upgrade revolutionized how transaction fees work, improved user experience, and began Ethereum&apos;s deflationary phase.
               </p>
             ) : slug === 'paris' ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
-                The Merge was Ethereum's most significant upgrade, transitioning consensus from Proof-of-Work to Proof-of-Stake. This historic change reduced energy consumption by 99.95% and established validator-based security, marking a fundamental shift in how the network operates.
+                The Merge was Ethereum&apos;s most significant upgrade, transitioning consensus from Proof-of-Work to Proof-of-Stake. This historic change reduced energy consumption by 99.95% and established validator-based security, marking a fundamental shift in how the network operates.
               </p>
             ) : slug === 'shanghai' ? (
               <p className="text-sm leading-relaxed text-muted-foreground">
@@ -478,16 +493,16 @@ export default function UpgradePage() {
             )}
           </motion.div>
 
-          {/* Blog Carousel Section */}
-          {blogPosts.length > 0 && (
+          {/* Timeline Chart Section */}
+          {timelineData.length > 0 && (
             <motion.div
-              id="related-articles"
+              id="timeline-chart"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.1 }}
               className="mb-6"
             >
-              <UpgradeBlogCarousel posts={blogPosts} upgradeName={upgrade.name} />
+              <UpgradeTimelineChart data={timelineData} upgradeName={upgrade.name} />
             </motion.div>
           )}
 
@@ -503,8 +518,22 @@ export default function UpgradePage() {
               upgradeName={upgrade.name}
               composition={composition}
               upgradeColor="#06B6D4"
+              heading={isPectra ? 'Prague/Electra (Pectra) EIPs' : undefined}
             />
           </motion.div>
+
+          {/* Blog Carousel Section */}
+          {blogPosts.length > 0 && (
+            <motion.div
+              id="related-articles"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+              className="mb-6"
+            >
+              <UpgradeBlogCarousel posts={blogPosts} upgradeName={upgrade.name} />
+            </motion.div>
+          )}
         </div>
       </div>
     </div>

@@ -17,6 +17,8 @@ interface UpgradeEIPsShowcaseProps {
   upgradeName: string;
   composition: EIPItem[];
   upgradeColor?: string;
+  heading?: string;
+  description?: string;
 }
 
 const bucketColors: Record<string, { bg: string; text: string; border: string }> = {
@@ -48,7 +50,13 @@ function formatBucket(bucket: string | null): string {
   return bucketMap[bucket.toLowerCase()] || bucket.charAt(0).toUpperCase() + bucket.slice(1);
 }
 
-export function UpgradeEIPsShowcase({ upgradeName, composition, upgradeColor = '#06B6D4' }: UpgradeEIPsShowcaseProps) {
+export function UpgradeEIPsShowcase({
+  upgradeName,
+  composition,
+  upgradeColor = '#06B6D4',
+  heading,
+  description = 'Complete list of Ethereum Improvement Proposals in this upgrade',
+}: UpgradeEIPsShowcaseProps) {
   const [expandedBuckets, setExpandedBuckets] = useState<Set<string>>(new Set());
   const [hoveredEip, setHoveredEip] = useState<number | null>(null);
 
@@ -148,10 +156,10 @@ export function UpgradeEIPsShowcase({ upgradeName, composition, upgradeColor = '
     <div className="space-y-5">
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-          {upgradeName} EIPs
+          {heading || `${upgradeName} EIPs`}
         </h3>
         <p className="text-sm text-muted-foreground">
-          Complete list of Ethereum Improvement Proposals in this upgrade
+          {description}
         </p>
       </div>
 

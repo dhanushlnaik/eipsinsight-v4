@@ -1,5 +1,6 @@
 import { optionalAuthProcedure, publicProcedure, checkAPIToken, ORPCError } from './types'
 import { prisma } from '@/lib/prisma'
+import { getUpgradeTimelineData } from '@/data/upgrade-timelines'
 import * as z from 'zod'
 
 // ─── Helper: Fetch and parse EIP/ERC/RIP markdown from GitHub ────────────────
@@ -7,6 +8,40 @@ import * as z from 'zod'
 interface FrontmatterData {
   discussions_to: string | null;
   requires: number[];
+}
+
+function getConstantUpgradeOverrides(eipNumber: number): Map<string, { bucket: string; date: string }> {
+  const slugs = ['pectra', 'fusaka'] as const;
+  const overrides = new Map<string, { bucket: string; date: string }>();
+  const eipLabel = `EIP-${eipNumber}`;
+
+  for (const slug of slugs) {
+    const timeline = getUpgradeTimelineData(slug);
+    if (!timeline || timeline.length === 0) continue;
+
+    const lastEntry = timeline[timeline.length - 1];
+    if (lastEntry.included.includes(eipLabel)) {
+      overrides.set(slug, { bucket: 'included', date: lastEntry.date });
+      continue;
+    }
+    if (lastEntry.scheduled.includes(eipLabel)) {
+      overrides.set(slug, { bucket: 'scheduled', date: lastEntry.date });
+      continue;
+    }
+    if (lastEntry.considered.includes(eipLabel)) {
+      overrides.set(slug, { bucket: 'considered', date: lastEntry.date });
+      continue;
+    }
+    if (lastEntry.declined.includes(eipLabel)) {
+      overrides.set(slug, { bucket: 'declined', date: lastEntry.date });
+      continue;
+    }
+    if (lastEntry.proposed.includes(eipLabel)) {
+      overrides.set(slug, { bucket: 'proposed', date: lastEntry.date });
+    }
+  }
+
+  return overrides;
 }
 
 /**
@@ -228,12 +263,50 @@ const eip = await prisma.eips.findUnique({
       number: z.number(),
     }))
     .handler(async ({ input }) => {
-// Get all events for this proposal number (eip_number field stores the proposal number regardless of type)
-      // Query directly by proposal number - no need to verify proposal exists first
+      const constantUpgradeOverrides = getConstantUpgradeOverrides(input.number);
+
+      const currentComposition = await prisma.upgrade_composition_current.findMany({
+        where: { eip_number: input.number },
+        select: {
+          upgrade_id: true,
+          bucket: true,
+          updated_at: true,
+        },
+      });
+
+      const currentUpgradeIds = currentComposition
+        .map((entry) => entry.upgrade_id)
+        .filter((value): value is number => value !== null);
+
+      const constantUpgradeSlugs = Array.from(constantUpgradeOverrides.keys());
+      const constantUpgrades = constantUpgradeSlugs.length > 0
+        ? await prisma.upgrades.findMany({
+            where: { slug: { in: constantUpgradeSlugs } },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          })
+        : [];
+
+      const currentUpgradeMap = new Map<number, { bucket: string; commit_date: Date | null }>();
+      for (const entry of currentComposition) {
+        if (!entry.upgrade_id || !entry.bucket) continue;
+        currentUpgradeMap.set(entry.upgrade_id, {
+          bucket: entry.bucket.toLowerCase(),
+          commit_date: entry.updated_at,
+        });
+      }
+
+      // Get all historical events for this proposal number (eip_number stores the proposal number regardless of type)
       const events = await prisma.upgrade_composition_events.findMany({
         where: { 
           eip_number: input.number,
-          bucket: { in: ['considered', 'scheduled', 'proposed', 'declined'] },
+          ...(currentUpgradeIds.length > 0
+            ? { upgrade_id: { notIn: currentUpgradeIds } }
+            : {}),
+          bucket: { in: ['included', 'considered', 'scheduled', 'proposed', 'declined'] },
         },
         orderBy: { commit_date: 'desc' },
         select: {
@@ -244,10 +317,10 @@ const eip = await prisma.eips.findUnique({
       });
 
       if (events.length === 0) {
-        return [];
+        if (currentUpgradeMap.size === 0) return [];
       }
 
-      // Get unique upgrade_ids and their latest bucket
+      // Get unique upgrade_ids and their latest bucket from historical events
       const upgradeMap = new Map<number, { bucket: string; commit_date: Date | null }>();
       
       for (const event of events) {
@@ -261,6 +334,19 @@ const eip = await prisma.eips.findUnique({
         }
       }
 
+      currentUpgradeMap.forEach((value, key) => {
+        upgradeMap.set(key, value);
+      });
+
+      for (const upgrade of constantUpgrades) {
+        const override = constantUpgradeOverrides.get(upgrade.slug);
+        if (!override) continue;
+        upgradeMap.set(upgrade.id, {
+          bucket: override.bucket,
+          commit_date: new Date(override.date),
+        });
+      }
+
       const upgradeIds = Array.from(upgradeMap.keys());
       
       // Get upgrade details
@@ -269,19 +355,28 @@ const eip = await prisma.eips.findUnique({
         select: {
           id: true,
           name: true,
+          slug: true,
         },
       });
 
       // Combine data
-      return Array.from(upgradeMap.entries()).map(([upgradeId, eventData]) => {
+      return Array.from(upgradeMap.entries())
+        .map(([upgradeId, eventData]) => {
         const upgrade = upgradesData.find(u => u.id === upgradeId);
         
         return {
           upgrade_id: upgradeId,
           name: upgrade?.name || '',
+          slug: upgrade?.slug || '',
           bucket: eventData.bucket,
+          commit_date: eventData.commit_date?.toISOString() || null,
         };
-      });
+      })
+        .sort((a, b) => {
+          const aTime = a.commit_date ? new Date(a.commit_date).getTime() : 0;
+          const bTime = b.commit_date ? new Date(b.commit_date).getTime() : 0;
+          return bTime - aTime;
+        });
     }),
 
   // E. Markdown Content (fetched from GitHub raw)
@@ -382,4 +477,3 @@ const emptyState = {
       };
     }),
 }
-
