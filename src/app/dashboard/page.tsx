@@ -44,7 +44,7 @@ const STATUS_DOT_COLORS: Record<string, string> = {
 };
 
 // ────────────────────────────────────────────────────────────────
-// CSV HELPER
+// REPORT DOWNLOAD HELPER
 // ────────────────────────────────────────────────────────────────
 
 function downloadCSV(headers: string[], rows: string[][], filename: string) {
@@ -54,7 +54,7 @@ function downloadCSV(headers: string[], rows: string[][], filename: string) {
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
-  toast.success('CSV downloaded', {
+  toast.success('Report downloaded', {
     description: filename,
   });
 }
@@ -63,7 +63,7 @@ function downloadCSV(headers: string[], rows: string[][], filename: string) {
 // SMALL UI COMPONENTS
 // ────────────────────────────────────────────────────────────────
 
-function CSVBtn({ onClick, label = 'CSV' }: { onClick: () => void; label?: string }) {
+function CSVBtn({ onClick, label = 'Download Reports' }: { onClick: () => void; label?: string }) {
   return (
     <button onClick={onClick}
       className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground">
@@ -196,15 +196,7 @@ export default function DashboardPage() {
 
   const loading = !kpis;
 
-  // ── CSV helpers ──
-  const exportCrossTab = () => {
-    if (!matrixData) return;
-    const headers = ['Category', ...STATUSES, 'Total'];
-    const rows = categories.map(cat => [cat, ...STATUSES.map(s => String(matrixData.matrix[cat]?.[s] || 0)), String(matrixData.catTotals[cat] || 0)]);
-    rows.push(['Total', ...STATUSES.map(s => String(matrixData.statusTotals[s] || 0)), String(matrixData.grandTotal)]);
-    downloadCSV(headers, rows, `category-status-matrix-${new Date().toISOString().slice(0, 10)}.csv`);
-  };
-
+  // ── Report download helpers ──
   const exportRepoBreakdown = () => {
     if (!repoBreakdown) return;
     const headers = ['Repo', ...STATUSES, 'Total'];
@@ -225,7 +217,7 @@ export default function DashboardPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(52,211,153,0.03),transparent_70%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(52,211,153,0.05),transparent_70%)]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-full px-4 py-8 sm:px-6 lg:px-8 xl:px-12">
+      <div className="relative z-10 w-full max-w-full px-3 py-8 sm:px-4 lg:px-5 xl:px-6">
         {/* ─── 1. Header ──────────────────────────────────── */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="mb-6">
           <DashboardPageHeader />
@@ -271,45 +263,52 @@ export default function DashboardPage() {
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.1 }}
           className="mb-6">
           <DashCard title="Category × Status Matrix" icon={<Layers className="h-4 w-4" />}
-            action={<div className="flex gap-2"><CSVBtn onClick={exportCrossTab} label="Matrix CSV" /><CSVBtn onClick={exportFullRaw} label="Full Raw CSV" /></div>}>
+            action={<CSVBtn onClick={exportFullRaw} label="Download Reports" />}>
             {!matrixData ? <Skeleton rows={8} /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-800/50">
-                      <th className="px-3 py-2 text-left text-[10px] font-semibold text-slate-600 dark:text-slate-500 uppercase">Category</th>
-                      {STATUSES.map(s => (
-                      <th key={s} className="px-3 py-2 text-right text-[10px] font-semibold text-slate-600 dark:text-slate-500 uppercase">{s}</th>
+              <div className="overflow-x-auto rounded-lg border border-border/70 bg-background/30">
+                <table className="w-full min-w-[980px] table-fixed text-xs">
+                  <colgroup>
+                    <col style={{ width: '20%' }} />
+                    {STATUSES.map((status) => (
+                      <col key={`matrix-col-${status}`} style={{ width: '8.75%' }} />
                     ))}
-                      <th className="px-3 py-2 text-right text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Total</th>
+                    <col style={{ width: '10%' }} />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-border bg-muted/35">
+                      <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Category</th>
+                      {STATUSES.map(s => (
+                      <th key={s} className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{s}</th>
+                    ))}
+                      <th className="px-3 py-2 text-right text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {categories.map(cat => (
-                      <tr key={cat} className="border-b border-slate-200 dark:border-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
-                        <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{cat}</td>
+                      <tr key={cat} className="border-b border-border/60 transition-colors hover:bg-muted/20">
+                        <td className="px-3 py-2 font-medium text-foreground">{cat}</td>
                         {STATUSES.map(s => {
                           const val = matrixData.matrix[cat]?.[s] || 0;
                           return (
                             <td key={s} className="px-3 py-2 text-right tabular-nums">
                               {val > 0 ? (
-                                <span className={cn('inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', STATUS_COLORS[s] || 'text-slate-400')}>
+                                <span className={cn('inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', STATUS_COLORS[s] || 'text-muted-foreground')}>
                                   {val.toLocaleString()}
                                 </span>
-                              ) : <span className="text-slate-500 dark:text-slate-700">—</span>}
+                              ) : <span className="text-muted-foreground/70">—</span>}
                             </td>
                           );
                         })}
-                        <td className="px-3 py-2 text-right tabular-nums font-bold text-slate-800 dark:text-slate-200">{(matrixData.catTotals[cat] || 0).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-bold text-foreground">{(matrixData.catTotals[cat] || 0).toLocaleString()}</td>
                       </tr>
                     ))}
                     {/* Totals row */}
-                    <tr className="border-t-2 border-slate-200 dark:border-slate-700/50 bg-slate-100 dark:bg-slate-800/20">
-                      <td className="px-3 py-2 font-bold text-slate-700 dark:text-slate-300">Total</td>
+                    <tr className="border-t-2 border-border bg-muted/40">
+                      <td className="px-3 py-2 font-bold text-foreground">Total</td>
                       {STATUSES.map(s => (
-                        <td key={s} className="px-3 py-2 text-right tabular-nums font-bold text-slate-700 dark:text-slate-300">{(matrixData.statusTotals[s] || 0).toLocaleString()}</td>
+                        <td key={s} className="px-3 py-2 text-right tabular-nums font-bold text-foreground">{(matrixData.statusTotals[s] || 0).toLocaleString()}</td>
                       ))}
-                      <td className="px-3 py-2 text-right tabular-nums font-bold text-slate-900 dark:text-white">{matrixData.grandTotal.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-bold text-foreground">{matrixData.grandTotal.toLocaleString()}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -324,7 +323,7 @@ export default function DashboardPage() {
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.12 }}
           className="mb-6">
           <DashCard title="Repository × Status Breakdown" icon={<Package className="h-4 w-4" />}
-            action={<CSVBtn onClick={exportRepoBreakdown} label="Repo CSV" />}>
+            action={<CSVBtn onClick={exportRepoBreakdown} label="Download Reports" />}>
             {!repoBreakdown ? <Skeleton rows={3} /> : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
@@ -458,20 +457,6 @@ export default function DashboardPage() {
           <TrendingProposals />
         </motion.div>
 
-        <hr className="mb-6 border-border/70" />
-
-        {/* ─── 12. Export Hub ───────────────────────────────── */}
-        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: 0.26 }}>
-          <div className="rounded-xl border border-border bg-card/60 p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Download any breakdown as CSV</p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              <ExportCard label="Category × Status Matrix" desc="Full cross-tab of all categories and statuses" onClick={exportCrossTab} disabled={!matrixData} />
-              <ExportCard label="Full Raw Breakdown" desc="Category, status, repo — every row" onClick={exportFullRaw} disabled={!crossTab} />
-              <ExportCard label="Repo × Status" desc="Repository breakdown by status" onClick={exportRepoBreakdown} disabled={!repoBreakdown} />
-            </div>
-          </div>
-        </motion.div>
-
         <div className="mt-6 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
           {dashboardUpdatedAt ? (
             <LastUpdated
@@ -495,21 +480,5 @@ export default function DashboardPage() {
 
       </div>
     </div>
-  );
-}
-
-function ExportCard({ label, desc, onClick, disabled }: { label: string; desc: string; onClick: () => void; disabled: boolean }) {
-  return (
-    <button onClick={onClick} disabled={disabled}
-      className={cn(
-        'flex flex-col items-start rounded-xl border p-3 text-left transition-all',
-        disabled
-          ? 'cursor-not-allowed border-border/40 bg-muted/40 opacity-50'
-          : 'border-border bg-muted/30 hover:border-primary/40 hover:bg-primary/10',
-      )}>
-      <Download className={cn('mb-1.5 h-3.5 w-3.5 shrink-0', disabled ? 'text-muted-foreground' : 'text-primary')} />
-      <span className="text-sm font-semibold text-foreground">{label}</span>
-      <span className="mt-0.5 text-xs leading-tight text-muted-foreground">{desc}</span>
-    </button>
   );
 }

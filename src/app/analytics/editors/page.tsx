@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
-import { Loader2, UserCheck, Clock, FileText, Download, AlertCircle } from "lucide-react";
+import { Loader2, UserCheck, Clock, FileText, Download, AlertCircle, ChevronDown } from "lucide-react";
 import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
 import ReactECharts from "echarts-for-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
@@ -36,9 +36,20 @@ interface MonthlyTrendPoint {
   [actor: string]: string | number;
 }
 
-interface DailyActivityData {
+interface DailyActivityStackedRow {
   date: string;
+  actor: string;
   count: number;
+}
+
+interface EditorActionDetailRow {
+  actor: string;
+  eventType: string;
+  actedAt: string;
+  prNumber: number;
+  repoShort: string;
+  title: string;
+  eventUrl: string | null;
 }
 
 const categoryColors: Record<string, string> = {
@@ -132,6 +143,18 @@ function getMonthWindow(year: number, month: number): { from: string; to: string
   };
 }
 
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<string | number>>) {
+  const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+  const csv = [headers.map(escape).join(","), ...rows.map((row) => row.map(escape).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function EditorsAnalyticsPage() {
   const { timeRange, repoFilter } = useAnalytics();
   const [loading, setLoading] = useState(true);
@@ -140,15 +163,22 @@ export default function EditorsAnalyticsPage() {
   
   const [leaderboard, setLeaderboard] = useState<EditorLeaderboardRow[]>([]);
   const [monthlyTrend, setMonthlyTrend] = useState<MonthlyTrendPoint[]>([]);
+  const [monthlyReviewedTrend, setMonthlyReviewedTrend] = useState<MonthlyTrendPoint[]>([]);
   const [categoryCoverage, setCategoryCoverage] = useState<CategoryCoverage[]>([]);
   const [repoDistribution, setRepoDistribution] = useState<RepoDistribution[]>([]);
-  const [dailyActivity, setDailyActivity] = useState<DailyActivityData[]>([]);
+  const [dailyActivityStacked, setDailyActivityStacked] = useState<DailyActivityStackedRow[]>([]);
+  const [editorActionDetails, setEditorActionDetails] = useState<EditorActionDetailRow[]>([]);
   const [membershipTier, setMembershipTier] = useState<string>('free');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [leaderboardMode, setLeaderboardMode] = useState<"all" | "monthly" | "range">("all");
+  const [leaderboardMode, setLeaderboardMode] = useState<"all" | "monthly" | "range">("range");
   const [leaderboardYear, setLeaderboardYear] = useState<number>(() => new Date().getUTCFullYear());
   const [leaderboardMonth, setLeaderboardMonth] = useState<number>(() => new Date().getUTCMonth() + 1);
   const [downloadingEditor, setDownloadingEditor] = useState<string | null>(null);
+  const [activityRepoFilter, setActivityRepoFilter] = useState<string>("all");
+  const [activityEditorFilter, setActivityEditorFilter] = useState<string>("all");
+  const [activityActionFilter, setActivityActionFilter] = useState<string>("all");
+  const [visibleActivityCount, setVisibleActivityCount] = useState<number>(20);
+  const [expandedActivityKeys, setExpandedActivityKeys] = useState<Record<string, boolean>>({});
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
   const { from, to } = getTimeWindow(timeRange);
@@ -266,7 +296,7 @@ export default function EditorsAnalyticsPage() {
       try {
         const months = timeRange === "7d" ? 3 : timeRange === "this_month" || timeRange === "30d" ? 6 : timeRange === "90d" ? 12 : 24;
         
-        const [leaderboardData, trendData, categoryData, repoData, dailyActivityData] = await Promise.all([
+        const [leaderboardData, trendData, reviewedTrendData, categoryData, repoData, dailyStackedData, actionDetails] = await Promise.all([
           leaderboardMode === "monthly"
             ? client.analytics.getMonthlyEditorLeaderboard({
                 repo: repoParam,
@@ -301,30 +331,44 @@ export default function EditorsAnalyticsPage() {
             repo: repoParam,
             months,
           }),
+          client.analytics.getEditorsMonthlyReviewedPRs({
+            repo: repoParam,
+            months,
+          }),
           client.analytics.getEditorsByCategory({
             repo: repoParam,
+            from,
+            to,
           }),
           client.analytics.getEditorsRepoDistribution({
             repo: repoParam,
             from,
             to,
           }),
-          client.analytics.getEditorDailyActivity({
+          client.analytics.getEditorDailyActivityStacked({
             repo: repoParam,
             from,
             to,
+          }),
+          client.analytics.getEditorActionDetails({
+            repo: repoParam,
+            from,
+            to,
+            limit: 1200,
           }),
         ]);
 
         setLeaderboard(leaderboardData.rows);
         setMonthlyTrend(trendData);
+        setMonthlyReviewedTrend(reviewedTrendData);
         setCategoryCoverage(categoryData);
         setRepoDistribution(repoData);
-        setDailyActivity(dailyActivityData);
+        setDailyActivityStacked(dailyStackedData);
+        setEditorActionDetails(actionDetails);
         if (leaderboardData.updatedAt) {
           setDataUpdatedAt(new Date(leaderboardData.updatedAt));
-        } else if (dailyActivityData.length > 0) {
-          setDataUpdatedAt(new Date(`${dailyActivityData[dailyActivityData.length - 1]!.date}T00:00:00.000Z`));
+        } else if (dailyStackedData.length > 0) {
+          setDataUpdatedAt(new Date(`${dailyStackedData[dailyStackedData.length - 1]!.date}T00:00:00.000Z`));
         } else {
           setDataUpdatedAt(new Date());
         }
@@ -413,6 +457,19 @@ export default function EditorsAnalyticsPage() {
     return Array.from(actors).slice(0, 8); // Limit to 8 for readability
   }, [monthlyTrend]);
 
+  const reviewedTrendActors = useMemo(() => {
+    if (monthlyReviewedTrend.length === 0) return [];
+    const actors = new Set<string>();
+    monthlyReviewedTrend.forEach((point) => {
+      Object.keys(point).forEach((key) => {
+        if (key !== "month" && typeof point[key] === "number") {
+          actors.add(key);
+        }
+      });
+    });
+    return Array.from(actors).slice(0, 8);
+  }, [monthlyReviewedTrend]);
+
   const totalActions = useMemo(() => leaderboard.reduce((sum, e) => sum + e.totalActions, 0), [leaderboard]);
   const activeEditors = useMemo(() => leaderboard.filter((e) => e.totalActions > 0).length, [leaderboard]);
   const inactiveEditors = OFFICIAL_EDITOR_HANDLES.length - activeEditors;
@@ -440,6 +497,80 @@ export default function EditorsAnalyticsPage() {
     () => leaderboard.filter((row) => row.totalActions === 0).map((row) => row.actor),
     [leaderboard],
   );
+
+  const activityRepoOptions = useMemo(() => {
+    const repos = Array.from(new Set(editorActionDetails.map((row) => row.repoShort))).sort();
+    return repos;
+  }, [editorActionDetails]);
+
+  const activityEditorOptions = useMemo(() => {
+    const editors = Array.from(new Set(editorActionDetails.map((row) => row.actor))).sort((a, b) => a.localeCompare(b));
+    return editors;
+  }, [editorActionDetails]);
+
+  const activityActionOptions = useMemo(() => {
+    const actions = Array.from(new Set(editorActionDetails.map((row) => row.eventType.toLowerCase()))).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    return actions;
+  }, [editorActionDetails]);
+
+  const filteredActivityFeed = useMemo(() => {
+    return editorActionDetails.filter((row) => {
+      const repoOk = activityRepoFilter === "all" || row.repoShort === activityRepoFilter;
+      const editorOk = activityEditorFilter === "all" || row.actor === activityEditorFilter;
+      const actionOk = activityActionFilter === "all" || row.eventType.toLowerCase() === activityActionFilter;
+      return repoOk && editorOk && actionOk;
+    });
+  }, [editorActionDetails, activityRepoFilter, activityEditorFilter, activityActionFilter]);
+
+  const visibleActivityFeed = useMemo(
+    () => filteredActivityFeed.slice(0, visibleActivityCount),
+    [filteredActivityFeed, visibleActivityCount]
+  );
+
+  const hasMoreActivities = visibleActivityCount < filteredActivityFeed.length;
+
+  const toggleActivityDetails = useCallback((key: string) => {
+    setExpandedActivityKeys((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const formatEventLabel = useCallback((eventType: string) => {
+    const normalized = eventType.toLowerCase();
+    if (normalized === "reviewed") return "reviewed";
+    if (normalized === "commented") return "commented";
+    if (normalized === "opened") return "opened PR";
+    if (normalized === "closed") return "closed PR";
+    if (normalized === "committed") return "committed";
+    if (normalized === "merged") return "merged PR";
+    return eventType;
+  }, []);
+
+  const getActionBadgeClass = useCallback((eventType: string) => {
+    const normalized = eventType.toLowerCase();
+    if (normalized === "reviewed") return "border-emerald-500/35 bg-emerald-500/12 text-emerald-300";
+    if (normalized === "commented") return "border-cyan-500/35 bg-cyan-500/12 text-cyan-300";
+    if (normalized === "committed") return "border-blue-500/35 bg-blue-500/12 text-blue-300";
+    if (normalized === "opened") return "border-violet-500/35 bg-violet-500/12 text-violet-300";
+    if (normalized === "closed") return "border-rose-500/35 bg-rose-500/12 text-rose-300";
+    if (normalized === "merged") return "border-amber-500/35 bg-amber-500/12 text-amber-300";
+    if (normalized === "reopened") return "border-orange-500/35 bg-orange-500/12 text-orange-300";
+    return "border-border/60 bg-muted/40 text-foreground/85";
+  }, []);
+
+  const formatActivityTime = useCallback((actedAt: string) => {
+    const parsed = new Date(actedAt.includes("T") ? actedAt : `${actedAt.replace(" ", "T")}Z`);
+    if (Number.isNaN(parsed.getTime())) return actedAt;
+    return parsed.toLocaleString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "UTC",
+    });
+  }, []);
 
   const trendOption = useMemo(() => ({
     backgroundColor: "transparent",
@@ -470,6 +601,36 @@ export default function EditorsAnalyticsPage() {
       data: monthlyTrend.map((p) => Number(p[actor] || 0)),
     })),
   }), [monthlyTrend, trendActors]);
+
+  const reviewedTrendOption = useMemo(() => ({
+    backgroundColor: "transparent",
+    tooltip: { trigger: "axis" },
+    legend: {
+      top: 0,
+      textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+      type: "scroll",
+    },
+    grid: { top: 36, left: 28, right: 20, bottom: 28 },
+    xAxis: {
+      type: "category",
+      data: monthlyReviewedTrend.map((m) => m.month),
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+      axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+      splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+    },
+    series: reviewedTrendActors.map((actor, idx) => ({
+      name: actor,
+      type: "line",
+      smooth: true,
+      symbol: "none",
+      lineStyle: { width: 2, color: `hsl(${(idx * 360) / Math.max(reviewedTrendActors.length, 1)}, 70%, 55%)` },
+      data: monthlyReviewedTrend.map((p) => Number(p[actor] || 0)),
+    })),
+  }), [monthlyReviewedTrend, reviewedTrendActors]);
 
   const categoryOption = useMemo(() => ({
     backgroundColor: "transparent",
@@ -590,31 +751,105 @@ export default function EditorsAnalyticsPage() {
     ],
   }), [repoCards]);
 
-  const dailyActivityOption = useMemo(() => ({
-    backgroundColor: "transparent",
-    tooltip: { trigger: "axis" },
-    grid: { top: 18, left: 28, right: 20, bottom: 24 },
-    xAxis: {
-      type: "category",
-      data: dailyActivity.map((item) => item.date),
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 10, hideOverlap: true },
-      axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
-    },
-    yAxis: {
-      type: "value",
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-      splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
-    },
-    series: [
-      {
-        name: "Actions",
-        type: "bar",
-        barWidth: "60%",
-        data: dailyActivity.map((item) => item.count),
-        itemStyle: { color: "#60a5fa", borderRadius: [6, 6, 0, 0] },
+  const dailyActivityOption = useMemo(() => {
+    const dates = Array.from(new Set(dailyActivityStacked.map((item) => item.date))).sort();
+    const actorTotals: Record<string, number> = {};
+    dailyActivityStacked.forEach((row) => {
+      actorTotals[row.actor] = (actorTotals[row.actor] || 0) + row.count;
+    });
+    const actors = Object.entries(actorTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([actor]) => actor);
+
+    return {
+      backgroundColor: "transparent",
+      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      legend: {
+        top: 0,
+        type: "scroll",
+        textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
       },
-    ],
-  }), [dailyActivity]);
+      grid: { top: 40, left: 28, right: 20, bottom: 46 },
+      xAxis: {
+        type: "category",
+        data: dates,
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 10, hideOverlap: true },
+        axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+      },
+      yAxis: {
+        type: "value",
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+      },
+      dataZoom: [
+        { type: "inside", xAxisIndex: 0, start: 0, end: 100 },
+        {
+          type: "slider",
+          xAxisIndex: 0,
+          bottom: 6,
+          height: 16,
+          borderColor: "rgba(148,163,184,0.22)",
+          backgroundColor: "rgba(148,163,184,0.08)",
+          fillerColor: "rgba(34,211,238,0.22)",
+          handleSize: 9,
+          showDetail: false,
+          start: 0,
+          end: 100,
+        },
+      ],
+      series: actors.map((actor, idx) => ({
+        name: actor,
+        type: "bar",
+        stack: "editors",
+        data: dates.map((date) => {
+          const row = dailyActivityStacked.find((item) => item.date === date && item.actor === actor);
+          return row?.count ?? 0;
+        }),
+        itemStyle: {
+          color: `hsl(${(idx * 360) / Math.max(actors.length, 1)}, 70%, 55%)`,
+        },
+      })),
+    };
+  }, [dailyActivityStacked]);
+
+  const downloadTrendReport = useCallback(() => {
+    const headers = ["Month", ...trendActors];
+    const rows = monthlyTrend.map((row) => [row.month, ...trendActors.map((actor) => Number(row[actor] || 0))]);
+    downloadCsv(`editors-activity-over-time-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [monthlyTrend, trendActors]);
+
+  const downloadReviewedMonthlyReport = useCallback(() => {
+    const headers = ["Month", ...reviewedTrendActors];
+    const rows = monthlyReviewedTrend.map((row) => [row.month, ...reviewedTrendActors.map((actor) => Number(row[actor] || 0))]);
+    downloadCsv(`editors-prs-reviewed-monthly-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [monthlyReviewedTrend, reviewedTrendActors]);
+
+  const downloadCoverageReport = useCallback(() => {
+    const headers = ["Category", "Covered Editors", "Editors"];
+    const rows = categoryData.map((entry) => [entry.category, entry.count, entry.actors.join(" | ")]);
+    downloadCsv(`editors-category-coverage-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [categoryData]);
+
+  const downloadDailyActivityReport = useCallback(() => {
+    const dates = Array.from(new Set(dailyActivityStacked.map((item) => item.date))).sort();
+    const actors = Array.from(new Set(dailyActivityStacked.map((item) => item.actor))).sort((a, b) => a.localeCompare(b));
+    const headers = ["Date", ...actors];
+    const rows = dates.map((date) => [
+      date,
+      ...actors.map((actor) => {
+        const row = dailyActivityStacked.find((item) => item.date === date && item.actor === actor);
+        return row?.count ?? 0;
+      }),
+    ]);
+    downloadCsv(`editors-daily-activity-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [dailyActivityStacked]);
+
+  const downloadRepoDistributionReport = useCallback(() => {
+    const headers = ["Editor", "Repository", "Count", "Percent"];
+    const rows = repoDistribution.map((row) => [row.actor, row.repo, row.count, row.pct]);
+    downloadCsv(`editors-repo-distribution-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [repoDistribution]);
 
   // Export functionality
   useAnalyticsExport(() => {
@@ -674,70 +909,107 @@ export default function EditorsAnalyticsPage() {
         </div>
       )}
 
-      {/* Hero KPIs */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Editors</p>
-              <p className="text-3xl font-bold text-foreground">{OFFICIAL_EDITOR_HANDLES.length}</p>
+      <div className="rounded-xl border border-border/70 bg-card/60 p-4 backdrop-blur-sm sm:p-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-border/60 bg-background/35 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Official Editors</p>
+                <p className="text-3xl font-semibold text-foreground tabular-nums">{OFFICIAL_EDITOR_HANDLES.length}</p>
+              </div>
+              <div className="rounded-full bg-primary/10 p-2.5">
+                <UserCheck className="h-5 w-5 text-primary" />
+              </div>
             </div>
-            <div className="rounded-full bg-violet-500/20 p-3">
-              <UserCheck className="h-6 w-6 text-violet-400" />
+          </div>
+          <div className="rounded-lg border border-border/60 bg-background/35 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Active This Scope</p>
+                <p className="text-3xl font-semibold text-foreground tabular-nums">{activeEditors}</p>
+              </div>
+              <div className="rounded-full bg-primary/10 p-2.5">
+                <UserCheck className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-background/35 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Total Actions</p>
+                <p className="text-3xl font-semibold text-foreground tabular-nums">{totalActions.toLocaleString()}</p>
+              </div>
+              <div className="rounded-full bg-primary/10 p-2.5">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-background/35 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Avg Response Time</p>
+                <p className="text-3xl font-semibold text-foreground tabular-nums">{avgResponseDays != null ? `${Math.round(avgResponseDays)}d` : "–"}</p>
+              </div>
+              <div className="rounded-full bg-primary/10 p-2.5">
+                <Clock className="h-5 w-5 text-primary" />
+              </div>
             </div>
           </div>
         </div>
-
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Total Actions</p>
-              <p className="text-3xl font-bold text-foreground">{totalActions.toLocaleString()}</p>
-            </div>
-            <div className="rounded-full bg-blue-500/20 p-3">
-              <FileText className="h-6 w-6 text-blue-400" />
-            </div>
-          </div>
+        <div className="mt-3 rounded-lg border border-border/60 bg-background/35 px-4 py-2.5 text-sm text-foreground">
+          Coverage risk: {thinCoverageCategories.length} thin categories
+          <span className="mx-2 text-muted-foreground">·</span>
+          Top 3 editors: {concentrationTop3Pct.toFixed(1)}% of actions
+          <span className="mx-2 text-muted-foreground">·</span>
+          Inactive editors: {inactiveEditorList.length}
         </div>
-
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Avg Response Time</p>
-              <p className="text-3xl font-bold text-foreground">{avgResponseDays != null ? `${Math.round(avgResponseDays)}d` : "–"}</p>
-            </div>
-            <div className="rounded-full bg-amber-500/20 p-3">
-              <Clock className="h-6 w-6 text-amber-400" />
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div>
-            <p className="text-sm text-muted-foreground">Category Coverage</p>
-              <p className="text-3xl font-bold text-foreground">{categoryData.length}</p>
-            </div>
-            <div className="rounded-full bg-emerald-500/20 p-3">
-              <UserCheck className="h-6 w-6 text-emerald-400" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-border/70 bg-card/60 px-4 py-3 text-sm text-foreground">
-        Coverage risk: {thinCoverageCategories.length} thin categories
-        <span className="mx-2 text-muted-foreground">·</span>
-        Top 3 editors: {concentrationTop3Pct.toFixed(1)}% of actions
-        <span className="mx-2 text-muted-foreground">·</span>
-        Inactive editors: {inactiveEditorList.length}
       </div>
 
       <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Top Active Editors</h2>
+            <h2 className="text-lg font-semibold text-foreground">Editor Activity Over Time</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">How workload changes month to month.</p>
           </div>
+          <button onClick={downloadTrendReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+            <Download className="h-3.5 w-3.5" />
+            Download Reports
+          </button>
+        </div>
+        <div className="relative h-72 w-full">
+          <ReactECharts option={trendOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Shows overall editor activity momentum by month.</p>
+          <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">PRs Reviewed (Monthly)</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Monthly distinct PRs reviewed by each editor.</p>
+          </div>
+        </div>
+        <div className="relative h-72 w-full">
+          <ReactECharts option={reviewedTrendOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Counts distinct PRs with review events, not total comments.</p>
+          <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
+        <div className="mb-4">
+          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Top Active Editors</h2>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {topEditorCards.map((editor) => {
@@ -745,7 +1017,7 @@ export default function EditorsAnalyticsPage() {
             const repos = (reposByActor[editor.actor] || []).slice(0, 2);
             const isActive = editor.totalActions > 0;
             return (
-              <div key={editor.actor} className="rounded-lg border border-border/60 bg-muted/20 p-4">
+              <div key={editor.actor} className="rounded-lg border border-border/60 bg-background/35 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <img
@@ -755,7 +1027,14 @@ export default function EditorsAnalyticsPage() {
                       loading="lazy"
                     />
                     <div>
-                      <p className="text-sm font-semibold text-foreground">{editor.actor}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-foreground">{editor.actor}</p>
+                        {editor.actor === "abcoathup" && (
+                          <span className="rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-primary">
+                            Associate
+                          </span>
+                        )}
+                      </div>
                       <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${isActive ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-border bg-muted/40 text-muted-foreground"}`}>
                         {isActive ? "Active" : "Inactive"}
                       </span>
@@ -766,14 +1045,26 @@ export default function EditorsAnalyticsPage() {
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">actions</p>
                   </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+                  <div className="rounded-md border border-border/50 bg-muted/30 px-2 py-1">
+                    <p className="text-muted-foreground">Reviews</p>
+                    <p className="font-medium text-foreground tabular-nums">{editor.reviews}</p>
+                  </div>
+                  <div className="rounded-md border border-border/50 bg-muted/30 px-2 py-1">
+                    <p className="text-muted-foreground">PRs</p>
+                    <p className="font-medium text-foreground tabular-nums">{editor.prsTouched}</p>
+                  </div>
+                  <div className="rounded-md border border-border/50 bg-muted/30 px-2 py-1">
+                    <p className="text-muted-foreground">Resp.</p>
+                    <p className="font-medium text-foreground tabular-nums">{editor.medianResponseDays != null ? `${Math.round(editor.medianResponseDays)}d` : "–"}</p>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {categories.map((category) => (
                     <span key={`${editor.actor}-${category}`} className="rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] text-foreground/85">
                       {category}
                     </span>
                   ))}
-                </div>
-                <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {repos.map((repo) => (
                     <span key={`${editor.actor}-${repo}`} className="rounded-full border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground">
                       {repo}
@@ -789,115 +1080,117 @@ export default function EditorsAnalyticsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">Editor Activity Over Time</h2>
-        </div>
-        <div className="h-72 w-full">
-          <ReactECharts option={trendOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Category Coverage</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">Coverage map showing who owns which standards categories, including special roles.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Who covers what and where concentration risk appears.</p>
           </div>
+          <button onClick={downloadCoverageReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+            <Download className="h-3.5 w-3.5" />
+            Download Reports
+          </button>
         </div>
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Covered Categories</p>
-            <p className="mt-1 text-xl font-semibold text-foreground tabular-nums">{categoryData.length}</p>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Thin Coverage</p>
-            <p className="mt-1 text-xl font-semibold text-foreground tabular-nums">{thinCoverageCategories.length}</p>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Active Editors</p>
-            <p className="mt-1 text-xl font-semibold text-foreground tabular-nums">{activeEditors}</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div>
-            <p className="text-xs text-muted-foreground">Editor × Category matrix (coverage visibility and concentration risk).</p>
-            <div className="mt-2 h-80 w-full rounded-lg border border-border/60 bg-background/30 p-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <div className="relative h-80 w-full rounded-lg border border-border/60 bg-background/30 p-2">
               <ReactECharts option={coverageMatrixOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+              </div>
             </div>
           </div>
-          <div>
-            <div className="h-56 w-full">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-md border border-border/60 bg-background/35 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Covered</p>
+                <p className="text-lg font-semibold text-foreground tabular-nums">{categoryData.length}</p>
+              </div>
+              <div className="rounded-md border border-border/60 bg-background/35 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Thin</p>
+                <p className="text-lg font-semibold text-foreground tabular-nums">{thinCoverageCategories.length}</p>
+              </div>
+            </div>
+            <div className="rounded-md border border-border/60 bg-background/35 p-2.5 text-xs text-muted-foreground">
+              Thin categories: {thinCoverageCategories.length ? thinCoverageCategories.join(", ") : "None"}
+            </div>
+            <div className="relative h-56 w-full rounded-md border border-border/60 bg-background/30 p-1">
               <ReactECharts option={categoryOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+              </div>
             </div>
           </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Includes category-level ownership and concentration signals.</p>
+          <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
         </div>
       </div>
 
       {/* Editor Directory */}
       <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <h2 className="text-xl font-semibold text-foreground">
               Editor Activity Directory
               <span className="ml-2 text-sm font-normal text-muted-foreground">— {leaderboardLabel}</span>
             </h2>
-            <p className="text-xs text-muted-foreground">Official handles only. Metrics derived from normalized PR event timestamps.</p>
+            <p className="text-xs text-muted-foreground">Who is doing the work in this scope.</p>
           </div>
-          <button
-            onClick={downloadLeaderboardCSV}
-            disabled={exporting || leaderboard.length === 0 || !isPaidMember}
-            title={!isPaidMember ? 'Upgrade to Pro to download exports' : ''}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-              !isPaidMember
-                ? 'border-amber-600/30 bg-amber-500/10 text-amber-600/70 cursor-not-allowed opacity-60'
-                : 'border-border/60/50 bg-muted/40 text-foreground/85 hover:bg-muted/60 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed'
-            }`}
-          >
-            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {!isPaidMember ? 'Export (Pro+)' : 'Download Reports'}
-          </button>
-        </div>
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/30 p-2">
-          <span className="text-xs font-medium text-muted-foreground">Leaderboard scope</span>
-          <select
-            value={leaderboardMode}
-            onChange={(e) => setLeaderboardMode(e.target.value as "all" | "monthly" | "range")}
-            className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-            aria-label="Select leaderboard scope"
-          >
-            <option value="all">All-time</option>
-            <option value="monthly">Monthly</option>
-            <option value="range">Use dashboard range</option>
-          </select>
-          {leaderboardMode === "monthly" && (
-            <>
-              <select
-                value={leaderboardYear}
-                onChange={(e) => setLeaderboardYear(Number(e.target.value))}
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-                aria-label="Select leaderboard year"
-              >
-                {yearOptions.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={leaderboardMonth}
-                onChange={(e) => setLeaderboardMonth(Number(e.target.value))}
-                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-                aria-label="Select leaderboard month"
-              >
-                {MONTH_NAMES.map((month, index) => (
-                  <option key={month} value={index + 1}>
-                    {month}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={leaderboardMode}
+              onChange={(e) => setLeaderboardMode(e.target.value as "all" | "monthly" | "range")}
+              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              aria-label="Select leaderboard scope"
+            >
+              <option value="all">All-time</option>
+              <option value="monthly">Monthly</option>
+              <option value="range">Use dashboard range</option>
+            </select>
+            {leaderboardMode === "monthly" && (
+              <>
+                <select
+                  value={leaderboardYear}
+                  onChange={(e) => setLeaderboardYear(Number(e.target.value))}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+                  aria-label="Select leaderboard year"
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={leaderboardMonth}
+                  onChange={(e) => setLeaderboardMonth(Number(e.target.value))}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+                  aria-label="Select leaderboard month"
+                >
+                  {MONTH_NAMES.map((month, index) => (
+                    <option key={month} value={index + 1}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+            <button
+              onClick={downloadLeaderboardCSV}
+              disabled={exporting || leaderboard.length === 0 || !isPaidMember}
+              title={!isPaidMember ? 'Upgrade to Pro to download exports' : ''}
+              className={`flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors ${
+                !isPaidMember
+                  ? 'border-amber-600/30 bg-amber-500/10 text-amber-600/70 cursor-not-allowed opacity-60'
+                  : 'border-border/60 bg-muted/40 text-foreground/85 hover:bg-muted/60 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed'
+              }`}
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {!isPaidMember ? 'Export (Pro+)' : 'Download Reports'}
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -933,7 +1226,14 @@ export default function EditorsAnalyticsPage() {
                         loading="lazy"
                       />
                       <div>
-                        <p className="font-medium text-foreground/90">{editor.actor}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium text-foreground/90">{editor.actor}</p>
+                          {editor.actor === "abcoathup" && (
+                            <span className="rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-primary">
+                              Associate
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-muted-foreground">
                           {categories.length ? categories.slice(0, 3).join(", ") : "No categories"}
                         </p>
@@ -960,6 +1260,9 @@ export default function EditorsAnalyticsPage() {
                       <div className="h-full bg-purple-400" style={{ width: `${commentsPct}%` }} />
                       <div className="h-full bg-slate-500" style={{ width: `${otherPct}%` }} />
                     </div>
+                    <p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
+                      R {reviewsPct.toFixed(0)}% · C {commentsPct.toFixed(0)}%
+                    </p>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
@@ -985,31 +1288,189 @@ export default function EditorsAnalyticsPage() {
         </div>
       </div>
 
-      {/* Repo Distribution + Daily Activity */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Repo Distribution</h2>
+      {/* Daily + Repo */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Daily Editorial Activity</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">Which editors drove activity day by day.</p>
+            </div>
+            <button onClick={downloadDailyActivityReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+              <Download className="h-3.5 w-3.5" />
+              Download Reports
+            </button>
           </div>
-          <div className="h-64 w-full">
-            <ReactECharts option={repoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+          <div className="relative h-64 w-full">
+            <ReactECharts option={dailyActivityOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+            </div>
+          </div>
+          <AnalyticsAnnotation>
+            Stacked bars show total actions per day, split by editor.
+          </AnalyticsAnnotation>
+          <div className="mt-2 flex justify-end">
+            <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
           </div>
         </div>
 
-        <div className="lg:col-span-2 rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Daily Editorial Activity</h2>
+        <div className="rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Repo Distribution</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">Where editor work is concentrated.</p>
+            </div>
+            <button onClick={downloadRepoDistributionReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+              <Download className="h-3.5 w-3.5" />
+              Download Reports
+            </button>
           </div>
-          <div className="h-64 w-full">
-            <ReactECharts option={dailyActivityOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+          <div className="relative h-64 w-full">
+            <ReactECharts option={repoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+            </div>
           </div>
-          <AnalyticsAnnotation>
-            Daily editor actions across the selected time range. Higher bars indicate more editorial activity.
-          </AnalyticsAnnotation>
+          <div className="mt-2 flex justify-end">
+            <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+          </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
+      <div className="rounded-xl border border-border/70 bg-card/60 backdrop-blur-sm">
+        <div className="border-b border-border/70 px-5 py-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">Recent Activities</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Live feed</p>
+        </div>
+        <div className="border-b border-border/70 px-5 py-3">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            <select
+              value={activityRepoFilter}
+              onChange={(e) => {
+                setActivityRepoFilter(e.target.value);
+                setVisibleActivityCount(20);
+              }}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              aria-label="Filter activity by repository"
+            >
+              <option value="all">All Repositories</option>
+              {activityRepoOptions.map((repo) => (
+                <option key={repo} value={repo}>
+                  {repo}
+                </option>
+              ))}
+            </select>
+            <select
+              value={activityEditorFilter}
+              onChange={(e) => {
+                setActivityEditorFilter(e.target.value);
+                setVisibleActivityCount(20);
+              }}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              aria-label="Filter activity by editor"
+            >
+              <option value="all">All Editors</option>
+              {activityEditorOptions.map((editor) => (
+                <option key={editor} value={editor}>
+                  {editor}
+                </option>
+              ))}
+            </select>
+            <select
+              value={activityActionFilter}
+              onChange={(e) => {
+                setActivityActionFilter(e.target.value);
+                setVisibleActivityCount(20);
+              }}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              aria-label="Filter activity by action"
+            >
+              <option value="all">All Actions</option>
+              {activityActionOptions.map((action) => (
+                <option key={action} value={action}>
+                  {action}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          {visibleActivityFeed.map((row, idx) => {
+            const key = `${row.actor}-${row.prNumber}-${row.actedAt}-${row.eventType}-${idx}`;
+            const expanded = Boolean(expandedActivityKeys[key]);
+            const eventLabel = formatEventLabel(row.eventType);
+            return (
+              <div key={key} className="border-b border-border/60 px-5 py-4 last:border-b-0">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-xs font-medium ${getActionBadgeClass(row.eventType)}`}
+                      >
+                        {eventLabel}
+                      </span>
+                      <span className="rounded-md border border-border/60 bg-background/60 px-2 py-0.5 text-xs text-muted-foreground">
+                        {row.repoShort}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{row.actor}</span>
+                    </div>
+                    {row.title && (
+                      <p className="mt-2 text-base text-foreground/90">{row.title}</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground tabular-nums">{formatActivityTime(row.actedAt)}</p>
+                </div>
+                <button
+                  onClick={() => toggleActivityDetails(key)}
+                  className="mt-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                  Show Details
+                </button>
+                {expanded && (
+                  <div className="mt-2 rounded-md border border-border/60 bg-background/40 px-3 py-2 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span>Type: {row.eventType}</span>
+                      <span>PR:</span>
+                      <Link href={`/pr/${row.repoShort}/${row.prNumber}`} className="text-primary hover:underline">
+                        #{row.prNumber}
+                      </Link>
+                      {row.eventUrl && (
+                        <a
+                          href={row.eventUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          GitHub event
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {visibleActivityFeed.length === 0 && (
+            <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+              No editor actions found for current filters.
+            </div>
+          )}
+        </div>
+        {hasMoreActivities && (
+          <div className="border-t border-border/60 px-5 py-3">
+            <button
+              onClick={() => setVisibleActivityCount((count) => count + 20)}
+              className="inline-flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground/85 hover:bg-muted/60"
+            >
+              Show more
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border/60 bg-muted/30 p-3.5 backdrop-blur-sm">
         <div className="flex flex-wrap items-center gap-2">
           <details className="group">
             <summary className="cursor-pointer rounded-md border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground/85 hover:bg-muted/60">
@@ -1020,14 +1481,6 @@ export default function EditorsAnalyticsPage() {
               Median response is measured from PR creation to first editor action in selected scope.
             </div>
           </details>
-          <button
-            onClick={downloadLeaderboardCSV}
-            disabled={exporting || leaderboard.length === 0 || !isPaidMember}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-3 py-1.5 text-xs text-foreground/85 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {exporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-            Download current scope
-          </button>
           <span className="rounded-md border border-border bg-background/60 px-2 py-1 text-xs text-muted-foreground">
             Scope: {leaderboardLabel}
           </span>

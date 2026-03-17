@@ -1,17 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
-import { Loader2, Users, Clock, MessageSquare, AlertCircle, Search, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { Loader2, Users, Clock, MessageSquare, AlertCircle, Search, ChevronLeft, ChevronRight, ChevronDown, Download, LayoutGrid, BarChart3 } from "lucide-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
-import { ReviewerFocusMatrix } from "@/components/analytics/ReviewerFocusMatrix";
-import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip";
 import {
   ChartContainer,
   ChartTooltip,
@@ -35,6 +29,7 @@ interface ReviewerLeaderboardRow {
   totalReviews: number;
   prsTouched: number;
   medianResponseDays: number | null;
+  updatedAt?: string | null;
 }
 
 interface CyclesData {
@@ -54,11 +49,46 @@ interface MonthlyTrendPoint {
   [actor: string]: string | number;
 }
 
-const repoColors: Record<string, string> = {
-  "ethereum/EIPs": "#22d3ee",
-  "ethereum/ERCs": "#60a5fa",
-  "ethereum/RIPs": "#94a3b8",
-};
+interface DailyActivityStackedRow {
+  date: string;
+  actor: string;
+  count: number;
+}
+
+interface ReviewerActionDetailRow {
+  actor: string;
+  eventType: string;
+  actedAt: string;
+  prNumber: number;
+  repoShort: string;
+  title: string;
+  eventUrl: string | null;
+}
+
+const OFFICIAL_REVIEWERS = [
+  "bomanaps",
+  "Marchhill",
+  "SkandaBhat",
+  "advaita-saha",
+  "nalepae",
+  "daniellehrner",
+];
+
+function getGitHubAvatarUrl(handle: string): string {
+  return `https://github.com/${handle}.png?size=80`;
+}
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<string | number>>) {
+  const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+  const csv = [headers.map(escape).join(","), ...rows.map((row) => row.map(escape).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function getTimeWindow(timeRange: string): { from: string | undefined; to: string | undefined } {
   const now = new Date();
@@ -100,8 +130,11 @@ export default function ReviewersAnalyticsPage() {
   
   const [leaderboard, setLeaderboard] = useState<ReviewerLeaderboardRow[]>([]);
   const [monthlyTrend, setMonthlyTrend] = useState<MonthlyTrendPoint[]>([]);
+  const [monthlyReviewedTrend, setMonthlyReviewedTrend] = useState<MonthlyTrendPoint[]>([]);
   const [cyclesData, setCyclesData] = useState<CyclesData[]>([]);
   const [repoDistribution, setRepoDistribution] = useState<RepoDistribution[]>([]);
+  const [dailyActivityStacked, setDailyActivityStacked] = useState<DailyActivityStackedRow[]>([]);
+  const [reviewerActionDetails, setReviewerActionDetails] = useState<ReviewerActionDetailRow[]>([]);
   
   // Leaderboard pagination and filtering
   const [searchQuery, setSearchQuery] = useState("");
@@ -109,10 +142,12 @@ export default function ReviewersAnalyticsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  // Focus matrix pagination and filtering
-  const [focusMatrixSearch, setFocusMatrixSearch] = useState("");
-  const [focusMatrixSort, setFocusMatrixSort] = useState<"name" | "total">("name");
-  const [focusMatrixPage, setFocusMatrixPage] = useState(1);
+  const [repoDistributionView, setRepoDistributionView] = useState<"cards" | "graph">("cards");
+  const [activityRepoFilter, setActivityRepoFilter] = useState<string>("all");
+  const [activityEditorFilter, setActivityEditorFilter] = useState<string>("all");
+  const [activityActionFilter, setActivityActionFilter] = useState<string>("all");
+  const [visibleActivityCount, setVisibleActivityCount] = useState<number>(20);
+  const [expandedActivityKeys, setExpandedActivityKeys] = useState<Record<string, boolean>>({});
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
   const { from, to } = getTimeWindow(timeRange);
@@ -124,7 +159,7 @@ export default function ReviewersAnalyticsPage() {
       try {
         const months = timeRange === "7d" ? 3 : timeRange === "30d" ? 6 : timeRange === "90d" ? 12 : 24;
         
-        const [leaderboardData, trendData, cyclesDataRes, repoData] = await Promise.all([
+        const [leaderboardData, trendData, reviewedTrendData, cyclesDataRes, repoData, dailyData, actionDetails] = await Promise.all([
           client.analytics.getReviewersLeaderboard({
             repo: repoParam,
             from,
@@ -132,6 +167,10 @@ export default function ReviewersAnalyticsPage() {
             limit: 30,
           }),
           client.analytics.getReviewersMonthlyTrend({
+            repo: repoParam,
+            months,
+          }),
+          client.analytics.getReviewersMonthlyReviewedPRs({
             repo: repoParam,
             months,
           }),
@@ -143,12 +182,26 @@ export default function ReviewersAnalyticsPage() {
             from,
             to,
           }),
+          client.analytics.getReviewerDailyActivityStacked({
+            repo: repoParam,
+            from,
+            to,
+          }),
+          client.analytics.getReviewerActionDetails({
+            repo: repoParam,
+            from,
+            to,
+            limit: 1200,
+          }),
         ]);
 
-        setLeaderboard(leaderboardData);
+        setLeaderboard(leaderboardData.filter((row) => OFFICIAL_REVIEWERS.includes(row.actor)));
         setMonthlyTrend(trendData);
+        setMonthlyReviewedTrend(reviewedTrendData);
         setCyclesData(cyclesDataRes);
-        setRepoDistribution(repoData);
+        setRepoDistribution(repoData.filter((row) => OFFICIAL_REVIEWERS.includes(row.actor)));
+        setDailyActivityStacked(dailyData);
+        setReviewerActionDetails(actionDetails);
         setDataUpdatedAt(new Date());
       } catch (error) {
         console.error("Failed to fetch reviewers analytics:", error);
@@ -161,18 +214,55 @@ export default function ReviewersAnalyticsPage() {
     fetchData();
   }, [timeRange, repoFilter, repoParam, from, to]);
 
-  // Aggregate repo distribution
-  const repoBars = useMemo(() => {
-    const totals: Record<string, number> = {};
-    repoDistribution.forEach(r => {
-      const repoName = r.repo.split('/')[1] || r.repo;
-      totals[repoName] = (totals[repoName] || 0) + r.count;
+  const activityRepoOptions = useMemo(() => {
+    return Array.from(new Set(reviewerActionDetails.map((row) => row.repoShort))).sort();
+  }, [reviewerActionDetails]);
+
+  const activityEditorOptions = useMemo(() => {
+    return Array.from(new Set(reviewerActionDetails.map((row) => row.actor))).sort((a, b) => a.localeCompare(b));
+  }, [reviewerActionDetails]);
+
+  const activityActionOptions = useMemo(() => {
+    return Array.from(new Set(reviewerActionDetails.map((row) => row.eventType.toLowerCase()))).sort((a, b) => a.localeCompare(b));
+  }, [reviewerActionDetails]);
+
+  const filteredActivityFeed = useMemo(() => {
+    return reviewerActionDetails.filter((row) => {
+      const repoOk = activityRepoFilter === "all" || row.repoShort === activityRepoFilter;
+      const editorOk = activityEditorFilter === "all" || row.actor === activityEditorFilter;
+      const actionOk = activityActionFilter === "all" || row.eventType.toLowerCase() === activityActionFilter;
+      return repoOk && editorOk && actionOk;
     });
-    return [
-      { repo: "EIPs", count: totals["EIPs"] || 0 },
-      { repo: "ERCs", count: totals["ERCs"] || 0 },
-      { repo: "RIPs", count: totals["RIPs"] || 0 },
-    ];
+  }, [reviewerActionDetails, activityRepoFilter, activityEditorFilter, activityActionFilter]);
+
+  const visibleActivityFeed = useMemo(
+    () => filteredActivityFeed.slice(0, visibleActivityCount),
+    [filteredActivityFeed, visibleActivityCount]
+  );
+
+  const hasMoreActivities = visibleActivityCount < filteredActivityFeed.length;
+
+  const reviewerRepoStackedData = useMemo(() => {
+    const repos = ["eips", "ercs", "rips"] as const;
+    const rows = repos.map((repo) => {
+      const displayRepo = repo === "eips" ? "EIPs" : repo === "ercs" ? "ERCs" : "RIPs";
+      const entry: Record<string, string | number> = { repo: displayRepo };
+      OFFICIAL_REVIEWERS.forEach((reviewer) => {
+        entry[reviewer] = 0;
+      });
+      return entry;
+    });
+
+    repoDistribution.forEach((row) => {
+      const repoName = (row.repo.split("/")[1] || row.repo || "").toLowerCase();
+      const targetRepo = repoName === "eips" ? "EIPs" : repoName === "ercs" ? "ERCs" : repoName === "rips" ? "RIPs" : null;
+      const target = rows.find((r) => r.repo === targetRepo);
+      if (!target) return;
+      if (!OFFICIAL_REVIEWERS.includes(row.actor)) return;
+      target[row.actor] = Number(target[row.actor] || 0) + row.count;
+    });
+
+    return rows;
   }, [repoDistribution]);
 
   // Get unique actors from monthly trend for legend
@@ -189,9 +279,137 @@ export default function ReviewersAnalyticsPage() {
     return Array.from(actors).slice(0, 8); // Limit to 8 for readability
   }, [monthlyTrend]);
 
+  const reviewedTrendActors = useMemo(() => {
+    if (monthlyReviewedTrend.length === 0) return [];
+    const actors = new Set<string>();
+    monthlyReviewedTrend.forEach((point) => {
+      Object.keys(point).forEach((key) => {
+        if (key !== "month" && typeof point[key] === "number") {
+          actors.add(key);
+        }
+      });
+    });
+    return Array.from(actors).slice(0, 8);
+  }, [monthlyReviewedTrend]);
+
+  const activeReviewers = useMemo(
+    () => leaderboard.filter((row) => row.totalReviews > 0).length,
+    [leaderboard]
+  );
+
+  const reviewerTotals = useMemo(
+    () => leaderboard.reduce((sum, row) => sum + row.totalReviews, 0),
+    [leaderboard]
+  );
+
+  const dailyStackedChartData = useMemo(() => {
+    const dates = Array.from(new Set(dailyActivityStacked.map((row) => row.date))).sort();
+    const actors = Array.from(new Set(dailyActivityStacked.map((row) => row.actor))).sort((a, b) => a.localeCompare(b));
+    return {
+      actors,
+      rows: dates.map((date) => {
+        const entry: Record<string, string | number> = { date };
+        actors.forEach((actor) => {
+          const hit = dailyActivityStacked.find((row) => row.date === date && row.actor === actor);
+          entry[actor] = hit?.count ?? 0;
+        });
+        return entry;
+      }),
+    };
+  }, [dailyActivityStacked]);
+
+  const reviewerRepoCards = useMemo(() => {
+    const byReviewer: Record<string, { eips: number; ercs: number; rips: number; total: number }> = {};
+    OFFICIAL_REVIEWERS.forEach((reviewer) => {
+      byReviewer[reviewer] = { eips: 0, ercs: 0, rips: 0, total: 0 };
+    });
+
+    repoDistribution.forEach((row) => {
+      const reviewer = row.actor;
+      if (!byReviewer[reviewer]) return;
+      const repoName = (row.repo.split("/")[1] || row.repo || "").toLowerCase();
+      if (repoName === "eips") byReviewer[reviewer]!.eips += row.count;
+      else if (repoName === "ercs") byReviewer[reviewer]!.ercs += row.count;
+      else if (repoName === "rips") byReviewer[reviewer]!.rips += row.count;
+      byReviewer[reviewer]!.total += row.count;
+    });
+
+    return OFFICIAL_REVIEWERS.map((reviewer) => ({
+      actor: reviewer,
+      ...byReviewer[reviewer],
+    }));
+  }, [repoDistribution]);
+
+  const formatEventLabel = (eventType: string) => {
+    const normalized = eventType.toLowerCase();
+    if (normalized === "reviewed") return "reviewed";
+    if (normalized === "commented") return "commented";
+    if (normalized === "opened") return "opened PR";
+    if (normalized === "closed") return "closed PR";
+    if (normalized === "committed") return "committed";
+    if (normalized === "merged") return "merged PR";
+    return eventType;
+  };
+
+  const getActionBadgeClass = (eventType: string) => {
+    const normalized = eventType.toLowerCase();
+    if (normalized === "reviewed") return "border-emerald-500/35 bg-emerald-500/12 text-emerald-300";
+    if (normalized === "commented") return "border-cyan-500/35 bg-cyan-500/12 text-cyan-300";
+    if (normalized === "committed") return "border-blue-500/35 bg-blue-500/12 text-blue-300";
+    if (normalized === "opened") return "border-violet-500/35 bg-violet-500/12 text-violet-300";
+    if (normalized === "closed") return "border-rose-500/35 bg-rose-500/12 text-rose-300";
+    if (normalized === "merged") return "border-amber-500/35 bg-amber-500/12 text-amber-300";
+    if (normalized === "reopened") return "border-orange-500/35 bg-orange-500/12 text-orange-300";
+    return "border-border/60 bg-muted/40 text-foreground/85";
+  };
+
+  const formatActivityTime = (actedAt: string) => {
+    const parsed = new Date(actedAt.includes("T") ? actedAt : `${actedAt.replace(" ", "T")}Z`);
+    if (Number.isNaN(parsed.getTime())) return actedAt;
+    return parsed.toLocaleString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "UTC",
+    });
+  };
+
+  const downloadTrendReport = useCallback(() => {
+    const headers = ["Month", ...trendActors];
+    const rows = monthlyTrend.map((row) => [row.month, ...trendActors.map((actor) => Number(row[actor] || 0))]);
+    downloadCsv(`reviewers-activity-over-time-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [monthlyTrend, trendActors]);
+
+  const downloadCyclesReport = useCallback(() => {
+    const headers = ["Reviewer Cycles", "PR Count"];
+    const rows = cyclesData.map((row) => [row.cycles, row.count]);
+    downloadCsv(`reviewers-cycles-per-pr-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [cyclesData]);
+
+  const downloadReviewedMonthlyReport = useCallback(() => {
+    const headers = ["Month", ...reviewedTrendActors];
+    const rows = monthlyReviewedTrend.map((row) => [row.month, ...reviewedTrendActors.map((actor) => Number(row[actor] || 0))]);
+    downloadCsv(`reviewers-prs-reviewed-monthly-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [monthlyReviewedTrend, reviewedTrendActors]);
+
+  const downloadDailyActivityReport = useCallback(() => {
+    const headers = ["Date", ...dailyStackedChartData.actors];
+    const rows = dailyStackedChartData.rows.map((row) => [row.date as string, ...dailyStackedChartData.actors.map((actor) => Number(row[actor] || 0))]);
+    downloadCsv(`reviewers-daily-activity-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [dailyStackedChartData]);
+
+  const downloadRepoDistributionReport = useCallback(() => {
+    const headers = ["Reviewer", "EIPs", "ERCs", "RIPs", "Total"];
+    const rows = reviewerRepoCards.map((row) => [row.actor, row.eips, row.ercs, row.rips, row.total]);
+    downloadCsv(`reviewers-repo-distribution-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+  }, [reviewerRepoCards]);
+
   // Filter and sort leaderboard
   const filteredAndSortedLeaderboard = useMemo(() => {
-    let filtered = leaderboard.filter((reviewer) =>
+    const filtered = leaderboard.filter((reviewer) =>
       reviewer.actor.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -286,12 +504,12 @@ export default function ReviewersAnalyticsPage() {
       )}
 
       {/* Hero KPIs */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Total Reviewers</p>
-              <p className="text-3xl font-bold text-foreground">{leaderboard.length}</p>
+              <p className="text-sm text-muted-foreground">Official Reviewers</p>
+              <p className="text-3xl font-bold text-foreground">{OFFICIAL_REVIEWERS.length}</p>
             </div>
             <div className="rounded-full bg-emerald-500/20 p-3">
               <Users className="h-6 w-6 text-emerald-400" />
@@ -302,13 +520,27 @@ export default function ReviewersAnalyticsPage() {
         <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Total Reviews</p>
+              <p className="text-sm text-muted-foreground">Active This Scope</p>
               <p className="text-3xl font-bold text-foreground">
-                {leaderboard.reduce((sum, r) => sum + r.totalReviews, 0).toLocaleString()}
+                {activeReviewers}
               </p>
             </div>
             <div className="rounded-full bg-blue-500/20 p-3">
               <MessageSquare className="h-6 w-6 text-blue-400" />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">Total Reviewer Actions</p>
+              <p className="text-3xl font-bold text-foreground">
+                {reviewerTotals.toLocaleString()}
+              </p>
+            </div>
+            <div className="rounded-full bg-amber-500/20 p-3">
+              <Clock className="h-6 w-6 text-amber-400" />
             </div>
           </div>
         </div>
@@ -328,8 +560,8 @@ export default function ReviewersAnalyticsPage() {
                 })()}
               </p>
             </div>
-            <div className="rounded-full bg-amber-500/20 p-3">
-              <Clock className="h-6 w-6 text-amber-400" />
+            <div className="rounded-full bg-violet-500/20 p-3">
+              <Clock className="h-6 w-6 text-violet-400" />
             </div>
           </div>
         </div>
@@ -387,7 +619,15 @@ export default function ReviewersAnalyticsPage() {
                   >
                     <td className="py-3 px-4 text-sm text-muted-foreground">#{actualRank}</td>
                     <td className="py-3 px-4">
-                      <span className="font-medium text-foreground/90">{reviewer.actor}</span>
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={getGitHubAvatarUrl(reviewer.actor)}
+                          alt={`${reviewer.actor} avatar`}
+                          className="h-7 w-7 rounded-full border border-border object-cover"
+                          loading="lazy"
+                        />
+                        <span className="font-medium text-foreground/90">{reviewer.actor}</span>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-foreground/85">
                       {reviewer.totalReviews.toLocaleString()}
@@ -447,66 +687,17 @@ export default function ReviewersAnalyticsPage() {
         )}
       </div>
 
-      {/* Reviewer Domain Focus */}
-      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold text-foreground">Reviewer Domain Focus</h2>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button className="inline-flex items-center justify-center rounded-full w-5 h-5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                  <Info className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-xs">
-                <p className="font-medium mb-1">Repository specialization analysis</p>
-                <p className="text-xs text-muted-foreground">Shows which reviewers specialize in different repository types (EIPs, ERCs, RIPs). Each card displays review distribution and identifies the reviewer's primary focus area.</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <LastUpdated timestamp={dataUpdatedAt} />
-        </div>
-
-        {/* Filters and Search */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1 sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search reviewer..."
-              value={focusMatrixSearch}
-              onChange={(e) => setFocusMatrixSearch(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background pl-9 pr-4 py-2 text-sm placeholder-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-
-          <select
-            value={focusMatrixSort}
-            onChange={(e) => setFocusMatrixSort(e.target.value as "name" | "total")}
-            className="rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option value="name">Sort by Name (A-Z)</option>
-            <option value="total">Sort by Total Reviews (High to Low)</option>
-          </select>
-        </div>
-
-        <ReviewerFocusMatrix 
-          data={repoDistribution}
-          searchQuery={focusMatrixSearch}
-          sortBy={focusMatrixSort}
-          currentPage={focusMatrixPage}
-          onPageChange={setFocusMatrixPage}
-          itemsPerPage={5}
-        />
-        <AnalyticsAnnotation>
-          Repository focus patterns highlight where reviewers concentrate their efforts across EIPs, ERCs, and RIPs.
-        </AnalyticsAnnotation>
-      </div>
-
       {/* Monthly Trend + Cycles per PR */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Review Activity Over Time</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-foreground">Review Activity Over Time</h2>
+            <button onClick={downloadTrendReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+              <Download className="h-3.5 w-3.5" />
+              Download Reports
+            </button>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">All reviewer actions per month; each line is one reviewer.</p>
           <ChartContainer
             config={Object.fromEntries(
               trendActors.map((actor, idx) => [
@@ -519,19 +710,119 @@ export default function ReviewersAnalyticsPage() {
             )}
             className="h-72 w-full"
           >
+            <div className="relative h-full w-full">
+              <ResponsiveContainer>
+                <LineChart data={monthlyTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="month" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Legend />
+                  {trendActors.map((actor, idx) => (
+                    <Line
+                      key={actor}
+                      type="monotone"
+                      dataKey={actor}
+                      stroke={`hsl(${(idx * 360) / trendActors.length}, 70%, 50%)`}
+                      strokeWidth={2}
+                      dot={false}
+                      name={actor}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+              </div>
+            </div>
+          </ChartContainer>
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Shows trend direction and contributor concentration over time.</p>
+            <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-foreground">Review Cycles per PR</h2>
+            <button onClick={downloadCyclesReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+              <Download className="h-3.5 w-3.5" />
+              Download Reports
+            </button>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">How many reviewers typically touch each PR before decision.</p>
+          <ChartContainer
+            config={{
+              count: { label: "PRs", color: "#22c55e" },
+            }}
+            className="h-72 w-full"
+          >
+            <div className="relative h-full w-full">
+              <ResponsiveContainer>
+                <BarChart data={cyclesData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="cycles" stroke="#94a3b8" label={{ value: "Number of Reviewers", position: "insideBottom", offset: -5 }} />
+                  <YAxis stroke="#94a3b8" />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#22c55e">
+                    {cyclesData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.cycles <= 2 ? "#22c55e" : entry.cycles <= 4 ? "#eab308" : "#ef4444"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+              </div>
+            </div>
+          </ChartContainer>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Distribution of how many reviewers typically review each PR
+          </p>
+          <div className="mt-2 flex justify-end">
+            <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-foreground">PRs Reviewed (Monthly)</h2>
+          <button onClick={downloadReviewedMonthlyReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+            <Download className="h-3.5 w-3.5" />
+            Download Reports
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">Monthly distinct PRs reviewed by each official reviewer.</p>
+        <ChartContainer
+          config={Object.fromEntries(
+            reviewedTrendActors.map((actor, idx) => [
+              actor,
+              {
+                label: actor,
+                color: `hsl(${(idx * 360) / Math.max(reviewedTrendActors.length, 1)}, 70%, 50%)`,
+              },
+            ])
+          )}
+          className="h-72 w-full"
+        >
+          <div className="relative h-full w-full">
             <ResponsiveContainer>
-              <LineChart data={monthlyTrend}>
+              <LineChart data={monthlyReviewedTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                 <XAxis dataKey="month" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Legend />
-                {trendActors.map((actor, idx) => (
+                {reviewedTrendActors.map((actor, idx) => (
                   <Line
                     key={actor}
                     type="monotone"
                     dataKey={actor}
-                    stroke={`hsl(${(idx * 360) / trendActors.length}, 70%, 50%)`}
+                    stroke={`hsl(${(idx * 360) / Math.max(reviewedTrendActors.length, 1)}, 70%, 50%)`}
                     strokeWidth={2}
                     dot={false}
                     name={actor}
@@ -539,72 +830,320 @@ export default function ReviewersAnalyticsPage() {
                 ))}
               </LineChart>
             </ResponsiveContainer>
-          </ChartContainer>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+            </div>
+          </div>
+        </ChartContainer>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Counts unique PRs, not total review events.</p>
+          <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
         </div>
+      </div>
 
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Review Cycles per PR</h2>
-          <ChartContainer
-            config={{
-              count: { label: "PRs", color: "#22c55e" },
-            }}
-            className="h-72 w-full"
-          >
+      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-foreground">Daily Reviewer Activity</h2>
+          <button onClick={downloadDailyActivityReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+            <Download className="h-3.5 w-3.5" />
+            Download Reports
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">Stacked daily actions across official reviewers.</p>
+        <ChartContainer
+          config={Object.fromEntries(
+            dailyStackedChartData.actors.map((actor, idx) => [
+              actor,
+              {
+                label: actor,
+                color: `hsl(${(idx * 360) / Math.max(dailyStackedChartData.actors.length, 1)}, 70%, 50%)`,
+              },
+            ])
+          )}
+          className="h-72 w-full"
+        >
+          <div className="relative h-full w-full">
             <ResponsiveContainer>
-              <BarChart data={cyclesData}>
+              <BarChart data={dailyStackedChartData.rows}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="cycles" stroke="#94a3b8" label={{ value: "Number of Reviewers", position: "insideBottom", offset: -5 }} />
+                <XAxis dataKey="date" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]} fill="#22c55e">
-                  {cyclesData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.cycles <= 2 ? "#22c55e" : entry.cycles <= 4 ? "#eab308" : "#ef4444"}
-                    />
-                  ))}
-                </Bar>
+                <Legend />
+                {dailyStackedChartData.actors.map((actor, idx) => (
+                  <Bar
+                    key={actor}
+                    dataKey={actor}
+                    stackId="reviewers"
+                    fill={`hsl(${(idx * 360) / Math.max(dailyStackedChartData.actors.length, 1)}, 70%, 50%)`}
+                  />
+                ))}
               </BarChart>
             </ResponsiveContainer>
-          </ChartContainer>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Distribution of how many reviewers typically review each PR
-          </p>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+            </div>
+          </div>
+        </ChartContainer>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Useful for spotting bursts, pauses, and reviewer load balance by day.</p>
+          <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
         </div>
       </div>
 
       {/* Top Reviewers by Repo */}
       <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <h2 className="mb-4 text-lg font-semibold text-foreground">Reviewers by Repository</h2>
-        <ChartContainer
-          config={Object.fromEntries(
-            repoBars.map((r) => [
-              r.repo,
-              {
-                label: r.repo,
-                color: repoColors[`ethereum/${r.repo}`] || "#94a3b8",
-              },
-            ])
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-foreground">Reviewers Repository Distribution</h2>
+          <div className="inline-flex rounded-md border border-border/70 bg-muted/30 p-1">
+            <button
+              onClick={() => setRepoDistributionView("cards")}
+              aria-label="Cards view"
+              title="Cards view"
+              className={`rounded p-1.5 transition-colors ${repoDistributionView === "cards" ? "bg-primary/20 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setRepoDistributionView("graph")}
+              aria-label="Graph view"
+              title="Graph view"
+              className={`rounded p-1.5 transition-colors ${repoDistributionView === "graph" ? "bg-primary/20 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <BarChart3 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs text-muted-foreground">Breakdown of reviewer contributions by repository family.</p>
+          <button onClick={downloadRepoDistributionReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
+            <Download className="h-3.5 w-3.5" />
+            Download Reports
+          </button>
+        </div>
+
+        {repoDistributionView === "cards" ? (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            {reviewerRepoCards.map((card) => {
+              const total = card.total || 0;
+              const eipsPct = total > 0 ? Math.round((card.eips / total) * 100) : 0;
+              const ercsPct = total > 0 ? Math.round((card.ercs / total) * 100) : 0;
+              const ripsPct = total > 0 ? Math.round((card.rips / total) * 100) : 0;
+              return (
+                <div key={card.actor} className="rounded-lg border border-border/60 bg-background/35 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={getGitHubAvatarUrl(card.actor)}
+                        alt={`${card.actor} avatar`}
+                        className="h-9 w-9 rounded-full border border-border object-cover"
+                        loading="lazy"
+                      />
+                      <p className="text-sm font-semibold text-foreground">{card.actor}</p>
+                    </div>
+                    <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      {total} total
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="text-foreground">EIPs</span>
+                        <span className="text-muted-foreground">{eipsPct}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted/40">
+                        <div className="h-2 rounded-full bg-cyan-400" style={{ width: `${eipsPct}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="text-foreground">ERCs</span>
+                        <span className="text-muted-foreground">{ercsPct}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted/40">
+                        <div className="h-2 rounded-full bg-emerald-400" style={{ width: `${ercsPct}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="text-foreground">RIPs</span>
+                        <span className="text-muted-foreground">{ripsPct}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted/40">
+                        <div className="h-2 rounded-full bg-rose-400" style={{ width: `${ripsPct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <ChartContainer
+            config={Object.fromEntries(
+              OFFICIAL_REVIEWERS.map((reviewer, idx) => [
+                reviewer,
+                {
+                  label: reviewer,
+                  color: `hsl(${(idx * 360) / Math.max(OFFICIAL_REVIEWERS.length, 1)}, 70%, 55%)`,
+                },
+              ])
+            )}
+            className="h-64 w-full"
+          >
+            <div className="relative h-full w-full">
+              <ResponsiveContainer>
+                <BarChart data={reviewerRepoStackedData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="repo" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Legend />
+                  {OFFICIAL_REVIEWERS.map((reviewer, idx) => (
+                    <Bar
+                      key={reviewer}
+                      dataKey={reviewer}
+                      stackId="reviewers"
+                      fill={`hsl(${(idx * 360) / Math.max(OFFICIAL_REVIEWERS.length, 1)}, 70%, 55%)`}
+                      radius={[2, 2, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+              </div>
+            </div>
+          </ChartContainer>
+        )}
+        <div className="mt-3 flex justify-end">
+          <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border/70 bg-card/60 backdrop-blur-sm">
+        <div className="border-b border-border/70 px-5 py-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">Recent Activities</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Live feed</p>
+        </div>
+        <div className="border-b border-border/70 px-5 py-3">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            <select
+              value={activityRepoFilter}
+              onChange={(e) => {
+                setActivityRepoFilter(e.target.value);
+                setVisibleActivityCount(20);
+              }}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              aria-label="Filter activity by repository"
+            >
+              <option value="all">All Repositories</option>
+              {activityRepoOptions.map((repo) => (
+                <option key={repo} value={repo}>
+                  {repo}
+                </option>
+              ))}
+            </select>
+            <select
+              value={activityEditorFilter}
+              onChange={(e) => {
+                setActivityEditorFilter(e.target.value);
+                setVisibleActivityCount(20);
+              }}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              aria-label="Filter activity by reviewer"
+            >
+              <option value="all">All Reviewers</option>
+              {activityEditorOptions.map((reviewer) => (
+                <option key={reviewer} value={reviewer}>
+                  {reviewer}
+                </option>
+              ))}
+            </select>
+            <select
+              value={activityActionFilter}
+              onChange={(e) => {
+                setActivityActionFilter(e.target.value);
+                setVisibleActivityCount(20);
+              }}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
+              aria-label="Filter activity by action"
+            >
+              <option value="all">All Actions</option>
+              {activityActionOptions.map((action) => (
+                <option key={action} value={action}>
+                  {action}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          {visibleActivityFeed.map((row, idx) => {
+            const key = `${row.actor}-${row.prNumber}-${row.actedAt}-${row.eventType}-${idx}`;
+            const expanded = Boolean(expandedActivityKeys[key]);
+            const eventLabel = formatEventLabel(row.eventType);
+            return (
+              <div key={key} className="border-b border-border/60 px-5 py-4 last:border-b-0">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${getActionBadgeClass(row.eventType)}`}>
+                        {eventLabel}
+                      </span>
+                      <span className="rounded-md border border-border/60 bg-background/60 px-2 py-0.5 text-xs text-muted-foreground">
+                        {row.repoShort}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{row.actor}</span>
+                    </div>
+                    {row.title && (
+                      <p className="mt-2 text-base text-foreground/90">{row.title}</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground tabular-nums">{formatActivityTime(row.actedAt)}</p>
+                </div>
+                <button
+                  onClick={() => setExpandedActivityKeys((prev) => ({ ...prev, [key]: !prev[key] }))}
+                  className="mt-2 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                  Show Details
+                </button>
+                {expanded && (
+                  <div className="mt-2 rounded-md border border-border/60 bg-background/40 px-3 py-2 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span>Type: {row.eventType}</span>
+                      <span>PR:</span>
+                      <Link href={`/pr/${row.repoShort}/${row.prNumber}`} className="text-primary hover:underline">
+                        #{row.prNumber}
+                      </Link>
+                      {row.eventUrl && (
+                        <a href={row.eventUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                          GitHub event
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {visibleActivityFeed.length === 0 && (
+            <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+              No reviewer actions found for current filters.
+            </div>
           )}
-          className="h-64 w-full"
-        >
-          <ResponsiveContainer>
-            <BarChart data={repoBars}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="repo" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {repoBars.map((entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={repoColors[`ethereum/${entry.repo}`] || "#94a3b8"}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartContainer>
+        </div>
+        {hasMoreActivities && (
+          <div className="border-t border-border/60 px-5 py-3">
+            <button
+              onClick={() => setVisibleActivityCount((count) => count + 20)}
+              className="inline-flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground/85 hover:bg-muted/60"
+            >
+              Show more
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
