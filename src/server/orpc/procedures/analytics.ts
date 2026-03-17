@@ -4101,23 +4101,45 @@ export const analyticsProcedures = {
         prisma.$queryRawUnsafe<Array<{
           total_authors: bigint;
           new_authors: bigint;
+          repeat_authors: bigint;
           prs_created: bigint;
+          authors_with_merged: bigint;
         }>>(
           `
-          WITH pr_authors AS (
-            SELECT DISTINCT pr.author, pr.created_at
+          WITH scoped_prs AS (
+            SELECT pr.author, pr.created_at, pr.merged_at
             FROM pull_requests pr
             JOIN repositories r ON pr.repository_id = r.id
             WHERE pr.author IS NOT NULL
+              AND LOWER(pr.author) NOT LIKE '%bot%'
               AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
               AND ($2::text IS NULL OR pr.created_at >= $2::timestamp)
               AND ($3::text IS NULL OR pr.created_at <= $3::timestamp)
+          ),
+          author_first_seen AS (
+            SELECT pr.author, MIN(pr.created_at) AS first_created_at
+            FROM pull_requests pr
+            JOIN repositories r ON pr.repository_id = r.id
+            WHERE pr.author IS NOT NULL
+              AND LOWER(pr.author) NOT LIKE '%bot%'
+              AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            GROUP BY pr.author
+          ),
+          scoped_authors AS (
+            SELECT DISTINCT author FROM scoped_prs
           )
           SELECT
-            COUNT(DISTINCT author)::bigint as total_authors,
-            COUNT(DISTINCT author) FILTER (WHERE created_at >= $4::timestamp)::bigint as new_authors,
-            COUNT(*)::bigint as prs_created
-          FROM pr_authors
+            (SELECT COUNT(*)::bigint FROM scoped_authors) as total_authors,
+            (SELECT COUNT(*)::bigint
+             FROM scoped_authors sa
+             JOIN author_first_seen afs ON afs.author = sa.author
+             WHERE afs.first_created_at >= $4::timestamp) as new_authors,
+            (SELECT COUNT(*)::bigint
+             FROM scoped_authors sa
+             JOIN author_first_seen afs ON afs.author = sa.author
+             WHERE afs.first_created_at < $4::timestamp) as repeat_authors,
+            (SELECT COUNT(*)::bigint FROM scoped_prs) as prs_created,
+            (SELECT COUNT(DISTINCT author)::bigint FROM scoped_prs WHERE merged_at IS NOT NULL) as authors_with_merged
         `,
           input.repo ?? null,
           input.from ?? null,
@@ -4133,6 +4155,7 @@ export const analyticsProcedures = {
           JOIN eip_snapshots s ON s.eip_id = e.id
           LEFT JOIN repositories r ON s.repository_id = r.id
           WHERE e.author IS NOT NULL
+            AND LOWER(e.author) NOT LIKE '%bot%'
             AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
         `,
           input.repo ?? null
@@ -4142,7 +4165,9 @@ export const analyticsProcedures = {
       const prRow = prStats[0] || {
         total_authors: BigInt(0),
         new_authors: BigInt(0),
+        repeat_authors: BigInt(0),
         prs_created: BigInt(0),
+        authors_with_merged: BigInt(0),
       };
       const eipRow = eipStats[0] || {
         eips_authored: BigInt(0),
@@ -4151,9 +4176,138 @@ export const analyticsProcedures = {
       return {
         totalAuthors: Number(prRow.total_authors),
         newAuthors: Number(prRow.new_authors),
+        repeatAuthors: Number(prRow.repeat_authors),
         prsCreated: Number(prRow.prs_created),
+        proposalsAuthored: Number(prRow.prs_created),
+        authorsWithMerged: Number(prRow.authors_with_merged),
         eipsAuthored: Number(eipRow.eips_authored),
       };
+    }),
+
+  getAuthorCohortTimeline: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+      months: z.number().optional().default(12),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        month: string;
+        active_authors: bigint;
+        new_authors: bigint;
+        returning_authors: bigint;
+        proposals_authored: bigint;
+      }>>(
+        `
+        WITH author_first_month AS (
+          SELECT
+            pr.author,
+            date_trunc('month', MIN(pr.created_at)) AS first_month
+          FROM pull_requests pr
+          JOIN repositories r ON pr.repository_id = r.id
+          WHERE pr.author IS NOT NULL
+            AND LOWER(pr.author) NOT LIKE '%bot%'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+          GROUP BY pr.author
+        ),
+        monthly_author_activity AS (
+          SELECT
+            date_trunc('month', pr.created_at) AS month_bucket,
+            pr.author,
+            COUNT(*)::bigint AS proposals
+          FROM pull_requests pr
+          JOIN repositories r ON pr.repository_id = r.id
+          WHERE pr.author IS NOT NULL
+            AND LOWER(pr.author) NOT LIKE '%bot%'
+            AND ($2::text IS NULL OR pr.created_at >= $2::timestamp)
+            AND ($3::text IS NULL OR pr.created_at <= $3::timestamp)
+            AND (
+              ($2::text IS NOT NULL OR $3::text IS NOT NULL)
+              OR $4::int IS NULL
+              OR pr.created_at >= date_trunc('month', NOW() - INTERVAL '1 month' * $4)
+            )
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+          GROUP BY date_trunc('month', pr.created_at), pr.author
+        )
+        SELECT
+          TO_CHAR(maa.month_bucket, 'YYYY-MM') AS month,
+          COUNT(DISTINCT maa.author)::bigint AS active_authors,
+          COUNT(DISTINCT maa.author) FILTER (WHERE afm.first_month = maa.month_bucket)::bigint AS new_authors,
+          (COUNT(DISTINCT maa.author) - COUNT(DISTINCT maa.author) FILTER (WHERE afm.first_month = maa.month_bucket))::bigint AS returning_authors,
+          SUM(maa.proposals)::bigint AS proposals_authored
+        FROM monthly_author_activity maa
+        JOIN author_first_month afm ON afm.author = maa.author
+        GROUP BY maa.month_bucket
+        ORDER BY month ASC
+      `,
+        input.repo ?? null,
+        input.from ?? null,
+        input.to ?? null,
+        input.months != null ? (input.months || 12) - 1 : null
+      );
+
+      return rows.map((r) => ({
+        month: r.month,
+        activeAuthors: Number(r.active_authors),
+        newAuthors: Number(r.new_authors),
+        returningAuthors: Number(r.returning_authors),
+        proposalsAuthored: Number(r.proposals_authored),
+      }));
+    }),
+
+  getAuthorRepoComposition: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      from: z.string().optional(),
+      to: z.string().optional(),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        repo: string;
+        unique_authors: bigint;
+        repeat_authors: bigint;
+        proposals: bigint;
+      }>>(
+        `
+        WITH base AS (
+          SELECT
+            pr.author,
+            LOWER(SPLIT_PART(r.name, '/', 2)) AS repo
+          FROM pull_requests pr
+          JOIN repositories r ON pr.repository_id = r.id
+          WHERE pr.author IS NOT NULL
+            AND LOWER(pr.author) NOT LIKE '%bot%'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            AND ($2::text IS NULL OR pr.created_at >= $2::timestamp)
+            AND ($3::text IS NULL OR pr.created_at <= $3::timestamp)
+        ),
+        author_totals AS (
+          SELECT author, COUNT(*) AS authored_count
+          FROM base
+          GROUP BY author
+        )
+        SELECT
+          b.repo,
+          COUNT(DISTINCT b.author)::bigint AS unique_authors,
+          COUNT(DISTINCT b.author) FILTER (WHERE at.authored_count > 1)::bigint AS repeat_authors,
+          COUNT(*)::bigint AS proposals
+        FROM base b
+        JOIN author_totals at ON at.author = b.author
+        GROUP BY b.repo
+        ORDER BY proposals DESC
+      `,
+        input.repo ?? null,
+        input.from ?? null,
+        input.to ?? null
+      );
+
+      return rows.map((r) => ({
+        repo: r.repo,
+        uniqueAuthors: Number(r.unique_authors),
+        repeatAuthors: Number(r.repeat_authors),
+        proposals: Number(r.proposals),
+      }));
     }),
 
   getAuthorActivityTimeline: optionalAuthProcedure
@@ -4261,8 +4415,12 @@ export const analyticsProcedures = {
         author: string;
         prs_created: bigint;
         prs_merged: bigint;
+        prs_open: bigint;
+        prs_closed: bigint;
         avg_time_to_merge: number | null;
+        first_seen: string | null;
         last_activity: string | null;
+        top_repo: string | null;
       }>>(
         `
         WITH author_stats AS (
@@ -4270,18 +4428,39 @@ export const analyticsProcedures = {
             pr.author,
             COUNT(*)::bigint as prs_created,
             COUNT(*) FILTER (WHERE pr.merged_at IS NOT NULL)::bigint as prs_merged,
+            COUNT(*) FILTER (WHERE pr.merged_at IS NULL AND pr.state = 'open')::bigint as prs_open,
+            COUNT(*) FILTER (WHERE pr.merged_at IS NULL AND pr.state = 'closed')::bigint as prs_closed,
             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(DAY FROM (pr.merged_at - pr.created_at))) FILTER (WHERE pr.merged_at IS NOT NULL)::numeric as avg_time_to_merge,
+            MIN(pr.created_at)::text as first_seen,
             MAX(pr.updated_at)::text as last_activity
           FROM pull_requests pr
           JOIN repositories r ON pr.repository_id = r.id
           WHERE pr.author IS NOT NULL
+            AND LOWER(pr.author) NOT LIKE '%bot%'
             AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
             AND ($2::text IS NULL OR pr.created_at >= $2::timestamp)
             AND ($3::text IS NULL OR pr.created_at <= $3::timestamp)
           GROUP BY pr.author
+        ),
+        author_repo_rank AS (
+          SELECT
+            pr.author,
+            LOWER(SPLIT_PART(r.name, '/', 2)) AS repo_short,
+            COUNT(*)::bigint AS cnt,
+            ROW_NUMBER() OVER (PARTITION BY pr.author ORDER BY COUNT(*) DESC, LOWER(SPLIT_PART(r.name, '/', 2)) ASC) AS rn
+          FROM pull_requests pr
+          JOIN repositories r ON pr.repository_id = r.id
+          WHERE pr.author IS NOT NULL
+            AND LOWER(pr.author) NOT LIKE '%bot%'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+            AND ($2::text IS NULL OR pr.created_at >= $2::timestamp)
+            AND ($3::text IS NULL OR pr.created_at <= $3::timestamp)
+          GROUP BY pr.author, LOWER(SPLIT_PART(r.name, '/', 2))
         )
-        SELECT * FROM author_stats
-        ORDER BY prs_created DESC
+        SELECT a.*, rr.repo_short AS top_repo
+        FROM author_stats a
+        LEFT JOIN author_repo_rank rr ON rr.author = a.author AND rr.rn = 1
+        ORDER BY a.prs_created DESC
         LIMIT $4
       `,
         input.repo ?? null,
@@ -4294,8 +4473,12 @@ export const analyticsProcedures = {
         author: r.author,
         prsCreated: Number(r.prs_created),
         prsMerged: Number(r.prs_merged),
+        prsOpen: Number(r.prs_open),
+        prsClosed: Number(r.prs_closed),
         avgTimeToMerge: r.avg_time_to_merge != null ? Math.round(Number(r.avg_time_to_merge)) : null,
+        firstSeen: r.first_seen,
         lastActivity: r.last_activity,
+        topRepo: r.top_repo,
       }));
     }),
 

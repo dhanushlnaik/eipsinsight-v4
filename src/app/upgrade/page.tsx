@@ -20,9 +20,10 @@ import { eipTitles, rawData, upgradeMetaEIPs, pairedUpgradeNames } from '@/data/
 export default function UpgradePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTable, setActiveTable] = useState<'core' | 'meta' | 'execution' | 'consensus' | null>(null);
+  const [activeTable, setActiveTable] = useState<'core' | 'meta' | 'execution' | 'consensus' | 'authors' | null>(null);
   const [page, setPage] = useState(1);
   const [columnSearch, setColumnSearch] = useState({
+    author: '',
     eip: '',
     title: '',
     upgrade: '',
@@ -36,6 +37,16 @@ export default function UpgradePage() {
     declined: string[];
     considered: string[];
     proposed: string[];
+  }>>([]);
+  const [independentIncludedAuthors, setIndependentIncludedAuthors] = useState<number>(0);
+  const [independentAuthorRows, setIndependentAuthorRows] = useState<Array<{
+    id: string;
+    author: string;
+    totalEips: number;
+    eipNumbers: number[];
+    sampleEip: number | null;
+    sampleTitle: string;
+    upgrades: string[];
   }>>([]);
   const detailsSectionRef = useRef<HTMLDivElement>(null);
   const totalUpgradeCount = useMemo(
@@ -88,14 +99,17 @@ export default function UpgradePage() {
   }, []);
 
   const activeRows = useMemo(() => {
+    if (activeTable === 'authors') return [];
     if (activeTable === 'meta') return metaEipRows;
     if (activeTable === 'execution') return coreEipRows.filter((row) => row.layer === 'Execution');
     if (activeTable === 'consensus') return coreEipRows.filter((row) => row.layer === 'Consensus');
     return coreEipRows;
   }, [activeTable, coreEipRows, metaEipRows]);
   const filteredRows = useMemo(() => {
+    if (activeTable === 'authors') return [];
     return activeRows.filter((row) =>
       Object.entries(columnSearch).every(([key, search]) => {
+        if (key === 'author') return true;
         const normalizedSearch = search.trim().toLowerCase();
         if (!normalizedSearch) return true;
 
@@ -108,16 +122,41 @@ export default function UpgradePage() {
           .includes(normalizedSearch);
       })
     );
-  }, [activeRows, columnSearch]);
+  }, [activeRows, columnSearch, activeTable]);
+  const filteredAuthorRows = useMemo(() => {
+    if (activeTable !== 'authors') return [];
+    return independentAuthorRows.filter((row) => {
+      const authorSearch = columnSearch.author.trim().toLowerCase();
+      const eipSearch = columnSearch.eip.trim().toLowerCase();
+      const titleSearch = columnSearch.title.trim().toLowerCase();
+      const upgradeSearch = columnSearch.upgrade.trim().toLowerCase();
+
+      const matchesAuthor = !authorSearch || row.author.toLowerCase().includes(authorSearch);
+      const matchesEip =
+        !eipSearch ||
+        row.eipNumbers.some((eipNumber) => `eip-${eipNumber}`.toLowerCase().includes(eipSearch) || String(eipNumber).includes(eipSearch));
+      const matchesTitle = !titleSearch || row.sampleTitle.toLowerCase().includes(titleSearch);
+      const matchesUpgrade = !upgradeSearch || row.upgrades.join(', ').toLowerCase().includes(upgradeSearch);
+
+      return matchesAuthor && matchesEip && matchesTitle && matchesUpgrade;
+    });
+  }, [activeTable, independentAuthorRows, columnSearch]);
   const pageSize = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const resultCount = activeTable === 'authors' ? filteredAuthorRows.length : filteredRows.length;
+  const totalPages = Math.max(1, Math.ceil(resultCount / pageSize));
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
+    if (activeTable === 'authors') return [];
     return filteredRows.slice(start, start + pageSize);
-  }, [filteredRows, page]);
+  }, [filteredRows, page, activeTable]);
+  const paginatedAuthorRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    if (activeTable !== 'authors') return [];
+    return filteredAuthorRows.slice(start, start + pageSize);
+  }, [activeTable, filteredAuthorRows, page]);
   const isTableFiltered = Object.values(columnSearch).some((value) => value.trim().length > 0);
 
-  const handleSelectTable = (mode: 'core' | 'meta' | 'execution' | 'consensus') => {
+  const handleSelectTable = (mode: 'core' | 'meta' | 'execution' | 'consensus' | 'authors') => {
     setActiveTable(mode);
     setPage(1);
 
@@ -133,6 +172,7 @@ export default function UpgradePage() {
 
   const clearFilters = () => {
     setColumnSearch({
+      author: '',
       eip: '',
       title: '',
       upgrade: '',
@@ -140,6 +180,51 @@ export default function UpgradePage() {
       date: '',
     });
     setPage(1);
+  };
+
+  const downloadReport = () => {
+    if (!activeTable) return;
+
+    const csvEscape = (value: string | number | null | undefined) => {
+      const text = String(value ?? '');
+      if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+      return text;
+    };
+
+    const header = activeTable === 'authors'
+      ? ['Author', 'Included EIPs', 'EIP List', 'Upgrades', 'Example Title']
+      : ['EIP', 'Title', 'Upgrade', 'Layer', 'Date'];
+
+    const rows = activeTable === 'authors'
+      ? filteredAuthorRows.map((row) =>
+          [
+            row.author,
+            row.totalEips,
+            row.eipNumbers.map((eipNumber) => `EIP-${eipNumber}`).join(' | '),
+            row.upgrades.join(' | '),
+            row.sampleTitle,
+          ]
+            .map(csvEscape)
+            .join(',')
+        )
+      : filteredRows.map((row) =>
+          [ `EIP-${row.eipNumber}`, row.title, row.upgrade, row.layer, row.date ]
+            .map(csvEscape)
+            .join(',')
+        );
+
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = activeTable === 'authors' ? 'independent-included-authors-report.csv' : 'upgrade-eips-report.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -160,11 +245,25 @@ export default function UpgradePage() {
         setLoading(true);
         setError(null);
 
-        const timelineData = await client.upgrades
-          .getUpgradeTimeline({ slug: 'glamsterdam' })
-          .catch(() => []);
+        const [timelineData, upgradeStats, independentAuthors] = await Promise.all([
+          client.upgrades.getUpgradeTimeline({ slug: 'glamsterdam' }).catch(() => []),
+          client.upgrades.getUpgradeStats({}).catch(() => null),
+          client.upgrades.getIndependentIncludedAuthors({}).catch(() => []),
+        ]);
 
         setGlamsterdamTimeline(timelineData);
+        setIndependentIncludedAuthors(upgradeStats?.independentIncludedAuthors ?? 0);
+        setIndependentAuthorRows(
+          independentAuthors.map((row) => ({
+            id: `${row.authorKey}-${row.sampleEip ?? 'none'}`,
+            author: row.authorKey,
+            totalEips: row.totalEips,
+            eipNumbers: row.eipNumbers,
+            sampleEip: row.sampleEip,
+            sampleTitle: row.sampleTitle,
+            upgrades: row.upgrades,
+          }))
+        );
       } catch (err) {
         console.error('Failed to fetch upgrade data:', err);
         setError('Failed to load upgrade data');
@@ -220,6 +319,7 @@ export default function UpgradePage() {
               <div className="w-full h-full min-h-[260px] sm:min-h-[280px] lg:min-h-[300px] flex items-stretch">
                 <UpgradeStatsCards
                   totalUpgrades={totalUpgradeCount}
+                  independentIncludedAuthors={independentIncludedAuthors}
                   activeTable={activeTable}
                   onSelectTable={handleSelectTable}
                 />
@@ -337,6 +437,8 @@ export default function UpgradePage() {
                       ? 'Execution Layer EIPs'
                       : activeTable === 'consensus'
                         ? 'Consensus Layer EIPs'
+                    : activeTable === 'authors'
+                      ? 'Independent Included Authors'
                     : activeTable === 'core'
                       ? 'EIPs Deployed'
                       : 'Upgrade EIP Details'}
@@ -348,6 +450,8 @@ export default function UpgradePage() {
                       ? 'Core EIPs deployed through execution-layer upgrades.'
                       : activeTable === 'consensus'
                         ? 'Core EIPs deployed through consensus-layer upgrades.'
+                    : activeTable === 'authors'
+                      ? 'EIP authors included in upgrades, excluding client development team aliases and bots.'
                     : activeTable === 'core'
                       ? 'Core EIPs deployed in upgrades from the distribution chart.'
                       : 'Select either stats card above to jump here and inspect the linked EIPs.'}
@@ -366,111 +470,203 @@ export default function UpgradePage() {
 
             <div className="overflow-x-auto">
               {activeTable ? (
-                <table className="w-full min-w-full table-fixed text-sm">
-                  <colgroup>
-                    <col className="w-[14%]" />
-                    <col className="w-[34%]" />
-                    <col className="w-[16%]" />
-                    <col className="w-[14%]" />
-                    <col className="w-[22%]" />
-                  </colgroup>
-                  <thead>
-                    <tr className="border-b border-border/70 bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      <th className="px-2 py-2">EIP</th>
-                      <th className="px-2 py-2">Title</th>
-                      <th className="px-2 py-2">Upgrade</th>
-                      <th className="px-2 py-2">Layer</th>
-                      <th className="px-2 py-2">Date</th>
-                    </tr>
-                    <tr className="border-b border-border/60 bg-muted/40">
-                      <th className="px-2 py-2">
-                        <input
-                          value={columnSearch.eip}
-                          onChange={(e) => handleColumnSearch('eip', e.target.value)}
-                          placeholder="EIP-1559 / 1559"
-                          className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
-                        />
-                      </th>
-                      <th className="px-2 py-2">
-                        <input
-                          value={columnSearch.title}
-                          onChange={(e) => handleColumnSearch('title', e.target.value)}
-                          placeholder="Title"
-                          className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
-                        />
-                      </th>
-                      <th className="px-2 py-2">
-                        <input
-                          value={columnSearch.upgrade}
-                          onChange={(e) => handleColumnSearch('upgrade', e.target.value)}
-                          placeholder="Upgrade"
-                          className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
-                        />
-                      </th>
-                      <th className="px-2 py-2">
-                        <input
-                          value={columnSearch.layer}
-                          onChange={(e) => handleColumnSearch('layer', e.target.value)}
-                          placeholder="Layer"
-                          className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
-                        />
-                      </th>
-                      <th className="px-2 py-2">
-                        <input
-                          value={columnSearch.date}
-                          onChange={(e) => handleColumnSearch('date', e.target.value)}
-                          placeholder="YYYY-MM-DD"
-                          className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
-                        />
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedRows.map((row) => (
-                      <tr key={row.id} className="border-b border-border/60 text-foreground hover:bg-muted/40">
-                        <td className="px-2 py-2 font-medium text-primary">
-                          <Link href={`/eip/${row.eipNumber}`} className="hover:underline">
-                            EIP-{row.eipNumber}
-                          </Link>
-                        </td>
-                        <td className="px-2 py-2 text-foreground">{row.title}</td>
-                        <td className="px-2 py-2 text-muted-foreground">
-                          {row.upgradeHref ? (
-                            <Link href={row.upgradeHref} className="text-primary hover:underline">
-                              {row.upgrade}
+                activeTable === 'authors' ? (
+                  <table className="w-full min-w-full table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-[18%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[28%]" />
+                      <col className="w-[24%]" />
+                      <col className="w-[18%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-border/70 bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <th className="px-2 py-2">Author</th>
+                        <th className="px-2 py-2">Included EIPs</th>
+                        <th className="px-2 py-2">EIPs</th>
+                        <th className="px-2 py-2">Upgrades</th>
+                        <th className="px-2 py-2">Example Title</th>
+                      </tr>
+                      <tr className="border-b border-border/60 bg-muted/40">
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.author}
+                            onChange={(e) => handleColumnSearch('author', e.target.value)}
+                            placeholder="Author"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                        <th className="px-2 py-2">
+                          <span className="inline-flex h-8 w-full items-center rounded-md border border-border bg-muted/50 px-2 text-[11px] text-muted-foreground">
+                            Count
+                          </span>
+                        </th>
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.eip}
+                            onChange={(e) => handleColumnSearch('eip', e.target.value)}
+                            placeholder="EIP-1559 / 1559"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.upgrade}
+                            onChange={(e) => handleColumnSearch('upgrade', e.target.value)}
+                            placeholder="Upgrade"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.title}
+                            onChange={(e) => handleColumnSearch('title', e.target.value)}
+                            placeholder="Example title"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedAuthorRows.map((row) => (
+                        <tr key={row.id} className="border-b border-border/60 text-foreground hover:bg-muted/40">
+                          <td className="px-2 py-2 font-medium text-foreground">{row.author}</td>
+                          <td className="px-2 py-2 text-muted-foreground">{row.totalEips}</td>
+                          <td className="px-2 py-2 text-primary">
+                            <div className="flex flex-wrap gap-1">
+                              {row.eipNumbers.map((eipNumber) => (
+                                <Link key={`${row.id}-eip-${eipNumber}`} href={`/eip/${eipNumber}`} className="hover:underline">
+                                  EIP-{eipNumber}
+                                </Link>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-muted-foreground">{row.upgrades.join(', ') || '-'}</td>
+                          <td className="px-2 py-2 text-foreground">{row.sampleTitle || '-'}</td>
+                        </tr>
+                      ))}
+                      {paginatedAuthorRows.length === 0 && (
+                        <tr className="border-b border-border/60">
+                          <td colSpan={5} className="px-4 py-8 text-sm text-muted-foreground">
+                            No matching rows found for the current filters.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full min-w-full table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-[14%]" />
+                      <col className="w-[34%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[22%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-border/70 bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <th className="px-2 py-2">EIP</th>
+                        <th className="px-2 py-2">Title</th>
+                        <th className="px-2 py-2">Upgrade</th>
+                        <th className="px-2 py-2">Layer</th>
+                        <th className="px-2 py-2">Date</th>
+                      </tr>
+                      <tr className="border-b border-border/60 bg-muted/40">
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.eip}
+                            onChange={(e) => handleColumnSearch('eip', e.target.value)}
+                            placeholder="EIP-1559 / 1559"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.title}
+                            onChange={(e) => handleColumnSearch('title', e.target.value)}
+                            placeholder="Title"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.upgrade}
+                            onChange={(e) => handleColumnSearch('upgrade', e.target.value)}
+                            placeholder="Upgrade"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.layer}
+                            onChange={(e) => handleColumnSearch('layer', e.target.value)}
+                            placeholder="Layer"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                        <th className="px-2 py-2">
+                          <input
+                            value={columnSearch.date}
+                            onChange={(e) => handleColumnSearch('date', e.target.value)}
+                            placeholder="YYYY-MM-DD"
+                            className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedRows.map((row) => (
+                        <tr key={row.id} className="border-b border-border/60 text-foreground hover:bg-muted/40">
+                          <td className="px-2 py-2 font-medium text-primary">
+                            <Link href={`/eip/${row.eipNumber}`} className="hover:underline">
+                              EIP-{row.eipNumber}
                             </Link>
-                          ) : (
-                            row.upgrade
-                          )}
-                        </td>
-                        <td className="px-2 py-2 text-muted-foreground">{row.layer}</td>
-                        <td className="px-2 py-2 text-muted-foreground">{row.date}</td>
-                      </tr>
-                    ))}
-                    {paginatedRows.length === 0 && (
-                      <tr className="border-b border-border/60">
-                        <td colSpan={5} className="px-4 py-8 text-sm text-muted-foreground">
-                          No matching rows found for the current filters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          </td>
+                          <td className="px-2 py-2 text-foreground">{row.title}</td>
+                          <td className="px-2 py-2 text-muted-foreground">
+                            {row.upgradeHref ? (
+                              <Link href={row.upgradeHref} className="text-primary hover:underline">
+                                {row.upgrade}
+                              </Link>
+                            ) : (
+                              row.upgrade
+                            )}
+                          </td>
+                          <td className="px-2 py-2 text-muted-foreground">{row.layer}</td>
+                          <td className="px-2 py-2 text-muted-foreground">{row.date}</td>
+                        </tr>
+                      ))}
+                      {paginatedRows.length === 0 && (
+                        <tr className="border-b border-border/60">
+                          <td colSpan={5} className="px-4 py-8 text-sm text-muted-foreground">
+                            No matching rows found for the current filters.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )
               ) : (
                 <div className="px-4 py-10 text-sm text-muted-foreground">
-                  Choose <span className="text-foreground">EIPs Deployed</span> or <span className="text-foreground">Hard Fork Meta EIPs</span> above to load the table.
+                  Choose a stats card above to load the table.
                 </div>
               )}
             </div>
             {activeTable && (
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                <span>{isTableFiltered ? 'Filtered results' : 'Results'}: {filteredRows.length.toLocaleString()}</span>
+                <span>{isTableFiltered ? 'Filtered results' : 'Results'}: {resultCount.toLocaleString()}</span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={clearFilters}
                     className="rounded-md border border-border bg-muted/60 px-2 py-1 text-muted-foreground hover:border-primary/40 hover:text-primary"
                   >
                     Reset Filters
+                  </button>
+                  <button
+                    onClick={downloadReport}
+                    className="rounded-md border border-border bg-muted/60 px-2 py-1 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                  >
+                    Download Reports
                   </button>
                   <button
                     onClick={() => setPage((current) => Math.max(1, current - 1))}

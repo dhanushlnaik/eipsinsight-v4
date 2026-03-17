@@ -2,17 +2,19 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { Rocket, Code, Layers, Network, FileText } from 'lucide-react';
+import { Rocket, Code, Layers, Network, FileText, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface UpgradeStatsCardsProps {
   totalUpgrades?: number;
-  activeTable?: 'core' | 'meta' | 'execution' | 'consensus' | null;
-  onSelectTable?: (mode: 'core' | 'meta' | 'execution' | 'consensus') => void;
+  independentIncludedAuthors?: number;
+  activeTable?: 'core' | 'meta' | 'execution' | 'consensus' | 'authors' | null;
+  onSelectTable?: (mode: 'core' | 'meta' | 'execution' | 'consensus' | 'authors') => void;
 }
 
 export function UpgradeStatsCards({
   totalUpgrades = 27,
+  independentIncludedAuthors = 0,
   activeTable = null,
   onSelectTable,
 }: UpgradeStatsCardsProps) {
@@ -110,6 +112,34 @@ export function UpgradeStatsCards({
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <motion.button
+          type="button"
+          variants={cardVariants}
+          whileHover="hover"
+          transition={{ duration: 0.2 }}
+          onClick={() => onSelectTable?.('authors')}
+          className={cn(
+            'relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm text-left sm:col-span-2',
+            'shadow-sm',
+            'hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15',
+            'transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+            activeTable === 'authors' && 'border-primary/50 shadow-lg shadow-primary/15'
+          )}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="p-1 rounded-lg bg-primary/10 border border-primary/20">
+              <Users className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Independent Included Authors
+            </h3>
+          </div>
+          <p className="text-3xl font-bold text-foreground mb-1">{independentIncludedAuthors}</p>
+          <p className="text-xs text-muted-foreground">
+            Unique EIP authors included in upgrades outside client dev teams
+          </p>
+        </motion.button>
+
         <motion.button
           type="button"
           variants={cardVariants}

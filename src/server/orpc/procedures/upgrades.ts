@@ -1,6 +1,112 @@
 import { optionalAuthProcedure, type Ctx, ORPCError } from './types'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
+import { buildClientTeamExclusionKeys } from '@/data/client-team-exclusions'
+import { rawData, pairedUpgradeNames } from '@/data/network-upgrades'
+
+const CLIENT_TEAM_AUTHOR_EXCLUSIONS = buildClientTeamExclusionKeys();
+const CLIENT_TEAM_AUTHOR_EXCLUSION_SET = new Set(CLIENT_TEAM_AUTHOR_EXCLUSIONS);
+
+function normalizeAuthorKeys(author: string): string[] {
+  return author
+    .toLowerCase()
+    // Split parenthetical aliases like "sam wilson (@samwilsn)" into separate tokens
+    .replace(/\(([^)]+)\)/g, ', $1')
+    .replace(/\s+and\s+/g, ',')
+    .replace(/\s*&\s*/g, ',')
+    .replace(/;/g, ',')
+    .replace(/\//g, ',')
+    .split(',')
+    .map((part) =>
+      part
+        .trim()
+        .replace(/^@+/, '')
+        .replace(/\s+/g, ' ')
+    )
+    .filter((part) => part.length > 0 && !part.includes('bot') && !CLIENT_TEAM_AUTHOR_EXCLUSION_SET.has(part));
+}
+
+function getCanonicalUpgradeName(upgrade: string, date: string): string {
+  const mergeTimestamp = new Date('2022-09-15').getTime();
+  const upgradeTimestamp = new Date(date).getTime();
+  if (upgradeTimestamp > mergeTimestamp && pairedUpgradeNames[date]) {
+    return pairedUpgradeNames[date];
+  }
+  return upgrade;
+}
+
+async function computeIndependentIncludedAuthorRows() {
+  const eipToUpgrades = new Map<number, Set<string>>();
+
+  rawData.forEach((item) => {
+    item.eips.forEach((value) => {
+      if (!value.startsWith('EIP-')) return;
+      const normalizedNumber = value.replace('EIP-', '').replace('-removed', '');
+      const eipNumber = Number(normalizedNumber);
+      if (!Number.isFinite(eipNumber)) return;
+
+      const upgradeName = getCanonicalUpgradeName(item.upgrade, item.date);
+      if (!eipToUpgrades.has(eipNumber)) {
+        eipToUpgrades.set(eipNumber, new Set<string>());
+      }
+      eipToUpgrades.get(eipNumber)?.add(upgradeName);
+    });
+  });
+
+  const eipNumbers = Array.from(eipToUpgrades.keys());
+  if (eipNumbers.length === 0) return [];
+
+  const eips = await prisma.eips.findMany({
+    where: { eip_number: { in: eipNumbers } },
+    select: {
+      eip_number: true,
+      title: true,
+      author: true,
+    },
+  });
+
+  const authorMap = new Map<string, {
+    eipNumbers: Set<number>;
+    upgrades: Set<string>;
+  }>();
+  const eipTitleMap = new Map<number, string>();
+
+  eips.forEach((eip) => {
+    if (!eip.author) return;
+    const authorKeys = normalizeAuthorKeys(eip.author);
+    if (authorKeys.length === 0) return;
+
+    const upgrades = eipToUpgrades.get(eip.eip_number) ?? new Set<string>();
+    eipTitleMap.set(eip.eip_number, eip.title ?? '');
+
+    authorKeys.forEach((authorKey) => {
+      if (!authorMap.has(authorKey)) {
+        authorMap.set(authorKey, { eipNumbers: new Set<number>(), upgrades: new Set<string>() });
+      }
+      const record = authorMap.get(authorKey);
+      if (!record) return;
+
+      record.eipNumbers.add(eip.eip_number);
+      upgrades.forEach((upgrade) => record.upgrades.add(upgrade));
+    });
+  });
+
+  return Array.from(authorMap.entries())
+    .map(([authorKey, value]) => {
+      const sortedEips = Array.from(value.eipNumbers).sort((a, b) => a - b);
+      const sampleEip = sortedEips[0] ?? null;
+
+      return {
+        authorKey,
+        totalEips: sortedEips.length,
+        eipNumbers: sortedEips,
+        sampleEip,
+        sampleTitle: sampleEip ? (eipTitleMap.get(sampleEip) ?? '') : '',
+        upgrades: Array.from(value.upgrades).sort((a, b) => a.localeCompare(b)),
+      };
+    })
+    .sort((a, b) => (b.totalEips - a.totalEips) || a.authorKey.localeCompare(b.authorKey));
+}
 
 export const upgradesProcedures = {
   // List all upgrades with statistics
@@ -63,8 +169,7 @@ export const upgradesProcedures = {
   getUpgradeStats: optionalAuthProcedure
     .input(z.object({}))
     .handler(async ({ context }) => {
-
-      const [totalUpgrades, totalEIPs, executionUpgrades, consensusUpgrades, totalCoreEIPs] = await Promise.all([
+      const [totalUpgrades, totalEIPs, executionUpgrades, consensusUpgrades, totalCoreEIPs, independentAuthorRows] = await Promise.all([
         prisma.upgrades.count(),
         prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`
           SELECT COUNT(DISTINCT eip_number)::bigint as count
@@ -83,6 +188,7 @@ export const upgradesProcedures = {
           JOIN eip_snapshots s ON s.eip_id = e.id
           WHERE s.category = 'Core'
         `).then(r => Number(r[0]?.count || 0)),
+        computeIndependentIncludedAuthorRows(),
       ]);
 
       return {
@@ -91,7 +197,14 @@ export const upgradesProcedures = {
         executionLayer: executionUpgrades,
         consensusLayer: consensusUpgrades,
         totalCoreEIPs,
+        independentIncludedAuthors: independentAuthorRows.length,
       };
+    }),
+
+  getIndependentIncludedAuthors: optionalAuthProcedure
+    .input(z.object({}))
+    .handler(async () => {
+      return computeIndependentIncludedAuthorRows();
     }),
 
   // Get upgrade by slug
