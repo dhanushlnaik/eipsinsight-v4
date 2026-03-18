@@ -66,6 +66,46 @@ function monthLabel(yyyyMm: string) {
     : d.toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function latestChangeDescriptor(row: {
+  statusTransition: { changedAt: string } | null;
+  primaryPrMergedAt: string | null;
+  latestChangedAt: string;
+  changedTypes: string[];
+}) {
+  const candidates: Array<{ source: string; at: string }> = [];
+  if (row.statusTransition?.changedAt) {
+    candidates.push({ source: "Status transition", at: row.statusTransition.changedAt });
+  }
+  if (row.primaryPrMergedAt) {
+    candidates.push({ source: "PR merged", at: row.primaryPrMergedAt });
+  }
+  if (row.changedTypes.includes("metadata-change")) {
+    candidates.push({ source: "Metadata update", at: row.latestChangedAt });
+  }
+
+  const latest = candidates
+    .filter((c) => !!c.at)
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0];
+
+  if (!latest) {
+    return { source: "Event", at: row.latestChangedAt };
+  }
+  return latest;
+}
+
 function availableMonthsDefaultStart(toMonth: string) {
   const end = new Date(`${toMonth}-01T00:00:00.000Z`);
   const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 11, 1));
@@ -119,7 +159,7 @@ function DrilldownPageContent() {
             change: [],
             type: [],
             q: "",
-            sort: "impact_desc",
+            sort: "updated_desc",
             page,
             pageSize,
           }),
@@ -130,7 +170,7 @@ function DrilldownPageContent() {
             change: [],
             type: [],
             q: "",
-            sort: "impact_desc",
+            sort: "updated_desc",
             page: 1,
             pageSize: 2000,
           }),
@@ -220,6 +260,8 @@ function DrilldownPageContent() {
             return `${r.linkedPrCount} ${r.commits} ${r.filesChanged} ${r.discussionVolume}`.toLowerCase().includes(q);
           case "upgrade":
             return (r.upgradeTags || []).join(" ").toLowerCase().includes(q);
+          case "latestChange":
+            return `${r.latestChangedAt || ""} ${r.statusTransition?.changedAt || ""}`.toLowerCase().includes(q);
           default:
             return true;
         }
@@ -769,8 +811,15 @@ function DrilldownPageContent() {
                     </div>
                     <div className="h-[280px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-border/70 scrollbar-track-transparent">
                       <div className="space-y-2">
-                        {editors.slice(0, 8).map((ed, idx) => (
-                          <div key={ed.editor} className="flex items-center gap-2.5 rounded-lg border border-border bg-background/60 px-2.5 py-2">
+        {editors.slice(0, 8).map((ed, idx) => (
+                          <div
+                            key={ed.editor}
+                            className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2 ${
+                              ed.editor.toLowerCase() === "abcoathup"
+                                ? "border-amber-500/40 bg-amber-500/10"
+                                : "border-border bg-background/60"
+                            }`}
+                          >
                             <span className="w-5 text-right text-xs font-semibold text-muted-foreground">{idx + 1}</span>
                             <img
                               src={`https://github.com/${ed.editor}.png`}
@@ -781,7 +830,14 @@ function DrilldownPageContent() {
                               className="h-8 w-8 rounded-full border border-border object-cover"
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-foreground">{ed.editor}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-sm font-medium text-foreground">{ed.editor}</p>
+                                {ed.editor.toLowerCase() === "abcoathup" && (
+                                  <span className="rounded-full border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                    Associate Editor
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[11px] text-muted-foreground">{ed.totalActions} actions · {ed.prsTouched} PRs touched</p>
                             </div>
                           </div>
@@ -931,8 +987,8 @@ function DrilldownPageContent() {
                           ["changeEvidence", "Change Evidence"],
                           ["prLinkage", "PR Linkage"],
                           ["author", "Author"],
+                          ["latestChange", "Latest Change"],
                           ["metrics", "Metrics"],
-                          ["upgrade", "Upgrade"],
                         ].map(([key, label]) => (
                           <th key={key} className="px-3 py-2 text-left">
                             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
@@ -973,7 +1029,7 @@ function DrilldownPageContent() {
                             {r.statusTransition ? (
                               <>
                                 <p>{r.statusTransition.from || "Unknown"} {"->"} {r.statusTransition.to}</p>
-                                <p>{new Date(r.statusTransition.changedAt).toLocaleDateString()}</p>
+                                <p>{formatDateTime(r.statusTransition.changedAt)}</p>
                               </>
                             ) : "—"}
                           </td>
@@ -999,22 +1055,21 @@ function DrilldownPageContent() {
                           </td>
                           <td className="px-3 py-2 align-top text-xs text-muted-foreground">{r.author || "—"}</td>
                           <td className="px-3 py-2 align-top text-xs text-muted-foreground">
+                            {(() => {
+                              const latest = latestChangeDescriptor(r);
+                              return (
+                                <>
+                                  <p className="font-medium text-foreground/90">{latest.source}</p>
+                                  <p>{formatDateTime(latest.at)}</p>
+                                </>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-3 py-2 align-top text-xs text-muted-foreground">
                             <p>PRs: {r.linkedPrCount}</p>
                             <p>Commits: {r.commits}</p>
                             <p>Files: {r.filesChanged}</p>
                             <p>Discussion: {r.discussionVolume}</p>
-                          </td>
-                          <td className="px-3 py-2 align-top">
-                            {r.upgradeTags.length === 0 ? (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            ) : (
-                              <div className="flex max-w-[180px] flex-wrap gap-1">
-                                {r.upgradeTags.slice(0, 2).map((t) => (
-                                  <span key={t} className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">{t}</span>
-                                ))}
-                                {r.upgradeTags.length > 2 && <span className="text-[10px] text-muted-foreground">+{r.upgradeTags.length - 2}</span>}
-                              </div>
-                            )}
                           </td>
                         </tr>
                       ))}

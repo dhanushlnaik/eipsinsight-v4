@@ -993,6 +993,7 @@ export const insightsProcedures = {
 
       const contentRows = await prisma.$queryRawUnsafe<Array<{
         eip_number: number;
+        repo_short: string | null;
         primary_pr_number: number | null;
         primary_pr_title: string | null;
         primary_pr_merged_at: Date | null;
@@ -1005,6 +1006,7 @@ export const insightsProcedures = {
         `
         SELECT
           pre.eip_number,
+          LOWER(SPLIT_PART(r.name, '/', 2)) AS repo_short,
           (ARRAY_AGG(p.pr_number ORDER BY p.merged_at DESC NULLS LAST))[1] AS primary_pr_number,
           (ARRAY_AGG(p.title ORDER BY p.merged_at DESC NULLS LAST))[1] AS primary_pr_title,
           MAX(p.merged_at) AS primary_pr_merged_at,
@@ -1015,10 +1017,11 @@ export const insightsProcedures = {
           COALESCE(SUM(COALESCE(p.num_comments, 0)), 0)::bigint AS discussion_volume
         FROM pull_request_eips pre
         JOIN pull_requests p ON p.pr_number = pre.pr_number AND p.repository_id = pre.repository_id
+        LEFT JOIN repositories r ON r.id = p.repository_id
         WHERE p.merged_at >= $1::date
           AND p.merged_at < $2::date
           AND ($3::int[] IS NULL OR p.repository_id = ANY($3))
-        GROUP BY pre.eip_number
+        GROUP BY pre.eip_number, LOWER(SPLIT_PART(r.name, '/', 2))
         `,
         monthStart,
         monthEnd,
@@ -1080,7 +1083,7 @@ export const insightsProcedures = {
         });
       }
 
-      const contentMap = new Map<number, {
+      const contentMap = new Map<string, {
         primaryPrNumber: number | null;
         primaryPrTitle: string | null;
         primaryPrMergedAt: Date | null;
@@ -1091,7 +1094,9 @@ export const insightsProcedures = {
         discussionVolume: number;
       }>();
       for (const row of contentRows) {
-        contentMap.set(row.eip_number, {
+        const rowRepo = (row.repo_short || 'eips').toLowerCase();
+        const contentKey = `${rowRepo}:${row.eip_number}`;
+        contentMap.set(contentKey, {
           primaryPrNumber: row.primary_pr_number,
           primaryPrTitle: row.primary_pr_title,
           primaryPrMergedAt: row.primary_pr_merged_at,
@@ -1119,7 +1124,8 @@ export const insightsProcedures = {
 
       const rows = coreRows.map((core) => {
         const statusEvt = statusMap.get(core.eip_id);
-        const contentEvt = contentMap.get(core.eip_number);
+        const coreRepo = (core.repo_short || 'eips').toLowerCase();
+        const contentEvt = contentMap.get(`${coreRepo}:${core.eip_number}`);
         const metadataEvt = metadataMap.get(core.eip_id);
         const metadataChanged = !!metadataEvt;
 
@@ -1141,7 +1147,7 @@ export const insightsProcedures = {
             }
           : null;
 
-        const repoShort = (core.repo_short || 'eips').toLowerCase();
+        const repoShort = coreRepo;
         const proposalKind = repoShort === 'ercs' ? 'ERC' : repoShort === 'rips' ? 'RIP' : 'EIP';
         const proposalUrl = proposalKind === 'ERC' ? `/erc/${core.eip_number}` : proposalKind === 'RIP' ? `/rip/${core.eip_number}` : `/eip/${core.eip_number}`;
         const primaryPrUrl = contentEvt?.primaryPrNumber != null
