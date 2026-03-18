@@ -4,6 +4,7 @@ import * as z from 'zod'
 import { unstable_cache } from 'next/cache'
 
 const CACHE_REVALIDATE = 300
+const HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL = '(2512, 3297, 1047)'
 
 const getRIPKPIsCached = unstable_cache(
   async () => {
@@ -765,7 +766,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM eip_snapshots s
           JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
-          WHERE e.eip_number NOT IN (7212, 3297, 2512)
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
           UNION ALL
           SELECT
             COALESCE(NULLIF(r.status, ''), 'Unknown') AS status,
@@ -880,7 +881,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM eip_snapshots s
           JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
-          WHERE e.eip_number NOT IN (7212, 3297, 2512)
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
         ),
         unified AS (
           SELECT * FROM eip_rows
@@ -988,7 +989,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM eip_snapshots s
           JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
-          WHERE e.eip_number NOT IN (7212, 3297, 2512)
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
         ),
         unified AS (
           SELECT * FROM eip_rows
@@ -1125,7 +1126,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM eip_snapshots s
           JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
-          WHERE e.eip_number NOT IN (7212, 3297, 2512)
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
           UNION ALL
           SELECT
             r.rip_number AS number,
@@ -1242,7 +1243,7 @@ const results = await prisma.$queryRawUnsafe<Array<{
           FROM eip_snapshots s
           JOIN eips e ON e.id = s.eip_id
           LEFT JOIN repositories r ON r.id = s.repository_id
-          WHERE e.eip_number NOT IN (7212, 3297, 2512)
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
         ),
         unified AS (
           SELECT * FROM eip_rows

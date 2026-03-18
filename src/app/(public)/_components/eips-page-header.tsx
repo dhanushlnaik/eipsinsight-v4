@@ -29,13 +29,13 @@ export function EIPsPageHeader() {
   return (
     <section className="relative w-full">
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 space-y-1.5">
             <motion.h1
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
-              className="dec-title persona-title text-3xl font-semibold tracking-tight sm:text-4xl"
+              className="dec-title persona-title text-balance text-2xl font-semibold tracking-tight leading-tight sm:text-4xl"
             >
               Track Ethereum Proposals and Governance
             </motion.h1>
@@ -43,7 +43,7 @@ export function EIPsPageHeader() {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.05 }}
-              className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base"
+              className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground"
             >
               Real-time view of proposal lifecycle, upgrade progress, and editorial activity across EIPs, ERCs, and RIPs.
             </motion.p>
@@ -55,7 +55,7 @@ export function EIPsPageHeader() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.3 }}
             className={cn(
-              "group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+              "group relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 sm:h-9 sm:w-9 sm:justify-center sm:px-0",
               "border-border bg-muted/60 backdrop-blur-sm",
               "transition-all hover:border-primary/40 hover:bg-primary/10"
             )}
@@ -68,6 +68,7 @@ export function EIPsPageHeader() {
               "text-muted-foreground group-hover:text-primary",
               isOpen && "text-primary"
             )} />
+            <span className="text-xs font-medium text-muted-foreground sm:hidden">{isOpen ? 'Hide' : 'Info'}</span>
           </motion.button>
         </div>
 
@@ -80,8 +81,8 @@ export function EIPsPageHeader() {
               transition={{ duration: 0.3 }}
               className="overflow-hidden"
             >
-              <div className="rounded-lg border border-border bg-card/60 p-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="rounded-lg border border-border bg-card/60 p-3 sm:p-6">
+                <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3 md:gap-6">
                   {infoItems.map((item, index) => {
                     const Icon = item.icon;
                     return (
@@ -92,7 +93,7 @@ export function EIPsPageHeader() {
                         transition={{ duration: 0.3, delay: index * 0.1 }}
                         className="flex items-start gap-3"
                       >
-                        <div className="shrink-0 rounded-lg border border-primary/20 bg-primary/10 p-2">
+                        <div className="shrink-0 rounded-lg border border-primary/20 bg-primary/10 p-1.5 sm:p-2">
                           <Icon className="h-4 w-4 text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">

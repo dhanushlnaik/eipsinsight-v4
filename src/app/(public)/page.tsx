@@ -651,7 +651,7 @@ export default function EIPsHomePage() {
   };
 
   return (
-    <div className="w-full px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
+    <div className="w-full overflow-x-clip px-2.5 py-5 sm:px-4 sm:py-6 lg:px-5 xl:px-6">
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="mb-6">
         <EIPsPageHeader />
       </motion.div>
@@ -659,24 +659,24 @@ export default function EIPsHomePage() {
       <hr className="mb-6 border-border" />
 
       {showNewUserGuide && (
-        <section className="mb-5 rounded-xl border border-primary/25 bg-primary/5 p-3 sm:p-4">
+        <section className="mb-5 rounded-xl border border-primary/25 bg-primary/5 p-2.5 sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">Start Here</p>
               <p className="mt-1 text-sm text-foreground">
-                New to EIPsInsight? Use the side bar:
-                <span className="ml-2 inline-flex items-center gap-1 text-primary">
-                  Explore <ArrowRight className="h-3.5 w-3.5" /> Analytics <ArrowRight className="h-3.5 w-3.5" /> Resources
-                </span>
+                New to EIPsInsight? Start with these quick paths.
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="mt-1 hidden items-center gap-1 text-xs text-primary sm:inline-flex">
+                Explore <ArrowRight className="h-3 w-3" /> Analytics <ArrowRight className="h-3 w-3" /> Resources
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
                 {ENTRY_PATHS.map((item) => (
                   <a
                     key={item.title}
                     href={item.href}
                     target={item.external ? '_blank' : undefined}
                     rel={item.external ? 'noreferrer' : undefined}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-foreground/85 hover:border-primary/30 hover:text-foreground"
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground/85 hover:border-primary/30 hover:text-foreground sm:w-auto sm:justify-start sm:px-2.5"
                   >
                     {item.title}
                   </a>
@@ -694,13 +694,13 @@ export default function EIPsHomePage() {
       )}
 
       <div className="mb-3 space-y-2">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start">
             <h2 className={sectionTitleClass}>
               Browse by Status, Category, and Repository
             </h2>
           </div>
-          <div className="overflow-x-auto pb-1">
+          <div className="w-full overflow-x-auto pb-1 sm:w-auto">
             <motion.div
               layout
               className="inline-flex min-w-max items-center rounded-xl border border-border bg-muted/60 p-1 shadow-sm"
@@ -812,7 +812,7 @@ export default function EIPsHomePage() {
       </div>
 
       <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card/60">
-        <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs">
+        <div className="flex flex-col items-start justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs sm:flex-row sm:items-center">
           <span className="text-muted-foreground">
             {isTableFiltered ? 'Filtered proposals' : 'Total proposals'}:{' '}
             <span className="font-semibold text-foreground">{tableData?.total.toLocaleString() || 0}</span>
@@ -826,7 +826,7 @@ export default function EIPsHomePage() {
             {downloading ? 'Exporting...' : (isTableFiltered ? 'Download Filtered CSV' : 'Download CSV')}
           </button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-[980px] text-sm">
             <thead>
               <tr className="border-b border-border/70 bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -916,9 +916,48 @@ export default function EIPsHomePage() {
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        <div className="space-y-2 p-2 md:hidden">
+          {showTableSkeleton ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={`mobile-row-skeleton-${i}`} className="rounded-lg border border-border bg-muted/40 p-3">
+                <div className="mb-2 h-4 w-28 animate-pulse rounded bg-muted" />
+                <div className="mb-1.5 h-3 w-full animate-pulse rounded bg-muted" />
+                <div className="mb-1.5 h-3 w-2/3 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+              </div>
+            ))
+          ) : (
+            (tableData?.rows || []).map((row) => (
+              <div key={`mobile-${row.repo}-${row.kind}-${row.number}`} className="rounded-lg border border-border bg-card/70 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <Link href={proposalUrl(row.repo, row.kind, row.number)} className="text-sm font-semibold text-primary hover:underline">
+                    {row.kind}-{row.number}
+                  </Link>
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${BADGE_COLORS[row.status] || BADGE_COLORS.Unknown}`}>
+                    {row.status}
+                  </span>
+                </div>
+                <p className="mb-1 line-clamp-2 text-sm text-foreground">{row.title || `${row.kind}-${row.number}`}</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span>{row.type || '-'}</span>
+                  <span>{row.category}</span>
+                  <a
+                    href={githubProposalUrl(row.kind, row.number)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {githubRepoLabel(row.repo, row.kind)}
+                  </a>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>{isTableFiltered ? 'Filtered results' : 'Results'}: {tableData?.total.toLocaleString() || 0}</span>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
             <button
               onClick={clearFilters}
               className="rounded-md border border-border bg-muted/60 px-2 py-1 text-muted-foreground hover:border-primary/40 hover:text-primary"
@@ -944,6 +983,12 @@ export default function EIPsHomePage() {
         </div>
       </div>
 
+      <section className="mb-6">
+        <HomeFAQs categoryBreakdown={faqCategoryBreakdown} statusDist={faqStatusDist} />
+      </section>
+
+      <hr className="my-6 border-border" />
+
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <div className="self-start rounded-xl border border-border bg-card/60 p-4 shadow-sm">
           <div className="mb-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -965,7 +1010,7 @@ export default function EIPsHomePage() {
             </button>
           </div>
 
-          <div className="relative h-[340px] sm:h-[420px]">
+          <div className="relative h-[250px] sm:h-[420px]">
             <div className="h-full w-full">
               {showInsightSkeleton ? (
                 <div className="h-full w-full animate-pulse rounded-xl bg-muted" />
@@ -1217,14 +1262,8 @@ export default function EIPsHomePage() {
 
       <hr className="my-6 border-border" />
 
-      <section className="mb-6">
-        <SocialCommunityUpdates />
-      </section>
-
-      <hr className="my-6 border-border" />
-
       <section>
-        <HomeFAQs categoryBreakdown={faqCategoryBreakdown} statusDist={faqStatusDist} />
+        <SocialCommunityUpdates />
       </section>
     </div>
   );

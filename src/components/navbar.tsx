@@ -14,6 +14,9 @@ import {
   Package,
   LineChart,
   BookOpen,
+  Compass,
+  Lightbulb,
+  Wrench,
   ChevronDown,
   Crown,
   Info,
@@ -40,14 +43,92 @@ import {
 import { ThemedLogoGif } from "@/components/themed-logo-gif";
 import { toast } from "sonner";
 
-// Mobile navigation items (same as sidebar)
-const mobileNavItems = [
+const mobileNavSections = [
+  {
+    label: "Main",
+    items: [
+      { title: "Home", href: "/", icon: Home },
+      { title: "Dashboard", href: "/dashboard", icon: Home },
+      { title: "Search", href: "/search", icon: Search },
+    ],
+  },
+  {
+    label: "Standards",
+    items: [
+      { title: "All Standards", href: "/standards", icon: Layers },
+      { title: "EIPs", href: "/standards?repo=eips", icon: Layers },
+      { title: "ERCs", href: "/standards?repo=ercs", icon: Layers },
+      { title: "RIPs", href: "/standards?repo=rips", icon: Layers },
+    ],
+  },
+  {
+    label: "Explore",
+    items: [
+      { title: "Explore Hub", href: "/explore", icon: Compass },
+      { title: "By Year", href: "/explore/years", icon: Compass },
+      { title: "By Status", href: "/explore/status", icon: Compass },
+      { title: "By Role", href: "/explore/roles", icon: Compass },
+      { title: "Trending", href: "/explore/trending", icon: Compass },
+    ],
+  },
+  {
+    label: "Upgrades",
+    items: [
+      { title: "Overview", href: "/upgrade", icon: Package },
+      { title: "Archive", href: "/upgrade/archive", icon: Package },
+      { title: "Pectra", href: "/upgrade/pectra", icon: Package },
+      { title: "Fusaka", href: "/upgrade/fusaka", icon: Package },
+      { title: "Glamsterdam", href: "/upgrade/glamsterdam", icon: Package },
+      { title: "Hegotá", href: "/upgrade/hegota", icon: Package },
+    ],
+  },
+  {
+    label: "Analytics & Insights",
+    items: [
+      { title: "Analytics Home", href: "/analytics", icon: LineChart },
+      { title: "EIPs", href: "/analytics/eips", icon: LineChart },
+      { title: "PRs", href: "/analytics/prs", icon: LineChart },
+      { title: "Editors", href: "/analytics/editors", icon: LineChart },
+      { title: "Reviewers", href: "/analytics/reviewers", icon: LineChart },
+      { title: "Authors", href: "/analytics/authors", icon: LineChart },
+      { title: "Contributors", href: "/analytics/contributors", icon: LineChart },
+      { title: "Insights", href: "/insights", icon: Lightbulb },
+      { title: "Year-Month", href: "/insights/year-month-analysis", icon: Lightbulb },
+      { title: "Governance", href: "/insights/governance-and-process", icon: Lightbulb },
+      { title: "Editorial", href: "/insights/editorial-commentary", icon: Lightbulb },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { title: "Tools Home", href: "/tools", icon: Wrench },
+      { title: "Board", href: "/tools/board", icon: Wrench },
+      { title: "EIP Builder", href: "/tools/eip-builder", icon: Wrench },
+      { title: "Dependencies", href: "/tools/dependencies", icon: Wrench },
+      { title: "Timeline", href: "/tools/timeline", icon: Wrench },
+    ],
+  },
+  {
+    label: "Resources",
+    items: [
+      { title: "Resources Home", href: "/resources", icon: BookOpen },
+      { title: "FAQ", href: "/resources/faq", icon: BookOpen },
+      { title: "Blogs", href: "/resources/blogs", icon: BookOpen },
+      { title: "Videos", href: "/resources/videos", icon: BookOpen },
+      { title: "News", href: "/resources/news", icon: BookOpen },
+      { title: "Documentation", href: "/resources/docs", icon: BookOpen },
+      { title: "About Us", href: "/about", icon: Info },
+    ],
+  },
+];
+
+const mobileQuickItems = [
   { title: "Home", href: "/", icon: Home },
+  { title: "Search", href: "/search", icon: Search },
   { title: "Standards", href: "/standards", icon: Layers },
   { title: "Upgrades", href: "/upgrade", icon: Package },
-  { title: "Analytics", href: "/analytics/prs", icon: LineChart },
+  { title: "Analytics", href: "/analytics", icon: LineChart },
   { title: "Resources", href: "/resources", icon: BookOpen },
-  { title: "About Us", href: "/about", icon: Info },
 ];
 
 const PERSONA_TONE: Record<string, string> = {
@@ -87,6 +168,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileOpenSection, setMobileOpenSection] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [membershipTier, setMembershipTier] = useState<string>("free");
   const { data: session } = useSession();
@@ -376,29 +458,91 @@ export default function Navbar() {
               />
             </div>
 
-            {/* Mobile Navigation */}
-            <nav className="flex flex-wrap gap-2">
-              {mobileNavItems.map((item) => {
-                const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-all",
-                      "border",
-                      isActive
-                        ? "border-primary/50 bg-primary/10 text-foreground font-medium"
-                        : "border-border bg-muted/40 text-muted-foreground hover:border-primary/40 hover:bg-muted/70 hover:text-foreground"
-                    )}
-                  >
-                    <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-primary/80")} />
-                    {item.title}
-                  </Link>
-                );
-              })}
-            </nav>
+            {/* Mobile Navigation (compact + expandable) */}
+            <div className="space-y-3">
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Quick Access
+                </p>
+                <nav className="flex flex-wrap gap-2">
+                  {mobileQuickItems.map((item) => {
+                    const itemPath = item.href.split("?")[0];
+                    const isActive =
+                      pathname === itemPath ||
+                      (itemPath !== "/" && pathname.startsWith(itemPath));
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs transition-all",
+                          isActive
+                            ? "border-primary/50 bg-primary/10 text-foreground font-medium"
+                            : "border-border bg-muted/40 text-muted-foreground hover:border-primary/40 hover:bg-muted/70 hover:text-foreground"
+                        )}
+                      >
+                        <Icon className={cn("h-3.5 w-3.5", isActive ? "text-primary" : "text-primary/80")} />
+                        {item.title}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              <div className="space-y-2">
+                {mobileNavSections.map((section) => {
+                  const sectionKey = section.label;
+                  const isSectionOpen = mobileOpenSection === sectionKey;
+                  const sectionHasActive = section.items.some((item) => {
+                    const itemPath = item.href.split("?")[0];
+                    return pathname === itemPath || (itemPath !== "/" && pathname.startsWith(itemPath));
+                  });
+
+                  return (
+                    <div key={section.label} className="overflow-hidden rounded-lg border border-border bg-muted/30">
+                      <button
+                        type="button"
+                        onClick={() => setMobileOpenSection((prev) => (prev === sectionKey ? null : sectionKey))}
+                        className={cn(
+                          "flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider transition-colors",
+                          sectionHasActive ? "text-foreground bg-primary/8" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        )}
+                      >
+                        {section.label}
+                        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isSectionOpen && "rotate-180")} />
+                      </button>
+                      {isSectionOpen && (
+                        <nav className="space-y-1 border-t border-border/70 px-2 py-2">
+                          {section.items.map((item) => {
+                            const itemPath = item.href.split("?")[0];
+                            const isActive =
+                              pathname === itemPath ||
+                              (itemPath !== "/" && pathname.startsWith(itemPath));
+                            const Icon = item.icon;
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                className={cn(
+                                  "flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition-all",
+                                  isActive
+                                    ? "bg-primary/10 text-foreground"
+                                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                                )}
+                              >
+                                <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-primary/80")} />
+                                <span className="truncate">{item.title}</span>
+                              </Link>
+                            );
+                          })}
+                        </nav>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Mobile Upgrade Button */}
             {session?.user && membershipTier === "free" && (

@@ -148,7 +148,7 @@ export default function HomeFAQs({ categoryBreakdown, statusDist }: HomeFAQsProp
 
   return (
     <section className="relative w-full py-10 sm:py-14" id="faqs">
-      <div className="w-full max-w-full px-3 sm:px-4 lg:px-5 xl:px-6">
+      <div className="w-full">
         <div className="flex flex-col gap-8 md:flex-row md:gap-12">
           {/* Left Sidebar - Sticky */}
           <div className="md:w-1/3 shrink-0">
