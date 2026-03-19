@@ -26,6 +26,7 @@ interface RoleLeaderboardProps {
   loading: boolean;
   title?: string;
   subtitle?: string;
+  onMetricClick?: (payload: { actor: string; metric: 'prsTouched' | 'totalActions' | 'totalScore' }) => void;
 }
 
 const rankIcons: Record<number, { icon: React.ComponentType<{ className?: string }>; color: string; bg: string }> = {
@@ -47,11 +48,30 @@ function formatLastActivity(dateStr: string | null): string {
   return `${Math.floor(diffDays / 30)}mo ago`;
 }
 
+function getContributionReason(entry: LeaderboardEntry): string {
+  const buckets = [
+    { label: 'review-led', value: entry.prsReviewed },
+    { label: 'comment-led', value: entry.comments },
+    { label: 'authoring-led', value: entry.prsCreated },
+    { label: 'merge-led', value: entry.prsMerged },
+  ].sort((a, b) => b.value - a.value);
+
+  const dominant = buckets[0];
+  if (!dominant || dominant.value <= 0) {
+    return `Broad touch across ${entry.prsTouched.toLocaleString()} PRs`;
+  }
+  const response = entry.avgResponseHours != null
+    ? ` • avg response ${entry.avgResponseHours < 24 ? `${Math.round(entry.avgResponseHours)}h` : `${(entry.avgResponseHours / 24).toFixed(1)}d`}`
+    : '';
+  return `${dominant.label} contribution across ${entry.prsTouched.toLocaleString()} PRs${response}`;
+}
+
 export function RoleLeaderboard({
   entries,
   loading,
   title = 'Top participants',
   subtitle = 'Ranked by total actions in selected filters',
+  onMetricClick,
 }: RoleLeaderboardProps) {
   if (loading) {
     return (
@@ -89,7 +109,7 @@ export function RoleLeaderboard({
       </div>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 max-h-[420px] overflow-auto">
+      <div className="flex-1 min-h-0 max-h-[520px] overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
             <tr className="border-b border-border/70">
@@ -99,19 +119,19 @@ export function RoleLeaderboard({
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Person
               </th>
-              <th className="w-16 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="w-24 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <div className="flex items-center justify-center gap-1">
                   <GitPullRequest className="h-3 w-3" />
                   Touched
                 </div>
               </th>
-              <th className="w-16 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="w-24 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <div className="flex items-center justify-center gap-1">
                   <MessageSquare className="h-3 w-3" />
                   Actions
                 </div>
               </th>
-              <th className="w-16 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="w-24 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <div className="flex items-center justify-center gap-1">
                   <Trophy className="h-3 w-3" />
                   Score
@@ -135,13 +155,13 @@ export function RoleLeaderboard({
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.02 }}
                   className={cn(
-                    "h-14 transition-colors",
+                    "transition-colors",
                     isTop3 && "bg-primary/5",
                     "hover:bg-muted/40"
                   )}
                 >
-                  <td className="px-3 py-0">
-                    <div className="flex items-center justify-center h-14">
+                  <td className="px-3 py-3 align-top">
+                    <div className="flex items-center justify-center">
                       {RankIcon ? (
                         <div className={cn(
                           "flex h-8 w-8 items-center justify-center rounded-lg",
@@ -156,10 +176,10 @@ export function RoleLeaderboard({
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-0">
+                  <td className="px-3 py-3 align-top">
                     <Link
                       href={`/people/${encodeURIComponent(entry.actor)}`}
-                      className="flex items-center gap-3 group h-14"
+                      className="group flex items-start gap-3"
                     >
                       <img
                         src={`https://github.com/${entry.actor}.png?size=64`}
@@ -170,7 +190,7 @@ export function RoleLeaderboard({
                           e.currentTarget.src = `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect fill="%2364748b" width="32" height="32" rx="16"/><text x="16" y="20" text-anchor="middle" fill="white" font-size="14" font-weight="600">${entry.actor.charAt(0).toUpperCase()}</text></svg>`;
                         }}
                       />
-                        <div className="min-w-0">
+                      <div className="min-w-0">
                         <span className="block truncate font-medium text-foreground transition-colors group-hover:text-primary">
                           {entry.actor}
                         </span>
@@ -182,25 +202,40 @@ export function RoleLeaderboard({
                             {entry.role}
                           </span>
                         )}
+                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {getContributionReason(entry)}
+                        </p>
                       </div>
                     </Link>
                   </td>
-                  <td className="px-3 py-0 text-center align-middle">
-                    <span className="font-semibold text-foreground">
+                  <td className="px-3 py-3 text-center align-top">
+                    <button
+                      type="button"
+                      onClick={() => onMetricClick?.({ actor: entry.actor, metric: 'prsTouched' })}
+                      className="font-semibold text-foreground transition-colors hover:text-primary"
+                    >
                       {entry.prsTouched.toLocaleString()}
-                    </span>
+                    </button>
                   </td>
-                  <td className="px-3 py-0 text-center align-middle">
-                    <span className="font-semibold text-foreground">
+                  <td className="px-3 py-3 text-center align-top">
+                    <button
+                      type="button"
+                      onClick={() => onMetricClick?.({ actor: entry.actor, metric: 'totalActions' })}
+                      className="font-semibold text-foreground transition-colors hover:text-primary"
+                    >
                       {entry.totalActions.toLocaleString()}
-                    </span>
+                    </button>
                   </td>
-                  <td className="px-3 py-0 text-center align-middle">
-                    <span className="font-bold text-primary">
+                  <td className="px-3 py-3 text-center align-top">
+                    <button
+                      type="button"
+                      onClick={() => onMetricClick?.({ actor: entry.actor, metric: 'totalScore' })}
+                      className="font-bold text-primary transition-colors hover:text-primary/80"
+                    >
                       {entry.totalScore.toLocaleString()}
-                    </span>
+                    </button>
                   </td>
-                  <td className="px-3 py-0 text-center align-middle">
+                  <td className="px-3 py-3 text-center align-top">
                     <span className="text-xs text-muted-foreground">
                       {formatLastActivity(entry.lastActivity)}
                     </span>

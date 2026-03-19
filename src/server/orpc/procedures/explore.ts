@@ -1,4 +1,9 @@
 import { optionalAuthProcedure, publicProcedure, checkAPIToken } from './types'
+import {
+  CANONICAL_EIP_EDITOR_LOWER,
+  CANONICAL_EIP_REVIEWER_LOWER,
+  OFFICIAL_EDITORS_BY_CATEGORY,
+} from '@/data/eip-contributor-roles'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 import { unstable_cache } from 'next/cache'
@@ -375,15 +380,16 @@ type RoleFilterRepo = (typeof ROLE_FILTER_REPOS)[number];
 type RoleFilterCategory = (typeof ROLE_FILTER_CATEGORIES)[number];
 type RoleFilterRange = (typeof ROLE_FILTER_TIME_RANGES)[number];
 
-const OFFICIAL_EDITORS_BY_CATEGORY: Record<string, string[]> = {
-  governance: ['lightclient', 'SamWilsn', 'xinbenlv', 'g11tech', 'jochem-brouwer'],
-  core: ['lightclient', 'SamWilsn', 'g11tech', 'jochem-brouwer'],
-  erc: ['SamWilsn', 'xinbenlv'],
-  networking: ['lightclient', 'SamWilsn', 'g11tech', 'jochem-brouwer'],
-  interface: ['lightclient', 'SamWilsn', 'g11tech', 'jochem-brouwer'],
-  meta: ['lightclient', 'SamWilsn', 'xinbenlv', 'g11tech', 'jochem-brouwer'],
-  informational: ['lightclient', 'SamWilsn', 'xinbenlv', 'g11tech', 'jochem-brouwer'],
-};
+const CANONICAL_EDITOR_SET = new Set(CANONICAL_EIP_EDITOR_LOWER);
+const CANONICAL_REVIEWER_SET = new Set(CANONICAL_EIP_REVIEWER_LOWER);
+
+function resolveCanonicalRole(actor: string | null | undefined): 'EDITOR' | 'REVIEWER' | 'CONTRIBUTOR' {
+  const key = String(actor ?? '').trim().toLowerCase();
+  if (!key) return 'CONTRIBUTOR';
+  if (CANONICAL_EDITOR_SET.has(key)) return 'EDITOR';
+  if (CANONICAL_REVIEWER_SET.has(key)) return 'REVIEWER';
+  return 'CONTRIBUTOR';
+}
 
 function getFromForTimeRange(range: RoleFilterRange): Date | null {
   if (range === 'all') return null;
@@ -982,7 +988,7 @@ export const exploreProcedures = {
       const categoryFilter = category === 'all' ? null : category;
 
       const rows = await prisma.$queryRaw<Array<{
-        role: string;
+        actor: string;
         unique_actors: bigint;
         total_actions: bigint;
       }>>`
@@ -1009,17 +1015,22 @@ export const exploreProcedures = {
             AND LOWER(ca.actor) NOT LIKE '%bot'
             AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
         )
-        SELECT role, COUNT(DISTINCT actor) AS unique_actors, COUNT(*) AS total_actions
+        SELECT actor, 1::bigint AS unique_actors, COUNT(*) AS total_actions
         FROM filtered
-        WHERE role IS NOT NULL
-        GROUP BY role
+        GROUP BY actor
       `;
 
-      return rows.map(r => ({
-        role: r.role,
-        uniqueActors: Number(r.unique_actors),
-        totalActions: Number(r.total_actions),
-      }));
+      const aggregate = new Map<string, { role: string; uniqueActors: number; totalActions: number }>();
+      for (const role of ['EDITOR', 'REVIEWER', 'CONTRIBUTOR'] as const) {
+        aggregate.set(role, { role, uniqueActors: 0, totalActions: 0 });
+      }
+      for (const row of rows) {
+        const role = resolveCanonicalRole(row.actor);
+        const entry = aggregate.get(role)!;
+        entry.uniqueActors += 1;
+        entry.totalActions += Number(row.total_actions);
+      }
+      return Array.from(aggregate.values());
     }),
 
   getRoleLeaderboard: optionalAuthProcedure
@@ -1038,7 +1049,6 @@ export const exploreProcedures = {
 
       const rows = await prisma.$queryRaw<Array<{
         actor: string;
-        primary_role: string | null;
         total_actions: bigint;
         prs_touched: bigint;
         prs_created: bigint;
@@ -1052,7 +1062,6 @@ export const exploreProcedures = {
           FROM contributor_activity ca
           LEFT JOIN repositories r ON r.id = ca.repository_id
           WHERE (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
-            AND (${input.role ?? null}::text IS NULL OR UPPER(COALESCE(ca.role, '')) = ${input.role ?? null})
             AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
             AND (${input.actor ?? null}::text IS NULL OR LOWER(ca.actor) = LOWER(${input.actor ?? null}))
             AND (
@@ -1074,7 +1083,6 @@ export const exploreProcedures = {
         )
         SELECT
           f.actor,
-          (ARRAY_REMOVE(ARRAY_AGG(f.role ORDER BY f.occurred_at DESC), NULL))[1] AS primary_role,
           COUNT(*) AS total_actions,
           COUNT(DISTINCT f.pr_number) AS prs_touched,
           COUNT(DISTINCT CASE WHEN LOWER(COALESCE(f.action_type, '')) = 'opened' THEN f.pr_number END) AS prs_created,
@@ -1085,27 +1093,36 @@ export const exploreProcedures = {
         FROM filtered f
         GROUP BY f.actor
         ORDER BY total_actions DESC, last_activity DESC NULLS LAST
-        LIMIT ${input.limit}
+        LIMIT ${Math.min(input.limit * 5, 500)}
       `;
 
-      return rows.map((entry, index) => ({
-        rank: index + 1,
-        actor: entry.actor,
-        totalActions: Number(entry.total_actions),
-        totalScore:
-          Number(entry.prs_touched) +
-          Number(entry.reviews) * 2 +
-          Number(entry.prs_merged) * 3 +
-          Number(entry.prs_created),
-        prsReviewed: Number(entry.reviews),
-        comments: Number(entry.comments),
-        prsCreated: Number(entry.prs_created),
-        prsMerged: Number(entry.prs_merged),
-        avgResponseHours: null,
-        lastActivity: entry.last_activity?.toISOString() || null,
-        role: entry.primary_role,
-        prsTouched: Number(entry.prs_touched),
-      }));
+      return rows
+        .map((entry) => {
+          const canonicalRole = resolveCanonicalRole(entry.actor);
+          return {
+            actor: entry.actor,
+            totalActions: Number(entry.total_actions),
+            totalScore:
+              Number(entry.prs_touched) +
+              Number(entry.reviews) * 2 +
+              Number(entry.prs_merged) * 3 +
+              Number(entry.prs_created),
+            prsReviewed: Number(entry.reviews),
+            comments: Number(entry.comments),
+            prsCreated: Number(entry.prs_created),
+            prsMerged: Number(entry.prs_merged),
+            avgResponseHours: null,
+            lastActivity: entry.last_activity?.toISOString() || null,
+            role: canonicalRole,
+            prsTouched: Number(entry.prs_touched),
+          };
+        })
+        .filter((entry) => !input.role || entry.role === input.role)
+        .slice(0, input.limit)
+        .map((entry, index) => ({
+          ...entry,
+          rank: index + 1,
+        }));
     }),
 
   getTopActorsByRole: optionalAuthProcedure
@@ -1192,7 +1209,6 @@ export const exploreProcedures = {
         FROM contributor_activity ca
         LEFT JOIN repositories r ON r.id = ca.repository_id
         WHERE (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
-          AND (${input.role ?? null}::text IS NULL OR UPPER(COALESCE(ca.role, '')) = ${input.role ?? null})
           AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
           AND (${input.actor ?? null}::text IS NULL OR LOWER(ca.actor) = LOWER(${input.actor ?? null}))
           AND (
@@ -1212,13 +1228,13 @@ export const exploreProcedures = {
           AND LOWER(ca.actor) NOT LIKE '%bot'
           AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
         ORDER BY ca.occurred_at DESC
-        LIMIT ${input.limit}
+        LIMIT ${Math.min(input.limit * 5, 500)}
       `;
 
       let normalized = events.map(e => ({
         id: e.id.toString(),
         actor: e.actor,
-        role: e.role,
+        role: resolveCanonicalRole(e.actor),
         eventType: e.event_type,
         prNumber: e.pr_number,
         createdAt: e.occurred_at.toISOString(),
@@ -1248,7 +1264,6 @@ export const exploreProcedures = {
           FROM contributor_activity ca
           LEFT JOIN repositories r ON r.id = ca.repository_id
           WHERE (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
-            AND (${input.role ?? null}::text IS NULL OR UPPER(COALESCE(ca.role, '')) = ${input.role ?? null})
             AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
             AND (${input.actor ?? null}::text IS NULL OR LOWER(ca.actor) = LOWER(${input.actor ?? null}))
             AND ca.actor NOT LIKE '%[bot]%'
@@ -1256,12 +1271,12 @@ export const exploreProcedures = {
             AND LOWER(ca.actor) NOT LIKE '%bot'
             AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
           ORDER BY ca.occurred_at DESC
-          LIMIT ${input.limit}
+          LIMIT ${Math.min(input.limit * 5, 500)}
         `;
         normalized = fallback.map(e => ({
           id: e.id.toString(),
           actor: e.actor,
-          role: e.role,
+          role: resolveCanonicalRole(e.actor),
           eventType: e.event_type,
           prNumber: e.pr_number,
           createdAt: e.occurred_at.toISOString(),
@@ -1295,7 +1310,6 @@ export const exploreProcedures = {
           FROM pr_events pe
           LEFT JOIN repositories r ON r.id = pe.repository_id
           WHERE (${fromDate}::timestamp IS NULL OR pe.created_at >= ${fromDate})
-            AND (${input.role ?? null}::text IS NULL OR UPPER(COALESCE(pe.actor_role, '')) = ${input.role ?? null})
             AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
             AND (${input.actor ?? null}::text IS NULL OR LOWER(pe.actor) = LOWER(${input.actor ?? null}))
             AND pe.actor NOT LIKE '%[bot]%'
@@ -1303,13 +1317,13 @@ export const exploreProcedures = {
             AND LOWER(pe.actor) NOT LIKE '%bot'
             AND pe.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
           ORDER BY pe.created_at DESC
-          LIMIT ${input.limit}
+          LIMIT ${Math.min(input.limit * 5, 500)}
         `;
 
         normalized = fallbackEvents.map((e) => ({
           id: e.id.toString(),
           actor: e.actor,
-          role: e.actor_role,
+          role: resolveCanonicalRole(e.actor),
           eventType: String(e.event_type || '').toUpperCase(),
           prNumber: e.pr_number,
           createdAt: e.created_at.toISOString(),
@@ -1318,7 +1332,144 @@ export const exploreProcedures = {
         }));
       }
 
-      return normalized;
+      return normalized
+        .filter((event) => !input.role || event.role === input.role)
+        .slice(0, input.limit);
+    }),
+
+  getRoleContributionMix: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(ROLE_FILTER_REPOS).default('all'),
+      category: z.enum(ROLE_FILTER_CATEGORIES).default('all'),
+      timeRange: z.enum(ROLE_FILTER_TIME_RANGES).default('90d'),
+      actor: z.string().trim().min(1).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const from = getFromForTimeRange(input.timeRange);
+      const repoFilter = input.repo === 'all' ? null : input.repo;
+      const categoryFilter = input.category === 'all' ? null : input.category;
+
+      const rows = await prisma.$queryRaw<Array<{
+        actor: string;
+        action_type: string | null;
+        count: bigint;
+      }>>`
+        SELECT
+          ca.actor,
+          LOWER(COALESCE(ca.action_type, 'activity')) AS action_type,
+          COUNT(*)::bigint AS count
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
+          AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
+          AND (${input.actor ?? null}::text IS NULL OR LOWER(ca.actor) = LOWER(${input.actor ?? null}))
+          AND (
+            ${categoryFilter}::text IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM pull_request_eips pre
+              JOIN eips e ON e.eip_number = pre.eip_number
+              JOIN eip_snapshots s ON s.eip_id = e.id
+              WHERE pre.pr_number = ca.pr_number
+                AND pre.repository_id = ca.repository_id
+                AND LOWER(COALESCE(s.category, '')) = ${categoryFilter}
+            )
+          )
+          AND ca.actor NOT LIKE '%[bot]%'
+          AND ca.actor NOT LIKE '%-bot'
+          AND LOWER(ca.actor) NOT LIKE '%bot'
+          AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
+        GROUP BY ca.actor, LOWER(COALESCE(ca.action_type, 'activity'))
+      `;
+
+      const metrics = [
+        { metric: 'Reviews', EDITOR: 0, REVIEWER: 0, CONTRIBUTOR: 0, total: 0 },
+        { metric: 'Comments', EDITOR: 0, REVIEWER: 0, CONTRIBUTOR: 0, total: 0 },
+        { metric: 'PR Created', EDITOR: 0, REVIEWER: 0, CONTRIBUTOR: 0, total: 0 },
+        { metric: 'PR Merged', EDITOR: 0, REVIEWER: 0, CONTRIBUTOR: 0, total: 0 },
+      ];
+
+      for (const row of rows) {
+        const role = resolveCanonicalRole(row.actor);
+        const c = Number(row.count);
+        const action = row.action_type ?? 'activity';
+        if (action === 'reviewed') metrics[0][role] += c;
+        if (action === 'commented' || action === 'issue_comment') metrics[1][role] += c;
+        if (action === 'opened') metrics[2][role] += c;
+        if (action === 'merged') metrics[3][role] += c;
+      }
+
+      for (const m of metrics) {
+        m.total = m.EDITOR + m.REVIEWER + m.CONTRIBUTOR;
+      }
+
+      return metrics;
+    }),
+
+  getRoleActorBreakdown: optionalAuthProcedure
+    .input(z.object({
+      actor: z.string().trim().min(1),
+      repo: z.enum(ROLE_FILTER_REPOS).default('all'),
+      category: z.enum(ROLE_FILTER_CATEGORIES).default('all'),
+      timeRange: z.enum(ROLE_FILTER_TIME_RANGES).default('90d'),
+      limit: z.number().min(1).max(500).default(200),
+    }))
+    .handler(async ({ input }) => {
+      const from = getFromForTimeRange(input.timeRange);
+      const repoFilter = input.repo === 'all' ? null : input.repo;
+      const categoryFilter = input.category === 'all' ? null : input.category;
+
+      const rows = await prisma.$queryRaw<Array<{
+        id: bigint;
+        actor: string;
+        role: string | null;
+        action_type: string | null;
+        pr_number: number;
+        occurred_at: Date;
+        repo_name: string | null;
+      }>>`
+        SELECT
+          ca.id,
+          ca.actor,
+          ca.role,
+          ca.action_type,
+          ca.pr_number,
+          ca.occurred_at,
+          r.name AS repo_name
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE LOWER(ca.actor) = LOWER(${input.actor})
+          AND (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
+          AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
+          AND (
+            ${categoryFilter}::text IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM pull_request_eips pre
+              JOIN eips e ON e.eip_number = pre.eip_number
+              JOIN eip_snapshots s ON s.eip_id = e.id
+              WHERE pre.pr_number = ca.pr_number
+                AND pre.repository_id = ca.repository_id
+                AND LOWER(COALESCE(s.category, '')) = ${categoryFilter}
+            )
+          )
+          AND ca.actor NOT LIKE '%[bot]%'
+          AND ca.actor NOT LIKE '%-bot'
+          AND LOWER(ca.actor) NOT LIKE '%bot'
+          AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
+        ORDER BY ca.occurred_at DESC
+        LIMIT ${input.limit}
+      `;
+
+      return rows.map((row) => ({
+        id: row.id.toString(),
+        actor: row.actor,
+        role: resolveCanonicalRole(row.actor),
+        actionType: String(row.action_type || 'activity').toUpperCase(),
+        prNumber: row.pr_number,
+        occurredAt: row.occurred_at.toISOString(),
+        repoName: row.repo_name || 'ethereum/EIPs',
+      }));
     }),
 
   getRoleActivitySparkline: optionalAuthProcedure

@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
+import { CANONICAL_EIP_REVIEWERS } from "@/data/eip-contributor-roles";
 import { Loader2, Users, Clock, MessageSquare, AlertCircle, Search, ChevronLeft, ChevronRight, ChevronDown, Download, LayoutGrid, BarChart3 } from "lucide-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
 import {
@@ -65,14 +66,7 @@ interface ReviewerActionDetailRow {
   eventUrl: string | null;
 }
 
-const OFFICIAL_REVIEWERS = [
-  "bomanaps",
-  "Marchhill",
-  "SkandaBhat",
-  "advaita-saha",
-  "nalepae",
-  "daniellehrner",
-];
+const OFFICIAL_REVIEWERS: string[] = Array.from(CANONICAL_EIP_REVIEWERS);
 
 function getGitHubAvatarUrl(handle: string): string {
   return `https://github.com/${handle}.png?size=80`;

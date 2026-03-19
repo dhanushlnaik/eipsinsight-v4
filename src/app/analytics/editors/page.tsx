@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
+import { CANONICAL_EIP_EDITORS } from "@/data/eip-contributor-roles";
 import { Loader2, UserCheck, Clock, FileText, Download, AlertCircle, ChevronDown } from "lucide-react";
 import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
 import ReactECharts from "echarts-for-react";
@@ -83,20 +84,7 @@ const MONTH_NAMES = [
   "December",
 ];
 
-const OFFICIAL_EDITOR_HANDLES = [
-  "axic",
-  "Pandapip1",
-  "gcolvin",
-  "lightclient",
-  "SamWilsn",
-  "xinbenlv",
-  "nconsigny",
-  "yoavw",
-  "CarlBeek",
-  "adietrichs",
-  "jochem-brouwer",
-  "abcoathup",
-];
+const OFFICIAL_EDITOR_HANDLES: string[] = Array.from(CANONICAL_EIP_EDITORS);
 
 function getGitHubAvatarUrl(handle: string): string {
   return `https://github.com/${handle}.png?size=80`;

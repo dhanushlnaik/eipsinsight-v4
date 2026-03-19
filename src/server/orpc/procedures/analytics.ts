@@ -1,6 +1,13 @@
 import { optionalAuthProcedure, requireTier } from './types'
 
 import { prisma } from '@/lib/prisma'
+import {
+  CANONICAL_EIP_EDITORS,
+  CANONICAL_EIP_EDITOR_LOWER,
+  CANONICAL_EIP_REVIEWERS,
+  CANONICAL_EIP_REVIEWER_LOWER,
+  OFFICIAL_EDITORS_BY_CATEGORY,
+} from '@/data/eip-contributor-roles'
 import * as z from 'zod'
 import { unstable_cache } from 'next/cache'
 
@@ -767,47 +774,6 @@ const getReviewersLeaderboardCached = unstable_cache(
   ['analytics-getReviewersLeaderboard'],
   { tags: ['analytics-reviewers-leaderboard'], revalidate: 600 }
 );
-
-// Canonical editor handles used across editor analytics.
-const CANONICAL_EIP_EDITORS = [
-  'axic',              // Alex Beregszaszi
-  'Pandapip1',         // Gavin John
-  'gcolvin',           // Greg Colvin
-  'lightclient',       // Matt Garnett
-  'SamWilsn',          // Sam Wilson
-  'xinbenlv',
-  'nconsigny',
-  'yoavw',
-  'CarlBeek',
-  'adietrichs',
-  'jochem-brouwer',
-  'abcoathup',
-] as const;
-
-const CANONICAL_EIP_EDITOR_LOWER = CANONICAL_EIP_EDITORS.map((editor) => editor.toLowerCase());
-
-// Canonical reviewer handles used across reviewer analytics.
-const CANONICAL_EIP_REVIEWERS = [
-  'bomanaps',
-  'Marchhill',
-  'SkandaBhat',
-  'advaita-saha',
-  'nalepae',
-  'daniellehrner',
-] as const;
-
-const CANONICAL_EIP_REVIEWER_LOWER = CANONICAL_EIP_REVIEWERS.map((reviewer) => reviewer.toLowerCase());
-
-// Official EIP editor assignments per category (governance-defined view on the page).
-const OFFICIAL_EDITORS_BY_CATEGORY: Record<string, string[]> = {
-  governance: ['lightclient', 'SamWilsn', 'xinbenlv', 'nconsigny', 'jochem-brouwer'],
-  core: ['axic', 'Pandapip1', 'gcolvin', 'lightclient'],
-  erc: ['SamWilsn', 'xinbenlv', 'abcoathup'],
-  networking: ['yoavw', 'CarlBeek', 'adietrichs'],
-  interface: ['yoavw', 'CarlBeek', 'lightclient'],
-  meta: ['lightclient', 'SamWilsn', 'nconsigny', 'jochem-brouwer', 'abcoathup'],
-  informational: ['lightclient', 'SamWilsn', 'xinbenlv', 'abcoathup'],
-};
 
 const getEditorsByCategoryCached = unstable_cache(
   async (repo: string | null, from: string | null, to: string | null) => {
