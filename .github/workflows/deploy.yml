@@ -18,10 +18,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Notify Deployment Start
-        if: ${{ secrets.DISCORD_WEBHOOK != '' }}
+        if: ${{ env.DISCORD_WEBHOOK != '' }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: tsickert/discord-webhook@v7.0.0
         with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          webhook-url: ${{ env.DISCORD_WEBHOOK }}
           embed-title: "Deploy Started (v4)"
           embed-description: |
             Repository: ${{ github.repository }}
@@ -114,10 +116,12 @@ jobs:
             echo "Deployment completed successfully"
 
       - name: Discord Notification - Success
-        if: ${{ success() && secrets.DISCORD_WEBHOOK != '' }}
+        if: ${{ success() && env.DISCORD_WEBHOOK != '' }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: tsickert/discord-webhook@v7.0.0
         with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          webhook-url: ${{ env.DISCORD_WEBHOOK }}
           embed-title: "Deploy Successful (v4)"
           embed-description: |
             Repository: ${{ github.repository }}
@@ -129,10 +133,12 @@ jobs:
           embed-timestamp: ${{ github.event.head_commit.timestamp }}
 
       - name: Discord Notification - Failure
-        if: ${{ failure() && secrets.DISCORD_WEBHOOK != '' }}
+        if: ${{ failure() && env.DISCORD_WEBHOOK != '' }}
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: tsickert/discord-webhook@v7.0.0
         with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          webhook-url: ${{ env.DISCORD_WEBHOOK }}
           embed-title: "Deploy Failed (v4)"
           embed-description: |
             Repository: ${{ github.repository }}
