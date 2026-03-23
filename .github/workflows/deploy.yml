@@ -64,9 +64,7 @@ jobs:
             ln -s $SHARED_DIR/.env.local $NEW_RELEASE/.env.local
 
             cd $NEW_RELEASE
-            set -a
-            . ./.env.local
-            set +a
+            cp .env.local .env
 
             echo "Using Node 20"
             source ~/.nvm/nvm.sh
