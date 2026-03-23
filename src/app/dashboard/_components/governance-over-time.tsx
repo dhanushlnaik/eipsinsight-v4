@@ -4,8 +4,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import ReactECharts from 'echarts-for-react';
 import * as echarts from 'echarts';
-import { Info, Loader2, Download, Filter, Eye, EyeOff } from 'lucide-react';
+import { Info, Download, Filter, Eye, EyeOff } from 'lucide-react';
 import { client } from '@/lib/orpc';
+import { InlineBrandLoader } from '@/components/inline-brand-loader';
 
 // Aligned with Active Proposals bento grid colors
 const categoryColors: Record<string, string> = {
@@ -505,7 +506,7 @@ export default function GovernanceOverTime() {
               >
                 {loading ? (
                   <div className="flex items-center justify-center h-96">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <InlineBrandLoader label="Loading chart..." size="md" />
                   </div>
                 ) : chartData.length === 0 ? (
                   <div className="flex items-center justify-center h-96 text-muted-foreground">
@@ -668,7 +669,7 @@ export default function GovernanceOverTime() {
             
             {loadingDetails ? (
               <div className="flex items-center justify-center h-32">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <InlineBrandLoader label="Loading details..." size="sm" />
               </div>
             ) : detailedData.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">

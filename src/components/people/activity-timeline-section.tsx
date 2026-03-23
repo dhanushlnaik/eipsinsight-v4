@@ -136,6 +136,7 @@ export function ActivityTimelineSection({
   }, [activities]);
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [repoFilter, setRepoFilter] = useState<string>("All Repositories");
+  const [visibleCount, setVisibleCount] = useState(10);
 
   const filtered = useMemo(() => {
     const eventFilterSet = selectedEvents.length > 0 ? new Set(selectedEvents) : null;
@@ -147,6 +148,8 @@ export function ActivityTimelineSection({
       return true;
     });
   }, [activities, selectedMetrics, selectedEvents, repoFilter]);
+
+  const visibleActivities = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
 
   const metricCounts = useMemo(() => {
     const counts: Record<MetricType, number> = { commits: 0, prs: 0, reviews: 0, comments: 0 };
@@ -181,20 +184,20 @@ export function ActivityTimelineSection({
   const repoOptions = ["All Repositories", "EIPs", "ERCs", "RIPs", "Unknown", "Other"];
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
+    <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground">
             Activity Timeline
           </h2>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{rangeLabel}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{rangeLabel}</p>
         </div>
         <button
           onClick={() => downloadCsv(`${actor.replace(/\s+/g, "-").toLowerCase()}-activity-timeline.csv`, csvRows)}
-          className="inline-flex items-center gap-1 rounded-md border border-cyan-400/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-300"
+          className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs text-primary hover:bg-primary/15"
         >
           <Download className="h-3.5 w-3.5" />
-          Download CSV
+          Download Reports
         </button>
       </div>
 
@@ -212,35 +215,35 @@ export function ActivityTimelineSection({
               className={cn(
                 "rounded-lg border px-3 py-2 text-left",
                 active
-                  ? "border-cyan-400/40 bg-cyan-500/10"
-                  : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40"
+                  ? "border-primary/40 bg-primary/10"
+                  : "border-border bg-muted/20"
               )}
             >
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">{metricLabels[metric]}</p>
-              <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{metricCounts[metric]}</p>
+              <p className="text-[11px] text-muted-foreground">{metricLabels[metric]}</p>
+              <p className="text-base font-semibold text-foreground">{metricCounts[metric]}</p>
             </button>
           );
         })}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="text-xs text-slate-500">Filter by activity type</span>
+        <span className="text-xs text-muted-foreground">Filter by activity type</span>
         <button
           onClick={() => setSelectedEvents(allEventTypes)}
-          className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/60"
         >
           Select All
         </button>
         <button
           onClick={() => setSelectedEvents([])}
-          className="rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/60"
         >
           Unselect All
         </button>
         <select
           value={repoFilter}
           onChange={(e) => setRepoFilter(e.target.value)}
-          className="ml-auto rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+          className="ml-auto rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground"
         >
           {repoOptions.map((repo) => (
             <option key={repo} value={repo}>{repo}</option>
@@ -264,8 +267,8 @@ export function ActivityTimelineSection({
               className={cn(
                 "rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-wide",
                 active
-                  ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
-                  : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-400"
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground"
               )}
             >
               {eventType}
@@ -275,40 +278,40 @@ export function ActivityTimelineSection({
       </div>
 
       <div className="space-y-2">
-        {filtered.slice(0, 180).map((activity, idx) => {
+        {visibleActivities.map((activity, idx) => {
           const eventType = eventForActivity(activity);
           const link = githubLinkForActivity(activity);
           return (
-            <div key={`${activity.occurredAt}-${activity.prNumber}-${idx}`} className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+            <div key={`${activity.occurredAt}-${activity.prNumber}-${idx}`} className="rounded-lg border border-border bg-muted/20 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-cyan-700 dark:text-cyan-300">{eventType}</span>
-                    <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{repoFamily(activity.repo)}</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">{new Date(activity.occurredAt).toLocaleString()}</span>
+                    <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-primary">{eventType}</span>
+                    <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">{repoFamily(activity.repo)}</span>
+                    <span className="text-[11px] text-muted-foreground">{new Date(activity.occurredAt).toLocaleString()}</span>
                   </div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  <p className="text-sm font-medium text-foreground">
                     #{activity.prNumber} · {activity.prTitle || "Untitled PR"}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {activity.repo || "Unknown repo"}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {activity.prState && (
-                      <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{activity.prState}</span>
+                      <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">{activity.prState}</span>
                     )}
                     {activity.governanceState && (
-                      <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300">{activity.governanceState}</span>
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">{activity.governanceState}</span>
                     )}
                     {activity.commitSha && (
-                      <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-700 dark:text-violet-300">commit {activity.commitSha.slice(0, 7)}</span>
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">commit {activity.commitSha.slice(0, 7)}</span>
                     )}
                     {activity.prLabels.slice(0, 5).map((label) => (
-                      <span key={label} className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">{label}</span>
+                      <span key={label} className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">{label}</span>
                     ))}
                   </div>
                 </div>
-                <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted/60">
                   View on GitHub
                   <ExternalLink className="h-3 w-3" />
                 </a>
@@ -317,11 +320,22 @@ export function ActivityTimelineSection({
           );
         })}
         {filtered.length === 0 && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
+          <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
             No activities for current filters.
           </div>
         )}
+        {filtered.length > visibleCount && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => setVisibleCount((prev) => prev + 10)}
+              className="rounded-md border border-border bg-muted/30 px-3 py-1.5 text-xs text-foreground hover:bg-muted/60"
+            >
+              Show more
+            </button>
+          </div>
+        )}
       </div>
-    </section>
+    </div>
   );
 }

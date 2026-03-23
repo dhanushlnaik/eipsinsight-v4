@@ -2,27 +2,44 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 interface EIP {
   id: number;
   number: number;
+  author: string | null;
   title: string;
   type: string | null;
   status: string;
   category: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  metricCount: number;
+  metricLatestAt: string | null;
+  prNumber: number | null;
+  prRepo: string | null;
+  prState: string | null;
+  linkedEipNumbers: number[];
 }
 
 interface YearEIPTableProps {
   eips: EIP[];
   total: number;
+  metricTotal: number;
+  mode: 'new_eips' | 'status_changes' | 'pr_activity';
   loading: boolean;
   page: number;
   pageSize: number;
+  filters: {
+    q: string;
+    status: string;
+    category: string;
+    type: string;
+  };
+  onFiltersChange: (filters: { q: string; status: string; category: string; type: string }) => void;
+  onDownloadReport: () => void;
   onPageChange: (page: number) => void;
 }
 
@@ -50,15 +67,28 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+function formatPrState(state: string | null): string {
+  if (!state) return '-';
+  return state.charAt(0).toUpperCase() + state.slice(1).toLowerCase();
+}
+
 export function YearEIPTable({
   eips,
   total,
+  metricTotal,
+  mode,
   loading,
   page,
   pageSize,
+  filters,
+  onFiltersChange,
+  onDownloadReport,
   onPageChange,
 }: YearEIPTableProps) {
   const totalPages = Math.ceil(total / pageSize);
+  const modeLabel = mode === 'new_eips' ? 'New EIPs' : mode === 'status_changes' ? 'Status Changes' : 'PR Activity';
+  const metricLabel = mode === 'new_eips' ? 'Entries' : mode === 'status_changes' ? 'Status Events' : 'PR Entries';
+  const isPrMode = mode === 'pr_activity';
 
   if (loading) {
     return (
@@ -83,13 +113,23 @@ export function YearEIPTable({
     >
       {/* Table Header */}
       <div className="px-6 py-4 border-b border-border/70">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="dec-title text-xl font-semibold tracking-tight text-foreground">
-            EIPs ({total.toLocaleString()})
+            {modeLabel} Breakdown
           </h3>
-          <span className="text-sm text-muted-foreground">
-            Showing {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} of {total}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Showing {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, total)} of {total} · {metricLabel}: {metricTotal.toLocaleString()}
+            </span>
+            <button
+              type="button"
+              onClick={onDownloadReport}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download Reports
+            </button>
+          </div>
         </div>
       </div>
 
@@ -99,27 +139,101 @@ export function YearEIPTable({
           <thead>
             <tr className="border-b border-border/70">
               <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                EIP #
+                {isPrMode ? 'PR #' : 'EIP #'}
               </th>
               <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Title
               </th>
+              {!isPrMode && (
+                <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Status
+                </th>
+              )}
+              {!isPrMode && (
+                <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Category
+                </th>
+              )}
+              {!isPrMode && (
+                <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Type
+                </th>
+              )}
               <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Type
+                {isPrMode ? 'Updated' : 'Created'}
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Status
+              {!isPrMode && (
+                <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Updated
+                </th>
+              )}
+              {isPrMode && (
+                <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  PR State
+                </th>
+              )}
+              {isPrMode && (
+                <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Repository
+                </th>
+              )}
+              {isPrMode && (
+                <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  View PR
+                </th>
+              )}
+              {!isPrMode && (
+                <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  {metricLabel}
+                </th>
+              )}
+            </tr>
+            <tr className="border-b border-border/70 bg-muted/20">
+              <th className="px-6 py-2">
+                <input value={filters.q} onChange={(e) => onFiltersChange({ ...filters, q: e.target.value })} placeholder="Search number/title/author" className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground" />
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Created
+              <th className="px-6 py-2">
+                <input value="" readOnly placeholder="" className="h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-xs text-foreground" />
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Updated
-              </th>
+              {!isPrMode && (
+                <th className="px-6 py-2">
+                  <input value={filters.status} onChange={(e) => onFiltersChange({ ...filters, status: e.target.value })} placeholder="Status" className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground" />
+                </th>
+              )}
+              {!isPrMode && (
+                <th className="px-6 py-2">
+                  <input value={filters.category} onChange={(e) => onFiltersChange({ ...filters, category: e.target.value })} placeholder="Category" className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground" />
+                </th>
+              )}
+              {!isPrMode && (
+                <th className="px-6 py-2">
+                  <input value={filters.type} onChange={(e) => onFiltersChange({ ...filters, type: e.target.value })} placeholder="Type" className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground" />
+                </th>
+              )}
+              <th className="px-6 py-2" />
+              {!isPrMode && <th className="px-6 py-2" />}
+              {isPrMode && (
+                <th className="px-6 py-2">
+                  <input value={filters.status} onChange={(e) => onFiltersChange({ ...filters, status: e.target.value })} placeholder="PR state" className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground" />
+                </th>
+              )}
+              {isPrMode && (
+                <th className="px-6 py-2">
+                  <input value={filters.category} onChange={(e) => onFiltersChange({ ...filters, category: e.target.value })} placeholder="Repository" className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground" />
+                </th>
+              )}
+              {isPrMode && <th className="px-6 py-2" />}
+              {!isPrMode && <th className="px-6 py-2" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
-            {eips.map((eip, index) => (
+            {eips.length === 0 ? (
+              <tr>
+                <td colSpan={isPrMode ? 6 : 8} className="px-6 py-10 text-center text-sm text-muted-foreground">
+                  No proposals match the current breakdown filters.
+                </td>
+              </tr>
+            ) : eips.map((eip, index) => (
               <motion.tr
                 key={eip.id}
                 initial={{ opacity: 0 }}
@@ -128,41 +242,86 @@ export function YearEIPTable({
                 className="hover:bg-muted/40 transition-colors"
               >
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <Link
-                    href={`/eips/${eip.number}`}
-                    className="flex items-center gap-2 text-primary hover:text-primary/80 font-medium"
-                  >
-                    EIP-{eip.number}
-                    <ExternalLink className="h-3 w-3 opacity-50" />
-                  </Link>
+                  {isPrMode ? (
+                    <span className="font-medium text-foreground">PR-{eip.prNumber ?? eip.number}</span>
+                  ) : (
+                    <Link
+                      href={`/eips/${eip.number}`}
+                      className="flex items-center gap-2 text-primary hover:text-primary/80 font-medium"
+                    >
+                      EIP-{eip.number}
+                      <ExternalLink className="h-3 w-3 opacity-50" />
+                    </Link>
+                  )}
                 </td>
                 <td className="px-6 py-4">
                   <span className="text-sm text-foreground/90 line-clamp-1 max-w-xs">
                     {eip.title}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={cn(
-                    "text-sm",
-                    typeColors[eip.type || ''] || 'text-muted-foreground'
-                  )}>
-                    {eip.type || '-'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={cn(
-                    "inline-flex px-2.5 py-1 rounded-full text-xs font-medium border",
-                    statusColors[eip.status] || statusColors['Draft']
-                  )}>
-                    {eip.status}
-                  </span>
-                </td>
+                {!isPrMode && (
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={cn(
+                      "inline-flex px-2.5 py-1 rounded-full text-xs font-medium border",
+                      statusColors[eip.status] || statusColors['Draft']
+                    )}>
+                      {eip.status}
+                    </span>
+                  </td>
+                )}
+                {!isPrMode && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                    {eip.category || '-'}
+                  </td>
+                )}
+                {!isPrMode && (
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={cn(
+                      "text-sm",
+                      typeColors[eip.type || ''] || 'text-muted-foreground'
+                    )}>
+                      {eip.type || '-'}
+                    </span>
+                  </td>
+                )}
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  {formatDate(eip.createdAt)}
+                  {isPrMode ? formatDate(eip.updatedAt) : formatDate(eip.createdAt)}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                  {formatDate(eip.updatedAt)}
-                </td>
+                {!isPrMode && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                    {formatDate(eip.updatedAt)}
+                  </td>
+                )}
+                {isPrMode && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                    {formatPrState(eip.prState)}
+                  </td>
+                )}
+                {isPrMode && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
+                    {(eip.prRepo || '-').toUpperCase()}
+                  </td>
+                )}
+                {isPrMode && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {eip.prNumber && eip.prRepo ? (
+                      <Link
+                        href={`/pr/${eip.prRepo}/${eip.prNumber}`}
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        View PR
+                        <ExternalLink className="h-3 w-3 opacity-50" />
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                )}
+                {!isPrMode && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-foreground">
+                    {eip.metricCount.toLocaleString()}
+                  </td>
+                )}
               </motion.tr>
             ))}
           </tbody>

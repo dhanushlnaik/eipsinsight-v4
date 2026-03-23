@@ -2,6 +2,7 @@
 
 import { Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { InlineBrandLoader } from '@/components/inline-brand-loader';
 
 interface DailyActivity {
   date: string;
@@ -37,9 +38,8 @@ export function TrendingHeatmap({ data, loading, windowLabel, selectedProposal, 
   if (loading) {
     return (
       <div className="rounded-xl border border-border bg-card/60 p-4">
-        <div className="animate-pulse space-y-3">
-          <div className="h-6 w-52 rounded bg-muted" />
-          <div className="h-52 rounded bg-muted" />
+        <div className="flex h-[220px] items-center justify-center">
+          <InlineBrandLoader label="Loading matrix..." size="sm" />
         </div>
       </div>
     );

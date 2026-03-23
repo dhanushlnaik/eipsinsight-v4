@@ -4,11 +4,6 @@ import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Calendar,
-  Loader2,
-  Medal,
-  RefreshCcw,
-  Sparkles,
   Users,
 } from "lucide-react";
 import { client } from "@/lib/orpc";
@@ -16,6 +11,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ActivityTimelineSection, type ActivityDetail } from "@/components/people/activity-timeline-section";
 import { RepositoryBreakdownSection } from "@/components/people/repository-breakdown-section";
 import { ContributorHeatmap } from "@/components/analytics/ContributorHeatmap";
+import { InlineBrandLoader } from "@/components/inline-brand-loader";
+import { CANONICAL_EIP_EDITORS, CANONICAL_EIP_REVIEWERS } from "@/data/eip-contributor-roles";
 import {
   ChartContainer,
   ChartTooltip,
@@ -105,12 +102,29 @@ function initials(name: string) {
   return (bits[0][0] + bits[1][0]).toUpperCase();
 }
 
+function deriveRoleSummary(data: {
+  summary: { reviews: number; prsAuthored: number; eipsAuthored: number };
+  leaderboard: {
+    editor: { rank: number | null };
+    reviewer: { rank: number | null };
+  };
+}) {
+  const editorRank = data.leaderboard.editor.rank;
+  const reviewerRank = data.leaderboard.reviewer.rank;
+  if (reviewerRank && editorRank) {
+    return reviewerRank < editorRank ? "Reviewer-editor" : "Editor-reviewer";
+  }
+  if (reviewerRank) return "Reviewer";
+  if (editorRank) return "Editor";
+  if (data.summary.prsAuthored > 0 || data.summary.eipsAuthored > 0) return "Contributor-author";
+  return "Contributor";
+}
+
 export default function PersonProfilePage() {
   const params = useParams();
   const actorParam = decodeURIComponent(String(params.actor ?? "")).trim();
-  const [selectedActions, setSelectedActions] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"timeline" | "prs" | "issues">("timeline");
-  const [rangePreset, setRangePreset] = useState<RangePreset>("365d");
+  const [rangePreset, setRangePreset] = useState<RangePreset>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
@@ -157,12 +171,6 @@ export default function PersonProfilePage() {
   });
 
   const data = profileQuery.data;
-  const actionTypes = useMemo(
-    () => data?.actionBreakdown.map((a) => a.actionType) ?? [],
-    [data?.actionBreakdown]
-  );
-
-  const activeActions = selectedActions.length > 0 ? selectedActions : actionTypes;
   const topAction = data?.actionBreakdown[0]?.actionType ?? null;
   const githubAvatar = data?.actor ? `https://github.com/${encodeURIComponent(data.actor)}.png?size=128` : undefined;
   const rangeLabel = useMemo(() => {
@@ -179,53 +187,45 @@ export default function PersonProfilePage() {
   const filteredMonthly = useMemo(() => {
     if (!data) return [];
     return data.monthlyActivity.map((point: MonthlyPoint) => {
-      const total = point.actionCounts
-        .filter((item) => activeActions.includes(item.actionType))
-        .reduce((sum, item) => sum + item.count, 0);
-
       return {
         month: point.month,
         label: monthLabel(point.month),
-        total,
-      };
-    });
-  }, [data, activeActions]);
-
-  const filteredActionBreakdown = useMemo(() => {
-    if (!data) return [];
-    return data.actionBreakdown.filter((a: ActionCount) =>
-      activeActions.includes(a.actionType)
-    );
-  }, [data, activeActions]);
-
-  const sparklineData = useMemo(() => {
-    if (!data) return [] as Array<{ actionType: string; count: number; series: Array<{ idx: number; count: number }> }>;
-
-    return data.actionBreakdown.map((action: ActionCount) => {
-      const series = data.monthlyActivity.slice(-12).map((point: MonthlyPoint, idx: number) => {
-        const found = point.actionCounts.find((a) => a.actionType === action.actionType);
-        return { idx, count: found?.count ?? 0 };
-      });
-      return {
-        actionType: action.actionType,
-        count: action.count,
-        series,
+        total: point.total,
       };
     });
   }, [data]);
 
-  const toggleAction = (action: string) => {
-    setSelectedActions((prev) =>
-      prev.includes(action) ? prev.filter((a) => a !== action) : [...prev, action]
-    );
-  };
+  const filteredActionBreakdown = data?.actionBreakdown ?? [];
 
-  const resetFilters = () => setSelectedActions([]);
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const topRepo = useMemo(() => {
+    if (!data?.activityDetails?.length) return "—";
+    const counts = new Map<string, number>();
+    for (const item of data.activityDetails as ActivityDetail[]) {
+      const repo = item.repo ?? "Unknown";
+      counts.set(repo, (counts.get(repo) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+  }, [data?.activityDetails]);
+
+  const roleSummary = data ? deriveRoleSummary(data) : "Contributor";
+  const profileNarrative = data
+    ? `${roleSummary} with strongest ${topAction ? prettyAction(topAction).toLowerCase() : "activity"} contribution in ${rangeLabel.toLowerCase()}, mainly across ${topRepo}.`
+    : "";
+  const canonicalBadge = useMemo(() => {
+    const key = actorParam.toLowerCase();
+    const isEditor = CANONICAL_EIP_EDITORS.some((e) => e.toLowerCase() === key);
+    const isReviewer = CANONICAL_EIP_REVIEWERS.some((r) => r.toLowerCase() === key);
+    if (isEditor && isReviewer) return "Editor & Reviewer Profile";
+    if (isEditor) return "Editor Profile";
+    if (isReviewer) return "Reviewer Profile";
+    return "Contributor Profile";
+  }, [actorParam]);
 
   if (profileQuery.isLoading) {
     return (
       <div className="flex min-h-[420px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+        <InlineBrandLoader size="md" label="Loading profile..." />
       </div>
     );
   }
@@ -246,35 +246,34 @@ export default function PersonProfilePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto w-full px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
       <header className="mb-6">
-        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-700 dark:text-cyan-300">
+        <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary">
           <Users className="h-3.5 w-3.5" />
-          Contributor Profile
+          {canonicalBadge}
         </div>
         <div className="mt-3 flex items-start gap-4">
-          <Avatar className="h-16 w-16 border border-cyan-400/30">
+          <Avatar className="h-16 w-16 border border-border">
             <AvatarImage src={githubAvatar} alt={data.actor} />
-            <AvatarFallback className="bg-cyan-500/10 text-cyan-700 dark:text-cyan-300">
+            <AvatarFallback className="bg-primary/10 text-primary">
               {initials(data.actor)}
             </AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="dec-title text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            <h1 className="dec-title persona-title text-3xl font-semibold tracking-tight sm:text-4xl">
               {data.actor}
             </h1>
-            <p className="mt-1.5 max-w-3xl text-sm text-slate-600 dark:text-slate-400">
-              End-to-end activity view across reviews, comments, commits, PR actions, and
-              governance-related status changes.
+            <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">
+              {profileNarrative}
             </p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Primary action: <span className="font-medium text-slate-800 dark:text-slate-200">{topAction ? prettyAction(topAction) : "—"}</span>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Primary role: <span className="font-medium text-foreground">{roleSummary}</span> · Primary action: <span className="font-medium text-foreground">{topAction ? prettyAction(topAction) : "—"}</span>
             </p>
             <a
               href={`https://github.com/${encodeURIComponent(data.actor)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-1 inline-flex text-xs text-cyan-700 hover:underline dark:text-cyan-300"
+              className="mt-1 inline-flex text-xs text-primary hover:underline"
             >
               View GitHub profile
             </a>
@@ -282,8 +281,8 @@ export default function PersonProfilePage() {
         </div>
       </header>
 
-      <section className="mb-6 rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-        <div className="mb-3 text-sm font-medium text-slate-800 dark:text-slate-200">Active Window</div>
+      <section className="mb-6 rounded-xl border border-border bg-card/60 p-4">
+        <div className="mb-3 text-sm font-medium text-foreground">Active Window</div>
         <div className="flex flex-wrap items-center gap-2">
           {([
             ["7d", "Last 7 Days"],
@@ -298,8 +297,8 @@ export default function PersonProfilePage() {
               className={cn(
                 "rounded-full border px-3 py-1.5 text-xs transition-colors",
                 rangePreset === key
-                  ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
-                  : "border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/60"
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted/60"
               )}
             >
               {label}
@@ -311,14 +310,14 @@ export default function PersonProfilePage() {
                 type="date"
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
               />
-              <span className="text-xs text-slate-500">to</span>
+              <span className="text-xs text-muted-foreground">to</span>
               <input
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
               />
             </div>
           )}
@@ -326,170 +325,47 @@ export default function PersonProfilePage() {
       </section>
 
       <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <p className="text-xs text-slate-500 dark:text-slate-400">Total Activity</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+        <div className="rounded-xl border border-border bg-card/60 p-4">
+          <p className="text-xs text-muted-foreground">Total Activity</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">
             {data.summary.totalActivities.toLocaleString()}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <p className="text-xs text-slate-500 dark:text-slate-400">PRs Touched</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+        <div className="rounded-xl border border-border bg-card/60 p-4">
+          <p className="text-xs text-muted-foreground">PRs Touched</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">
             {data.summary.prsTouched.toLocaleString()}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <p className="text-xs text-slate-500 dark:text-slate-400">PRs Authored</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+        <div className="rounded-xl border border-border bg-card/60 p-4">
+          <p className="text-xs text-muted-foreground">PRs Authored</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">
             {data.summary.prsAuthored.toLocaleString()}
           </p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <p className="text-xs text-slate-500 dark:text-slate-400">EIPs Authored</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+        <div className="rounded-xl border border-border bg-card/60 p-4">
+          <p className="text-xs text-muted-foreground">EIPs Authored</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">
             {data.summary.eipsAuthored.toLocaleString()}
           </p>
         </div>
       </section>
 
-      <section className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
-            <Medal className="h-4 w-4 text-amber-500" />
-            Leaderboard Position
-          </div>
-          <div className="space-y-1 text-sm">
-            <p className="text-slate-600 dark:text-slate-400">
-              All-time total: <span className="font-semibold text-slate-900 dark:text-white">#{data.leaderboard.allTime.totalRank ?? "—"}</span> / {data.leaderboard.allTime.participants || "—"}
-            </p>
-            <p className="text-slate-600 dark:text-slate-400">
-              This month: <span className="font-semibold text-slate-900 dark:text-white">#{data.leaderboard.thisMonth.totalRank ?? "—"}</span> / {data.leaderboard.thisMonth.participants || "—"}
-            </p>
-            <p className="text-slate-600 dark:text-slate-400">
-              Editor rank: <span className="font-semibold text-slate-900 dark:text-white">{data.leaderboard.editor.rank ? `#${data.leaderboard.editor.rank}` : "—"}</span>
-            </p>
-            <p className="text-slate-600 dark:text-slate-400">
-              Reviewer rank: <span className="font-semibold text-slate-900 dark:text-white">{data.leaderboard.reviewer.rank ? `#${data.leaderboard.reviewer.rank}` : "—"}</span>
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
-            <Sparkles className="h-4 w-4 text-cyan-500" />
-            Peak Insights
-          </div>
-          <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
-            <p>
-              Peak month: <span className="font-semibold text-slate-900 dark:text-white">{data.peaks.topMonth ? `${monthLabel(data.peaks.topMonth.month)} (${data.peaks.topMonth.count})` : "—"}</span>
-            </p>
-            <p>
-              Months topped leaderboard: <span className="font-semibold text-slate-900 dark:text-white">{data.peaks.toppedMonths}</span>
-            </p>
-            {data.peaks.topActionMonths.slice(0, 2).map((m: { actionType: string; month: string; count: number }) => (
-              <p key={m.actionType}>
-                Best {prettyAction(m.actionType)}: <span className="font-semibold text-slate-900 dark:text-white">{monthLabel(m.month)} ({m.count})</span>
-              </p>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
-            <Calendar className="h-4 w-4 text-emerald-500" />
-            Activity Span
-          </div>
-          <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
-            <p>
-              First seen: <span className="font-medium text-slate-900 dark:text-white">{data.summary.firstActivity ? new Date(data.summary.firstActivity).toLocaleDateString() : "—"}</span>
-            </p>
-            <p>
-              Last active: <span className="font-medium text-slate-900 dark:text-white">{data.summary.lastActivity ? new Date(data.summary.lastActivity).toLocaleDateString() : "—"}</span>
-            </p>
-            <p>
-              Reviews: <span className="font-medium text-slate-900 dark:text-white">{data.summary.reviews}</span>
-            </p>
-            <p>
-              Commits: <span className="font-medium text-slate-900 dark:text-white">{data.summary.commits}</span>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="mb-6 rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-        <h2 className="mb-4 text-sm font-medium text-slate-800 dark:text-slate-200">Daily Activity</h2>
-        {dailyActivityQuery.isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
-          </div>
-        ) : dailyActivityQuery.data && dailyActivityQuery.data.length > 0 ? (
-          <ContributorHeatmap data={dailyActivityQuery.data} />
-        ) : (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 py-8 text-center dark:border-slate-700 dark:bg-slate-900/50">
-            <p className="text-sm text-slate-500 dark:text-slate-400">No activity data available for the selected range</p>
-          </div>
-        )}
-      </section>
-
-      <section className="mb-6 rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="text-sm font-medium text-slate-800 dark:text-slate-200">Filter by activity action</div>
-          <button
-            onClick={resetFilters}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60"
-          >
-            <RefreshCcw className="h-3 w-3" />
-            Reset
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {actionTypes.map((action) => {
-            const active = selectedActions.length === 0 || selectedActions.includes(action);
-            return (
-              <button
-                key={action}
-                onClick={() => toggleAction(action)}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs transition-colors",
-                  active
-                    ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
-                    : "border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/60"
-                )}
-              >
-                {prettyAction(action)}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {sparklineData.map((item) => (
-            <div key={item.actionType} className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium text-slate-700 dark:text-slate-300">{prettyAction(item.actionType)}</p>
-                <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">{item.count}</p>
-              </div>
-              <div className="h-14 w-full">
-                <ResponsiveContainer>
-                  <LineChart data={item.series}>
-                    <Line
-                      type="monotone"
-                      dataKey="count"
-                      stroke={actionColors[item.actionType] ?? "#22d3ee"}
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          ))}
+      <section className="mb-6 rounded-xl border border-border bg-card/60 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Profile Summary</p>
+        <div className="mt-2 grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
+          <p className="text-muted-foreground">All-time rank: <span className="font-semibold text-foreground">#{data.leaderboard.allTime.totalRank ?? "—"}</span> / {data.leaderboard.allTime.participants || "—"}</p>
+          <p className="text-muted-foreground">This month rank: <span className="font-semibold text-foreground">#{data.leaderboard.thisMonth.totalRank ?? "—"}</span> / {data.leaderboard.thisMonth.participants || "—"}</p>
+          <p className="text-muted-foreground">Peak month: <span className="font-semibold text-foreground">{data.peaks.topMonth ? `${monthLabel(data.peaks.topMonth.month)} (${data.peaks.topMonth.count})` : "—"}</span></p>
+          <p className="text-muted-foreground">Top repo: <span className="font-semibold text-foreground">{topRepo}</span></p>
+          <p className="text-muted-foreground">First seen: <span className="font-semibold text-foreground">{data.summary.firstActivity ? new Date(data.summary.firstActivity).toLocaleDateString() : "—"}</span></p>
+          <p className="text-muted-foreground">Last active: <span className="font-semibold text-foreground">{data.summary.lastActivity ? new Date(data.summary.lastActivity).toLocaleDateString() : "—"}</span></p>
         </div>
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">Progress Over Time (24 months)</h2>
+        <div className="rounded-xl border border-border bg-card/60 p-4">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Progress Over Time (24 months)</h2>
           <ChartContainer config={{ total: { label: "Activity", color: "#22d3ee" } }} className="h-72 w-full">
             <ResponsiveContainer>
               <LineChart data={filteredMonthly}>
@@ -503,8 +379,8 @@ export default function PersonProfilePage() {
           </ChartContainer>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">Activity by Action Type</h2>
+        <div className="rounded-xl border border-border bg-card/60 p-4">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Activity by Action Type</h2>
           <ChartContainer config={{ count: { label: "Count", color: "#10b981" } }} className="h-72 w-full">
             <ResponsiveContainer>
               <BarChart data={filteredActionBreakdown}>
@@ -523,14 +399,7 @@ export default function PersonProfilePage() {
         </div>
       </section>
 
-      <div className="mb-6">
-        <RepositoryBreakdownSection
-          actor={data.actor}
-          activities={data.activityDetails as ActivityDetail[]}
-        />
-      </div>
-
-      <section className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
+      <section className="mb-6 rounded-xl border border-border bg-card/60 p-4">
         <div className="mb-4 flex items-center gap-2">
           {([
             { key: "timeline", label: "Timeline" },
@@ -543,8 +412,8 @@ export default function PersonProfilePage() {
               className={cn(
                 "rounded-md border px-3 py-1.5 text-xs transition-colors",
                 activeTab === tab.key
-                  ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
-                  : "border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/60"
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted/60"
               )}
             >
               {tab.label}
@@ -563,23 +432,23 @@ export default function PersonProfilePage() {
         {activeTab === "prs" && (
           <div className="space-y-3">
             {data.involvedPRs.map((pr: InvolvedPR) => (
-              <div key={`${pr.repo}-${pr.prNumber}`} className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+              <div key={`${pr.repo}-${pr.prNumber}`} className="rounded-lg border border-border bg-muted/20 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">#{pr.prNumber} · {pr.title || "Untitled PR"}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-sm font-medium text-foreground">#{pr.prNumber} · {pr.title || "Untitled PR"}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {pr.repo ?? "Unknown"} · Last touched by contributor: {new Date(pr.lastOccurredAt).toLocaleDateString()}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1">
-                      <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{pr.state || "unknown"}</span>
+                      <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">{pr.state || "unknown"}</span>
                       {pr.governanceState && (
-                        <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-700 dark:text-cyan-300">{pr.governanceState}</span>
+                        <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">{pr.governanceState}</span>
                       )}
-                      <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300">
+                      <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
                         {pr.totalActions} actions
                       </span>
                       {pr.actionsBreakdown.slice(0, 3).map((action) => (
-                        <span key={action} className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">
+                        <span key={action} className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">
                           {action.replace(":", " · ")}
                         </span>
                       ))}
@@ -589,7 +458,7 @@ export default function PersonProfilePage() {
                     href={`https://github.com/${pr.repo ?? "ethereum/EIPs"}/pull/${pr.prNumber}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded-md border border-slate-300 px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted/60"
                   >
                     Open
                   </a>
@@ -597,7 +466,7 @@ export default function PersonProfilePage() {
               </div>
             ))}
             {data.involvedPRs.length === 0 && (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No PR activity records found in selected window.</p>
+              <p className="text-sm text-muted-foreground">No PR activity records found in selected window.</p>
             )}
           </div>
         )}
@@ -605,17 +474,17 @@ export default function PersonProfilePage() {
         {activeTab === "issues" && (
           <div className="space-y-3">
             {data.authoredIssues.map((issue: AuthoredIssue) => (
-              <div key={`${issue.repo}-${issue.issueNumber}`} className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+              <div key={`${issue.repo}-${issue.issueNumber}`} className="rounded-lg border border-border bg-muted/20 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">#{issue.issueNumber} · {issue.title || "Untitled Issue"}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-sm font-medium text-foreground">#{issue.issueNumber} · {issue.title || "Untitled Issue"}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {issue.repo ?? "Unknown"} · {issue.updatedAt ? new Date(issue.updatedAt).toLocaleDateString() : "—"}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1">
-                      <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{issue.state || "unknown"}</span>
+                      <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">{issue.state || "unknown"}</span>
                       {issue.labels.slice(0, 3).map((label) => (
-                        <span key={label} className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-400">{label}</span>
+                        <span key={label} className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground">{label}</span>
                       ))}
                     </div>
                   </div>
@@ -623,7 +492,7 @@ export default function PersonProfilePage() {
                     href={`https://github.com/${issue.repo ?? "ethereum/EIPs"}/issues/${issue.issueNumber}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded-md border border-slate-300 px-2 py-1 text-[10px] text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                    className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted/60"
                   >
                     Open
                   </a>
@@ -631,11 +500,35 @@ export default function PersonProfilePage() {
               </div>
             ))}
             {data.authoredIssues.length === 0 && (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No authored issue records found.</p>
+              <p className="text-sm text-muted-foreground">No authored issue records found.</p>
             )}
           </div>
         )}
       </section>
+
+      <div className="mb-6">
+        <RepositoryBreakdownSection
+          actor={data.actor}
+          activities={data.activityDetails as ActivityDetail[]}
+        />
+      </div>
+
+      <details className="rounded-xl border border-border bg-card/60 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-foreground">Daily activity pattern</summary>
+        <div className="mt-4">
+          {dailyActivityQuery.isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <InlineBrandLoader label="Loading activity..." />
+            </div>
+          ) : dailyActivityQuery.data && dailyActivityQuery.data.length > 0 ? (
+            <ContributorHeatmap data={dailyActivityQuery.data} />
+          ) : (
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 py-8 text-center">
+              <p className="text-sm text-muted-foreground">No activity data available for the selected range</p>
+            </div>
+          )}
+        </div>
+      </details>
     </div>
   );
 }

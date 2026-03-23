@@ -1,4 +1,9 @@
 import { optionalAuthProcedure, publicProcedure, checkAPIToken } from './types'
+import {
+  CANONICAL_EIP_EDITOR_LOWER,
+  CANONICAL_EIP_REVIEWER_LOWER,
+  OFFICIAL_EDITORS_BY_CATEGORY,
+} from '@/data/eip-contributor-roles'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 import { unstable_cache } from 'next/cache'
@@ -23,11 +28,24 @@ const getYearsOverviewCached = unstable_cache(
         UNION
         SELECT DISTINCT EXTRACT(YEAR FROM changed_at)::int FROM eip_status_events
         UNION
-        SELECT DISTINCT EXTRACT(YEAR FROM created_at)::int FROM pull_requests WHERE created_at IS NOT NULL
+        SELECT DISTINCT EXTRACT(YEAR FROM p.created_at)::int
+        FROM pull_requests p
+        JOIN pull_request_eips pre ON pre.pr_number = p.pr_number AND pre.repository_id = p.repository_id
+        JOIN eips e ON e.eip_number = pre.eip_number
+        WHERE p.created_at IS NOT NULL
+          AND e.eip_number NOT IN (2512, 3297, 1047)
       ) years
       LEFT JOIN (SELECT EXTRACT(YEAR FROM created_at)::int AS y, COUNT(*) AS cnt FROM eips WHERE created_at IS NOT NULL AND eip_number NOT IN (2512, 3297, 1047) GROUP BY 1) e ON e.y = years.y
       LEFT JOIN (SELECT EXTRACT(YEAR FROM changed_at)::int AS y, COUNT(*) AS cnt FROM eip_status_events GROUP BY 1) s ON s.y = years.y
-      LEFT JOIN (SELECT EXTRACT(YEAR FROM created_at)::int AS y, COUNT(*) AS cnt FROM pull_requests WHERE created_at IS NOT NULL GROUP BY 1) p ON p.y = years.y
+      LEFT JOIN (
+        SELECT EXTRACT(YEAR FROM p.created_at)::int AS y, COUNT(DISTINCT (p.repository_id, p.pr_number)) AS cnt
+        FROM pull_requests p
+        JOIN pull_request_eips pre ON pre.pr_number = p.pr_number AND pre.repository_id = p.repository_id
+        JOIN eips e ON e.eip_number = pre.eip_number
+        WHERE p.created_at IS NOT NULL
+          AND e.eip_number NOT IN (2512, 3297, 1047)
+        GROUP BY 1
+      ) p ON p.y = years.y
       ORDER BY years.y DESC
     `;
     return rows.map(r => ({
@@ -71,7 +89,15 @@ const getYearStatsCached = unstable_cache(
           ORDER BY COUNT(*) DESC
           LIMIT 1
         ) AS most_active_category,
-        (SELECT COUNT(*) FROM pull_requests WHERE created_at >= ${startDate} AND created_at <= ${endDate}) AS total_prs
+        (
+          SELECT COUNT(DISTINCT (p.repository_id, p.pr_number))
+          FROM pull_requests p
+          JOIN pull_request_eips pre ON pre.pr_number = p.pr_number AND pre.repository_id = p.repository_id
+          JOIN eips e ON e.eip_number = pre.eip_number
+          WHERE p.created_at >= ${startDate}
+            AND p.created_at <= ${endDate}
+            AND e.eip_number NOT IN (2512, 3297, 1047)
+        ) AS total_prs
     `;
     const r = rows[0];
     return {
@@ -259,7 +285,7 @@ async function getYearActivityChartDetail(year: number) {
 }
 
 const getStatusCountsCached = unstable_cache(
-  async () => {
+  async (category: string | null) => {
     const rows = await prisma.$queryRaw<Array<{
       status: string;
       count: bigint;
@@ -271,11 +297,19 @@ const getStatusCountsCached = unstable_cache(
         JOIN eips e ON e.id = s.eip_id
         WHERE s.status IS NOT NULL
           AND e.eip_number NOT IN (2512, 3297, 1047)
+          AND (
+            ${category}::text IS NULL
+            OR COALESCE(NULLIF(TRIM(s.category), ''), NULLIF(TRIM(s.type), ''), 'Unknown') = ${category}
+          )
         UNION ALL
         SELECT COALESCE(r.status, 'Unknown') AS status,
                COALESCE((SELECT MAX(rc.commit_date) FROM rip_commits rc WHERE rc.rip_id = r.id), r.created_at) AS updated_at
         FROM rips r
         WHERE r.rip_number <> 0
+          AND (
+            ${category}::text IS NULL
+            OR LOWER(${category}) IN ('rip', 'rips')
+          )
       )
       SELECT status, COUNT(*) AS count, MAX(updated_at) AS last_updated
       FROM all_statuses
@@ -298,11 +332,10 @@ const getCategoryCountsCached = unstable_cache(
       count: bigint;
     }>>`
       WITH all_categories AS (
-        SELECT s.category AS category
+        SELECT COALESCE(NULLIF(TRIM(s.category), ''), NULLIF(TRIM(s.type), ''), 'Unknown') AS category
         FROM eip_snapshots s
         JOIN eips e ON e.id = s.eip_id
-        WHERE s.category IS NOT NULL
-          AND e.eip_number NOT IN (2512, 3297, 1047)
+        WHERE e.eip_number NOT IN (2512, 3297, 1047)
         UNION ALL
         SELECT 'RIP'::text AS category
         FROM rips
@@ -347,15 +380,16 @@ type RoleFilterRepo = (typeof ROLE_FILTER_REPOS)[number];
 type RoleFilterCategory = (typeof ROLE_FILTER_CATEGORIES)[number];
 type RoleFilterRange = (typeof ROLE_FILTER_TIME_RANGES)[number];
 
-const OFFICIAL_EDITORS_BY_CATEGORY: Record<string, string[]> = {
-  governance: ['lightclient', 'SamWilsn', 'xinbenlv', 'g11tech', 'jochem-brouwer'],
-  core: ['lightclient', 'SamWilsn', 'g11tech', 'jochem-brouwer'],
-  erc: ['SamWilsn', 'xinbenlv'],
-  networking: ['lightclient', 'SamWilsn', 'g11tech', 'jochem-brouwer'],
-  interface: ['lightclient', 'SamWilsn', 'g11tech', 'jochem-brouwer'],
-  meta: ['lightclient', 'SamWilsn', 'xinbenlv', 'g11tech', 'jochem-brouwer'],
-  informational: ['lightclient', 'SamWilsn', 'xinbenlv', 'g11tech', 'jochem-brouwer'],
-};
+const CANONICAL_EDITOR_SET = new Set(CANONICAL_EIP_EDITOR_LOWER);
+const CANONICAL_REVIEWER_SET = new Set(CANONICAL_EIP_REVIEWER_LOWER);
+
+function resolveCanonicalRole(actor: string | null | undefined): 'EDITOR' | 'REVIEWER' | 'CONTRIBUTOR' {
+  const key = String(actor ?? '').trim().toLowerCase();
+  if (!key) return 'CONTRIBUTOR';
+  if (CANONICAL_EDITOR_SET.has(key)) return 'EDITOR';
+  if (CANONICAL_REVIEWER_SET.has(key)) return 'REVIEWER';
+  return 'CONTRIBUTOR';
+}
 
 function getFromForTimeRange(range: RoleFilterRange): Date | null {
   if (range === 'all') return null;
@@ -390,12 +424,31 @@ export const exploreProcedures = {
         month: number;
         count: bigint;
       }>>`
-        SELECT 
-          EXTRACT(MONTH FROM changed_at)::int as month,
-          COUNT(DISTINCT eip_id) as count
-        FROM eip_status_events
-        WHERE changed_at >= ${startDate} AND changed_at <= ${endDate}
-        GROUP BY EXTRACT(MONTH FROM changed_at)
+        WITH status_touched AS (
+          SELECT
+            EXTRACT(MONTH FROM changed_at)::int AS month,
+            eip_id::text AS proposal_key
+          FROM eip_status_events
+          WHERE changed_at >= ${startDate} AND changed_at <= ${endDate}
+        ),
+        created_touched AS (
+          SELECT
+            EXTRACT(MONTH FROM created_at)::int AS month,
+            id::text AS proposal_key
+          FROM eips
+          WHERE created_at >= ${startDate} AND created_at <= ${endDate}
+            AND eip_number NOT IN (2512, 3297, 1047)
+        ),
+        all_touched AS (
+          SELECT month, proposal_key FROM status_touched
+          UNION
+          SELECT month, proposal_key FROM created_touched
+        )
+        SELECT
+          month,
+          COUNT(DISTINCT proposal_key)::bigint AS count
+        FROM all_touched
+        GROUP BY month
         ORDER BY month
       `;
 
@@ -424,47 +477,297 @@ export const exploreProcedures = {
   getEIPsByYear: optionalAuthProcedure
     .input(z.object({
       year: z.number().min(2015).max(2030),
-      limit: z.number().min(1).max(100).default(50),
+      mode: z.enum(['new_eips', 'status_changes', 'pr_activity']).default('new_eips'),
+      q: z.string().optional(),
+      status: z.string().optional(),
+      category: z.string().optional(),
+      type: z.string().optional(),
+      limit: z.number().min(1).max(5000).default(50),
       offset: z.number().min(0).default(0),
     }))
-    .handler(async ({ input }) => {const startDate = new Date(`${input.year}-01-01`);
+    .handler(async ({ input }) => {
+      const startDate = new Date(`${input.year}-01-01`);
       const endDate = new Date(`${input.year}-12-31`);
+      const params: unknown[] = [];
+      let paramIdx = 0;
+      const whereParts: string[] = [];
+
+      if (input.q?.trim()) {
+        paramIdx++;
+        params.push(`%${input.q.trim()}%`);
+        whereParts.push(`(CAST(base.eip_number AS TEXT) ILIKE $${paramIdx} OR COALESCE(base.title, '') ILIKE $${paramIdx} OR COALESCE(base.author, '') ILIKE $${paramIdx})`);
+      }
+      if (input.status?.trim()) {
+        paramIdx++;
+        params.push(input.status.trim());
+        whereParts.push(`COALESCE(base.status, '') = $${paramIdx}`);
+      }
+      if (input.category?.trim()) {
+        paramIdx++;
+        params.push(input.category.trim());
+        whereParts.push(`COALESCE(base.category, '') = $${paramIdx}`);
+      }
+      if (input.type?.trim()) {
+        paramIdx++;
+        params.push(input.type.trim());
+        whereParts.push(`COALESCE(base.type, '') = $${paramIdx}`);
+      }
+
+      const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+
+      const limit = input.limit;
+      const offset = input.offset;
 
       const [items, countResult] = await Promise.all([
-        prisma.$queryRaw<Array<{
-          id: number; eip_number: number; title: string | null;
-          type: string | null; status: string; category: string | null;
-          created_at: Date | null; updated_at: Date | null;
-        }>>`
-          SELECT e.id, e.eip_number, e.title, s.type, COALESCE(s.status, 'Unknown') AS status,
-                 s.category, e.created_at, s.updated_at
-          FROM eips e
-          LEFT JOIN eip_snapshots s ON e.id = s.eip_id
-          WHERE e.created_at >= ${startDate} AND e.created_at <= ${endDate}
-            AND e.eip_number NOT IN (2512, 3297, 1047)
-          ORDER BY e.created_at DESC
-          LIMIT ${input.limit} OFFSET ${input.offset}
-        `,
-        prisma.$queryRaw<Array<{ count: bigint }>>`
-          SELECT COUNT(*) AS count FROM eips WHERE created_at >= ${startDate} AND created_at <= ${endDate}
-            AND eip_number NOT IN (2512, 3297, 1047)
-        `,
+        prisma.$queryRawUnsafe<Array<{
+          id: number;
+          eip_number: number;
+          title: string | null;
+          author: string | null;
+          type: string | null;
+          status: string;
+          category: string | null;
+          created_at: Date | null;
+          updated_at: Date | null;
+          metric_count: bigint;
+          metric_latest_at: Date | null;
+          pr_number: number | null;
+          pr_repo: string | null;
+          pr_state: string | null;
+          linked_eip_numbers: number[] | null;
+        }>>(
+          `
+          WITH base AS (
+            ${input.mode === 'new_eips'
+              ? `
+              SELECT
+                e.id,
+                e.eip_number,
+                e.title,
+                e.author,
+                s.type,
+                COALESCE(s.status, 'Unknown') AS status,
+                s.category,
+                e.created_at,
+                s.updated_at,
+                1::bigint AS metric_count,
+                e.created_at AS metric_latest_at
+              FROM eips e
+              LEFT JOIN eip_snapshots s ON e.id = s.eip_id
+              WHERE e.created_at >= '${startDate.toISOString()}'
+                AND e.created_at <= '${endDate.toISOString()}'
+                AND e.eip_number NOT IN (2512, 3297, 1047)
+              `
+              : input.mode === 'status_changes'
+                ? `
+                SELECT
+                  e.id,
+                  e.eip_number,
+                  e.title,
+                  e.author,
+                  s.type,
+                  COALESCE(s.status, 'Unknown') AS status,
+                  s.category,
+                  e.created_at,
+                  s.updated_at,
+                  COUNT(*)::bigint AS metric_count,
+                  MAX(ese.changed_at) AS metric_latest_at
+                FROM eip_status_events ese
+                JOIN eips e ON e.id = ese.eip_id
+                LEFT JOIN eip_snapshots s ON s.eip_id = e.id
+                WHERE ese.changed_at >= '${startDate.toISOString()}'
+                  AND ese.changed_at <= '${endDate.toISOString()}'
+                  AND e.eip_number NOT IN (2512, 3297, 1047)
+                GROUP BY e.id, e.eip_number, e.title, e.author, s.type, s.status, s.category, e.created_at, s.updated_at
+                `
+                : `
+                SELECT
+                  (p.repository_id * 1000000 + p.pr_number)::int AS id,
+                  COALESCE(linked.primary_eip_number, p.pr_number) AS eip_number,
+                  p.title,
+                  p.author,
+                  linked.type,
+                  COALESCE(linked.status, 'Unknown') AS status,
+                  linked.category,
+                  p.created_at,
+                  COALESCE(p.merged_at, p.closed_at, p.updated_at, p.created_at) AS updated_at,
+                  1::bigint AS metric_count,
+                  COALESCE(p.merged_at, p.closed_at, p.updated_at, p.created_at) AS metric_latest_at,
+                  p.pr_number,
+                  LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) AS pr_repo,
+                  COALESCE(p.state, 'unknown') AS pr_state,
+                  ARRAY_REMOVE(ARRAY_AGG(DISTINCT pre.eip_number), NULL) AS linked_eip_numbers
+                FROM pull_requests p
+                JOIN pull_request_eips pre ON pre.pr_number = p.pr_number AND pre.repository_id = p.repository_id
+                LEFT JOIN repositories r ON r.id = p.repository_id
+                LEFT JOIN LATERAL (
+                  SELECT
+                    pre2.eip_number AS primary_eip_number,
+                    s2.type,
+                    s2.status,
+                    s2.category
+                  FROM pull_request_eips pre2
+                  JOIN eips e2 ON e2.eip_number = pre2.eip_number
+                  LEFT JOIN eip_snapshots s2 ON s2.eip_id = e2.id
+                  WHERE pre2.pr_number = p.pr_number
+                    AND pre2.repository_id = p.repository_id
+                    AND e2.eip_number NOT IN (2512, 3297, 1047)
+                  ORDER BY pre2.eip_number ASC
+                  LIMIT 1
+                ) linked ON TRUE
+                WHERE p.created_at >= '${startDate.toISOString()}'
+                  AND p.created_at <= '${endDate.toISOString()}'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM pull_request_eips pre3
+                    JOIN eips e3 ON e3.eip_number = pre3.eip_number
+                    WHERE pre3.pr_number = p.pr_number
+                      AND pre3.repository_id = p.repository_id
+                      AND e3.eip_number NOT IN (2512, 3297, 1047)
+                  )
+                GROUP BY
+                  p.repository_id, p.pr_number, p.title, p.author, p.created_at, p.merged_at, p.closed_at, p.updated_at, p.state,
+                  r.name,
+                  linked.primary_eip_number, linked.type, linked.status, linked.category
+                `
+            }
+          )
+          SELECT *
+          FROM base
+          ${whereClause}
+          ORDER BY metric_latest_at DESC NULLS LAST, eip_number ASC
+          LIMIT ${limit} OFFSET ${offset}
+          `,
+          ...params
+        ),
+        prisma.$queryRawUnsafe<Array<{ count: bigint; metric_total: bigint }>>(
+          `
+          WITH base AS (
+            ${input.mode === 'new_eips'
+              ? `
+              SELECT
+                e.id,
+                e.eip_number,
+                e.title,
+                e.author,
+                s.type,
+                COALESCE(s.status, 'Unknown') AS status,
+                s.category,
+                e.created_at,
+                s.updated_at,
+                1::bigint AS metric_count,
+                e.created_at AS metric_latest_at
+              FROM eips e
+              LEFT JOIN eip_snapshots s ON e.id = s.eip_id
+              WHERE e.created_at >= '${startDate.toISOString()}'
+                AND e.created_at <= '${endDate.toISOString()}'
+                AND e.eip_number NOT IN (2512, 3297, 1047)
+              `
+              : input.mode === 'status_changes'
+                ? `
+                SELECT
+                  e.id,
+                  e.eip_number,
+                  e.title,
+                  e.author,
+                  s.type,
+                  COALESCE(s.status, 'Unknown') AS status,
+                  s.category,
+                  e.created_at,
+                  s.updated_at,
+                  COUNT(*)::bigint AS metric_count,
+                  MAX(ese.changed_at) AS metric_latest_at
+                FROM eip_status_events ese
+                JOIN eips e ON e.id = ese.eip_id
+                LEFT JOIN eip_snapshots s ON s.eip_id = e.id
+                WHERE ese.changed_at >= '${startDate.toISOString()}'
+                  AND ese.changed_at <= '${endDate.toISOString()}'
+                  AND e.eip_number NOT IN (2512, 3297, 1047)
+                GROUP BY e.id, e.eip_number, e.title, e.author, s.type, s.status, s.category, e.created_at, s.updated_at
+                `
+                : `
+                SELECT
+                  (p.repository_id * 1000000 + p.pr_number)::int AS id,
+                  COALESCE(linked.primary_eip_number, p.pr_number) AS eip_number,
+                  p.title,
+                  p.author,
+                  linked.type,
+                  COALESCE(linked.status, 'Unknown') AS status,
+                  linked.category,
+                  p.created_at,
+                  COALESCE(p.merged_at, p.closed_at, p.updated_at, p.created_at) AS updated_at,
+                  1::bigint AS metric_count,
+                  COALESCE(p.merged_at, p.closed_at, p.updated_at, p.created_at) AS metric_latest_at,
+                  p.pr_number,
+                  LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) AS pr_repo,
+                  COALESCE(p.state, 'unknown') AS pr_state,
+                  ARRAY_REMOVE(ARRAY_AGG(DISTINCT pre.eip_number), NULL) AS linked_eip_numbers
+                FROM pull_requests p
+                JOIN pull_request_eips pre ON pre.pr_number = p.pr_number AND pre.repository_id = p.repository_id
+                LEFT JOIN repositories r ON r.id = p.repository_id
+                LEFT JOIN LATERAL (
+                  SELECT
+                    pre2.eip_number AS primary_eip_number,
+                    s2.type,
+                    s2.status,
+                    s2.category
+                  FROM pull_request_eips pre2
+                  JOIN eips e2 ON e2.eip_number = pre2.eip_number
+                  LEFT JOIN eip_snapshots s2 ON s2.eip_id = e2.id
+                  WHERE pre2.pr_number = p.pr_number
+                    AND pre2.repository_id = p.repository_id
+                    AND e2.eip_number NOT IN (2512, 3297, 1047)
+                  ORDER BY pre2.eip_number ASC
+                  LIMIT 1
+                ) linked ON TRUE
+                WHERE p.created_at >= '${startDate.toISOString()}'
+                  AND p.created_at <= '${endDate.toISOString()}'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM pull_request_eips pre3
+                    JOIN eips e3 ON e3.eip_number = pre3.eip_number
+                    WHERE pre3.pr_number = p.pr_number
+                      AND pre3.repository_id = p.repository_id
+                      AND e3.eip_number NOT IN (2512, 3297, 1047)
+                  )
+                GROUP BY
+                  p.repository_id, p.pr_number, p.title, p.author, p.created_at, p.merged_at, p.closed_at, p.updated_at, p.state,
+                  r.name,
+                  linked.primary_eip_number, linked.type, linked.status, linked.category
+                `
+            }
+          )
+          SELECT COUNT(*) AS count, COALESCE(SUM(metric_count), 0)::bigint AS metric_total
+          FROM base
+          ${whereClause}
+          `,
+          ...params
+        ),
       ]);
 
       const total = Number(countResult[0]?.count ?? 0);
+      const metricTotal = Number(countResult[0]?.metric_total ?? 0);
 
       return {
         items: items.map(eip => ({
           id: eip.id,
           number: eip.eip_number,
           title: eip.title || `EIP-${eip.eip_number}`,
+          author: eip.author || null,
           type: eip.type,
           status: eip.status,
           category: eip.category,
           createdAt: eip.created_at?.toISOString() || null,
           updatedAt: eip.updated_at?.toISOString() || null,
+          metricCount: Number(eip.metric_count),
+          metricLatestAt: eip.metric_latest_at?.toISOString() || null,
+          prNumber: eip.pr_number,
+          prRepo: eip.pr_repo,
+          prState: eip.pr_state,
+          linkedEipNumbers: eip.linked_eip_numbers ?? [],
         })),
         total,
+        metricTotal,
         hasMore: input.offset + input.limit < total,
       };
     }),
@@ -492,9 +795,12 @@ export const exploreProcedures = {
   // ============================================
 
   getStatusCounts: publicProcedure
-    .handler(async ({ context }) => {
+    .input(z.object({
+      category: z.string().optional(),
+    }).optional())
+    .handler(async ({ context, input }) => {
       await checkAPIToken(context.headers);
-      return getStatusCountsCached();
+      return getStatusCountsCached(input?.category ?? null);
     }),
 
   getCategoryCounts: publicProcedure
@@ -517,6 +823,7 @@ export const exploreProcedures = {
       const filters: string[] = [];
       const params: unknown[] = [];
       let paramIdx = 0;
+      const normalizedCategoryExpr = `COALESCE(NULLIF(TRIM(s.category), ''), NULLIF(TRIM(s.type), ''), 'Unknown')`;
       const includesRipCategory = (input.categories ?? []).some((category) => category.toLowerCase() === 'rip' || category.toLowerCase() === 'rips');
       const ripEnabled = (!input.types || input.types.length === 0) && (!input.categories || input.categories.length === 0 || includesRipCategory);
 
@@ -530,7 +837,7 @@ export const exploreProcedures = {
           paramIdx++;
           return `$${paramIdx}`;
         }).join(', ');
-        filters.push(`AND s.category IN (${placeholders})`);
+        filters.push(`AND ${normalizedCategoryExpr} IN (${placeholders})`);
         params.push(...input.categories);
       }
       if (input.types && input.types.length > 0) {
@@ -575,12 +882,12 @@ export const exploreProcedures = {
               e.title,
               s.type,
               s.status,
-              s.category,
+              ${normalizedCategoryExpr} AS category,
               s.updated_at,
               (SELECT MAX(changed_at) FROM eip_status_events ese WHERE ese.eip_id = s.eip_id) AS last_changed_at,
               CASE
                 WHEN LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = 'rips' THEN 'RIP'
-                WHEN LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = 'ercs' OR s.category = 'ERC' THEN 'ERC'
+                WHEN LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = 'ercs' OR ${normalizedCategoryExpr} = 'ERC' THEN 'ERC'
                 ELSE 'EIP'
               END AS kind
             FROM eip_snapshots s
@@ -652,7 +959,7 @@ export const exploreProcedures = {
     .handler(async ({ context }) => {
       await checkAPIToken(context.headers);
       const statusOrder = ['Draft', 'Review', 'Last Call', 'Final', 'Living', 'Stagnant', 'Withdrawn'];
-      const cached = await getStatusCountsCached();
+      const cached = await getStatusCountsCached(null);
       const countMap = new Map(cached.map(s => [s.status, s.count]));
       const ordered = statusOrder.map(status => ({ status, count: countMap.get(status) || 0 }));
       const extras = cached
@@ -681,7 +988,7 @@ export const exploreProcedures = {
       const categoryFilter = category === 'all' ? null : category;
 
       const rows = await prisma.$queryRaw<Array<{
-        role: string;
+        actor: string;
         unique_actors: bigint;
         total_actions: bigint;
       }>>`
@@ -708,17 +1015,22 @@ export const exploreProcedures = {
             AND LOWER(ca.actor) NOT LIKE '%bot'
             AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
         )
-        SELECT role, COUNT(DISTINCT actor) AS unique_actors, COUNT(*) AS total_actions
+        SELECT actor, 1::bigint AS unique_actors, COUNT(*) AS total_actions
         FROM filtered
-        WHERE role IS NOT NULL
-        GROUP BY role
+        GROUP BY actor
       `;
 
-      return rows.map(r => ({
-        role: r.role,
-        uniqueActors: Number(r.unique_actors),
-        totalActions: Number(r.total_actions),
-      }));
+      const aggregate = new Map<string, { role: string; uniqueActors: number; totalActions: number }>();
+      for (const role of ['EDITOR', 'REVIEWER', 'CONTRIBUTOR'] as const) {
+        aggregate.set(role, { role, uniqueActors: 0, totalActions: 0 });
+      }
+      for (const row of rows) {
+        const role = resolveCanonicalRole(row.actor);
+        const entry = aggregate.get(role)!;
+        entry.uniqueActors += 1;
+        entry.totalActions += Number(row.total_actions);
+      }
+      return Array.from(aggregate.values());
     }),
 
   getRoleLeaderboard: optionalAuthProcedure
@@ -737,7 +1049,6 @@ export const exploreProcedures = {
 
       const rows = await prisma.$queryRaw<Array<{
         actor: string;
-        primary_role: string | null;
         total_actions: bigint;
         prs_touched: bigint;
         prs_created: bigint;
@@ -751,7 +1062,6 @@ export const exploreProcedures = {
           FROM contributor_activity ca
           LEFT JOIN repositories r ON r.id = ca.repository_id
           WHERE (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
-            AND (${input.role ?? null}::text IS NULL OR UPPER(COALESCE(ca.role, '')) = ${input.role ?? null})
             AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
             AND (${input.actor ?? null}::text IS NULL OR LOWER(ca.actor) = LOWER(${input.actor ?? null}))
             AND (
@@ -773,7 +1083,6 @@ export const exploreProcedures = {
         )
         SELECT
           f.actor,
-          (ARRAY_REMOVE(ARRAY_AGG(f.role ORDER BY f.occurred_at DESC), NULL))[1] AS primary_role,
           COUNT(*) AS total_actions,
           COUNT(DISTINCT f.pr_number) AS prs_touched,
           COUNT(DISTINCT CASE WHEN LOWER(COALESCE(f.action_type, '')) = 'opened' THEN f.pr_number END) AS prs_created,
@@ -784,27 +1093,36 @@ export const exploreProcedures = {
         FROM filtered f
         GROUP BY f.actor
         ORDER BY total_actions DESC, last_activity DESC NULLS LAST
-        LIMIT ${input.limit}
+        LIMIT ${Math.min(input.limit * 5, 500)}
       `;
 
-      return rows.map((entry, index) => ({
-        rank: index + 1,
-        actor: entry.actor,
-        totalActions: Number(entry.total_actions),
-        totalScore:
-          Number(entry.prs_touched) +
-          Number(entry.reviews) * 2 +
-          Number(entry.prs_merged) * 3 +
-          Number(entry.prs_created),
-        prsReviewed: Number(entry.reviews),
-        comments: Number(entry.comments),
-        prsCreated: Number(entry.prs_created),
-        prsMerged: Number(entry.prs_merged),
-        avgResponseHours: null,
-        lastActivity: entry.last_activity?.toISOString() || null,
-        role: entry.primary_role,
-        prsTouched: Number(entry.prs_touched),
-      }));
+      return rows
+        .map((entry) => {
+          const canonicalRole = resolveCanonicalRole(entry.actor);
+          return {
+            actor: entry.actor,
+            totalActions: Number(entry.total_actions),
+            totalScore:
+              Number(entry.prs_touched) +
+              Number(entry.reviews) * 2 +
+              Number(entry.prs_merged) * 3 +
+              Number(entry.prs_created),
+            prsReviewed: Number(entry.reviews),
+            comments: Number(entry.comments),
+            prsCreated: Number(entry.prs_created),
+            prsMerged: Number(entry.prs_merged),
+            avgResponseHours: null,
+            lastActivity: entry.last_activity?.toISOString() || null,
+            role: canonicalRole,
+            prsTouched: Number(entry.prs_touched),
+          };
+        })
+        .filter((entry) => !input.role || entry.role === input.role)
+        .slice(0, input.limit)
+        .map((entry, index) => ({
+          ...entry,
+          rank: index + 1,
+        }));
     }),
 
   getTopActorsByRole: optionalAuthProcedure
@@ -891,7 +1209,6 @@ export const exploreProcedures = {
         FROM contributor_activity ca
         LEFT JOIN repositories r ON r.id = ca.repository_id
         WHERE (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
-          AND (${input.role ?? null}::text IS NULL OR UPPER(COALESCE(ca.role, '')) = ${input.role ?? null})
           AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
           AND (${input.actor ?? null}::text IS NULL OR LOWER(ca.actor) = LOWER(${input.actor ?? null}))
           AND (
@@ -911,13 +1228,13 @@ export const exploreProcedures = {
           AND LOWER(ca.actor) NOT LIKE '%bot'
           AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
         ORDER BY ca.occurred_at DESC
-        LIMIT ${input.limit}
+        LIMIT ${Math.min(input.limit * 5, 500)}
       `;
 
       let normalized = events.map(e => ({
         id: e.id.toString(),
         actor: e.actor,
-        role: e.role,
+        role: resolveCanonicalRole(e.actor),
         eventType: e.event_type,
         prNumber: e.pr_number,
         createdAt: e.occurred_at.toISOString(),
@@ -947,7 +1264,6 @@ export const exploreProcedures = {
           FROM contributor_activity ca
           LEFT JOIN repositories r ON r.id = ca.repository_id
           WHERE (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
-            AND (${input.role ?? null}::text IS NULL OR UPPER(COALESCE(ca.role, '')) = ${input.role ?? null})
             AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
             AND (${input.actor ?? null}::text IS NULL OR LOWER(ca.actor) = LOWER(${input.actor ?? null}))
             AND ca.actor NOT LIKE '%[bot]%'
@@ -955,12 +1271,12 @@ export const exploreProcedures = {
             AND LOWER(ca.actor) NOT LIKE '%bot'
             AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
           ORDER BY ca.occurred_at DESC
-          LIMIT ${input.limit}
+          LIMIT ${Math.min(input.limit * 5, 500)}
         `;
         normalized = fallback.map(e => ({
           id: e.id.toString(),
           actor: e.actor,
-          role: e.role,
+          role: resolveCanonicalRole(e.actor),
           eventType: e.event_type,
           prNumber: e.pr_number,
           createdAt: e.occurred_at.toISOString(),
@@ -994,7 +1310,6 @@ export const exploreProcedures = {
           FROM pr_events pe
           LEFT JOIN repositories r ON r.id = pe.repository_id
           WHERE (${fromDate}::timestamp IS NULL OR pe.created_at >= ${fromDate})
-            AND (${input.role ?? null}::text IS NULL OR UPPER(COALESCE(pe.actor_role, '')) = ${input.role ?? null})
             AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
             AND (${input.actor ?? null}::text IS NULL OR LOWER(pe.actor) = LOWER(${input.actor ?? null}))
             AND pe.actor NOT LIKE '%[bot]%'
@@ -1002,13 +1317,13 @@ export const exploreProcedures = {
             AND LOWER(pe.actor) NOT LIKE '%bot'
             AND pe.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
           ORDER BY pe.created_at DESC
-          LIMIT ${input.limit}
+          LIMIT ${Math.min(input.limit * 5, 500)}
         `;
 
         normalized = fallbackEvents.map((e) => ({
           id: e.id.toString(),
           actor: e.actor,
-          role: e.actor_role,
+          role: resolveCanonicalRole(e.actor),
           eventType: String(e.event_type || '').toUpperCase(),
           prNumber: e.pr_number,
           createdAt: e.created_at.toISOString(),
@@ -1017,7 +1332,144 @@ export const exploreProcedures = {
         }));
       }
 
-      return normalized;
+      return normalized
+        .filter((event) => !input.role || event.role === input.role)
+        .slice(0, input.limit);
+    }),
+
+  getRoleContributionMix: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(ROLE_FILTER_REPOS).default('all'),
+      category: z.enum(ROLE_FILTER_CATEGORIES).default('all'),
+      timeRange: z.enum(ROLE_FILTER_TIME_RANGES).default('90d'),
+      actor: z.string().trim().min(1).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const from = getFromForTimeRange(input.timeRange);
+      const repoFilter = input.repo === 'all' ? null : input.repo;
+      const categoryFilter = input.category === 'all' ? null : input.category;
+
+      const rows = await prisma.$queryRaw<Array<{
+        actor: string;
+        action_type: string | null;
+        count: bigint;
+      }>>`
+        SELECT
+          ca.actor,
+          LOWER(COALESCE(ca.action_type, 'activity')) AS action_type,
+          COUNT(*)::bigint AS count
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
+          AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
+          AND (${input.actor ?? null}::text IS NULL OR LOWER(ca.actor) = LOWER(${input.actor ?? null}))
+          AND (
+            ${categoryFilter}::text IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM pull_request_eips pre
+              JOIN eips e ON e.eip_number = pre.eip_number
+              JOIN eip_snapshots s ON s.eip_id = e.id
+              WHERE pre.pr_number = ca.pr_number
+                AND pre.repository_id = ca.repository_id
+                AND LOWER(COALESCE(s.category, '')) = ${categoryFilter}
+            )
+          )
+          AND ca.actor NOT LIKE '%[bot]%'
+          AND ca.actor NOT LIKE '%-bot'
+          AND LOWER(ca.actor) NOT LIKE '%bot'
+          AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
+        GROUP BY ca.actor, LOWER(COALESCE(ca.action_type, 'activity'))
+      `;
+
+      const metrics = [
+        { metric: 'Reviews', EDITOR: 0, REVIEWER: 0, CONTRIBUTOR: 0, total: 0 },
+        { metric: 'Comments', EDITOR: 0, REVIEWER: 0, CONTRIBUTOR: 0, total: 0 },
+        { metric: 'PR Created', EDITOR: 0, REVIEWER: 0, CONTRIBUTOR: 0, total: 0 },
+        { metric: 'PR Merged', EDITOR: 0, REVIEWER: 0, CONTRIBUTOR: 0, total: 0 },
+      ];
+
+      for (const row of rows) {
+        const role = resolveCanonicalRole(row.actor);
+        const c = Number(row.count);
+        const action = row.action_type ?? 'activity';
+        if (action === 'reviewed') metrics[0][role] += c;
+        if (action === 'commented' || action === 'issue_comment') metrics[1][role] += c;
+        if (action === 'opened') metrics[2][role] += c;
+        if (action === 'merged') metrics[3][role] += c;
+      }
+
+      for (const m of metrics) {
+        m.total = m.EDITOR + m.REVIEWER + m.CONTRIBUTOR;
+      }
+
+      return metrics;
+    }),
+
+  getRoleActorBreakdown: optionalAuthProcedure
+    .input(z.object({
+      actor: z.string().trim().min(1),
+      repo: z.enum(ROLE_FILTER_REPOS).default('all'),
+      category: z.enum(ROLE_FILTER_CATEGORIES).default('all'),
+      timeRange: z.enum(ROLE_FILTER_TIME_RANGES).default('90d'),
+      limit: z.number().min(1).max(500).default(200),
+    }))
+    .handler(async ({ input }) => {
+      const from = getFromForTimeRange(input.timeRange);
+      const repoFilter = input.repo === 'all' ? null : input.repo;
+      const categoryFilter = input.category === 'all' ? null : input.category;
+
+      const rows = await prisma.$queryRaw<Array<{
+        id: bigint;
+        actor: string;
+        role: string | null;
+        action_type: string | null;
+        pr_number: number;
+        occurred_at: Date;
+        repo_name: string | null;
+      }>>`
+        SELECT
+          ca.id,
+          ca.actor,
+          ca.role,
+          ca.action_type,
+          ca.pr_number,
+          ca.occurred_at,
+          r.name AS repo_name
+        FROM contributor_activity ca
+        LEFT JOIN repositories r ON r.id = ca.repository_id
+        WHERE LOWER(ca.actor) = LOWER(${input.actor})
+          AND (${from}::timestamp IS NULL OR ca.occurred_at >= ${from})
+          AND (${repoFilter}::text IS NULL OR LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = ${repoFilter})
+          AND (
+            ${categoryFilter}::text IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM pull_request_eips pre
+              JOIN eips e ON e.eip_number = pre.eip_number
+              JOIN eip_snapshots s ON s.eip_id = e.id
+              WHERE pre.pr_number = ca.pr_number
+                AND pre.repository_id = ca.repository_id
+                AND LOWER(COALESCE(s.category, '')) = ${categoryFilter}
+            )
+          )
+          AND ca.actor NOT LIKE '%[bot]%'
+          AND ca.actor NOT LIKE '%-bot'
+          AND LOWER(ca.actor) NOT LIKE '%bot'
+          AND ca.actor NOT IN ('dependabot', 'github-actions', 'codecov', 'renovate', 'eth-bot', 'ethereum-bot')
+        ORDER BY ca.occurred_at DESC
+        LIMIT ${input.limit}
+      `;
+
+      return rows.map((row) => ({
+        id: row.id.toString(),
+        actor: row.actor,
+        role: resolveCanonicalRole(row.actor),
+        actionType: String(row.action_type || 'activity').toUpperCase(),
+        prNumber: row.pr_number,
+        occurredAt: row.occurred_at.toISOString(),
+        repoName: row.repo_name || 'ethereum/EIPs',
+      }));
     }),
 
   getRoleActivitySparkline: optionalAuthProcedure

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/chart";
 import { client } from "@/lib/orpc";
 import { toast as sonnerToast } from "sonner";
+import { InlineBrandLoader } from "@/components/inline-brand-loader";
 
 function ChartWatermark({ className = "", centered = false }: { className?: string; centered?: boolean }) {
   if (centered) {
@@ -233,7 +234,7 @@ export default function ProtocolBento() {
       <section className="relative overflow-hidden py-16">
         <div className="relative w-full max-w-full px-3 sm:px-4 lg:px-5 xl:px-6">
           <div className="flex items-center justify-center py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary/40 border-t-transparent" />
+            <InlineBrandLoader label="Loading snapshot..." size="md" />
           </div>
         </div>
       </section>

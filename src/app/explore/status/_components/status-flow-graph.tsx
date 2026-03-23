@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { InlineBrandLoader } from '@/components/inline-brand-loader';
 
 interface StatusFlow {
   status: string;
@@ -78,7 +79,9 @@ export function StatusFlowGraph({ data, loading, selectedStatus, onSelectStatus 
   if (loading) {
     return (
       <div className="rounded-xl border border-border bg-card/60 p-6">
-        <div className="h-24 animate-pulse rounded bg-muted" />
+        <div className="flex h-24 items-center justify-center">
+          <InlineBrandLoader label="Loading pipeline..." size="sm" />
+        </div>
       </div>
     );
   }

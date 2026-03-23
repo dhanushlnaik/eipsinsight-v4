@@ -54,7 +54,7 @@ export default function ExplorePage() {
         <TrendingCarousel />
 
         {/* Bottom spacing */}
-        <div className="h-16" />
+        <div className="h-6" />
       </div>
     </div>
   );

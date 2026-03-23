@@ -26,6 +26,8 @@ interface YearOverviewPanelProps {
     activePRs: number;
   } | null;
   loading: boolean;
+  activeBreakdown?: 'new_eips' | 'status_changes' | 'pr_activity';
+  onBreakdownSelect?: (mode: 'new_eips' | 'status_changes' | 'pr_activity') => void;
 }
 
 const statCards = [
@@ -82,6 +84,8 @@ export function YearOverviewPanel({
   selectedYearData,
   previousYearData,
   loading,
+  activeBreakdown = 'new_eips',
+  onBreakdownSelect,
 }: YearOverviewPanelProps) {
   if (loading) {
     return (
@@ -126,8 +130,29 @@ export function YearOverviewPanel({
             transition={{ duration: 0.3, delay: index * 0.05 }}
             className={cn(
               "relative p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm",
-              "ring-1 ring-border/50"
+              "ring-1 ring-border/50",
+              (card.key === 'newEIPs' && activeBreakdown === 'new_eips') ||
+              (card.key === 'statusChanges' && activeBreakdown === 'status_changes') ||
+              (card.key === 'activePRs' && activeBreakdown === 'pr_activity')
+                ? "border-primary/45 ring-primary/25 bg-primary/10"
+                : ""
             )}
+            role={onBreakdownSelect ? "button" : undefined}
+            tabIndex={onBreakdownSelect ? 0 : undefined}
+            onClick={() => {
+              if (!onBreakdownSelect) return;
+              if (card.key === 'newEIPs') onBreakdownSelect('new_eips');
+              if (card.key === 'statusChanges') onBreakdownSelect('status_changes');
+              if (card.key === 'activePRs') onBreakdownSelect('pr_activity');
+            }}
+            onKeyDown={(event) => {
+              if (!onBreakdownSelect) return;
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              if (card.key === 'newEIPs') onBreakdownSelect('new_eips');
+              if (card.key === 'statusChanges') onBreakdownSelect('status_changes');
+              if (card.key === 'activePRs') onBreakdownSelect('pr_activity');
+            }}
           >
             <div className="flex items-center gap-2 mb-2">
               <div className={cn(

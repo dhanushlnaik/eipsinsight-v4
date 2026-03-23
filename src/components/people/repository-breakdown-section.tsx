@@ -97,20 +97,20 @@ export function RepositoryBreakdownSection({
   }));
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white/90 p-4 dark:border-slate-700/50 dark:bg-slate-900/50">
+    <section className="rounded-xl border border-border bg-card/60 p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground">
             Repository Breakdown
           </h2>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Contribution distribution by repository family</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">Contribution distribution by repository family</p>
         </div>
         <button
           onClick={() => downloadCsv(`${actor.replace(/\s+/g, "-").toLowerCase()}-repository-breakdown.csv`, csvRows)}
-          className="inline-flex items-center gap-1 rounded-md border border-cyan-400/40 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-700 hover:bg-cyan-500/20 dark:text-cyan-300"
+          className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs text-primary hover:bg-primary/15"
         >
           <Download className="h-3.5 w-3.5" />
-          Download CSV
+          Download Reports
         </button>
       </div>
 
@@ -118,20 +118,20 @@ export function RepositoryBreakdownSection({
         {buckets.map((bucket) => {
           const pct = total > 0 ? (bucket.total / total) * 100 : 0;
           return (
-            <div key={bucket.key} className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+            <div key={bucket.key} className="rounded-lg border border-border bg-muted/20 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{bucket.label}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">{pct.toFixed(1)}%</p>
+                <p className="text-sm font-semibold text-foreground">{bucket.label}</p>
+                <p className="text-xs text-muted-foreground">{pct.toFixed(1)}%</p>
               </div>
-              <div className="mb-3 h-2 rounded-full bg-slate-200 dark:bg-slate-700/60">
-                <div className="h-2 rounded-full bg-linear-to-r from-emerald-500 to-cyan-500" style={{ width: `${pct}%` }} />
+              <div className="mb-3 h-2 rounded-full bg-muted/60">
+                <div className="h-2 rounded-full bg-primary" style={{ width: `${pct}%` }} />
               </div>
               <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-5">
-                <div><span className="text-slate-500">Total</span><p className="font-semibold text-slate-800 dark:text-slate-200">{bucket.total}</p></div>
-                <div><span className="text-slate-500">Commits</span><p className="font-semibold text-slate-800 dark:text-slate-200">{bucket.commits}</p></div>
-                <div><span className="text-slate-500">PRs</span><p className="font-semibold text-slate-800 dark:text-slate-200">{bucket.prs}</p></div>
-                <div><span className="text-slate-500">Reviews</span><p className="font-semibold text-slate-800 dark:text-slate-200">{bucket.reviews}</p></div>
-                <div><span className="text-slate-500">Comments</span><p className="font-semibold text-slate-800 dark:text-slate-200">{bucket.comments}</p></div>
+                <div><span className="text-muted-foreground">Total</span><p className="font-semibold text-foreground">{bucket.total}</p></div>
+                <div><span className="text-muted-foreground">Commits</span><p className="font-semibold text-foreground">{bucket.commits}</p></div>
+                <div><span className="text-muted-foreground">PRs</span><p className="font-semibold text-foreground">{bucket.prs}</p></div>
+                <div><span className="text-muted-foreground">Reviews</span><p className="font-semibold text-foreground">{bucket.reviews}</p></div>
+                <div><span className="text-muted-foreground">Comments</span><p className="font-semibold text-foreground">{bucket.comments}</p></div>
               </div>
             </div>
           );

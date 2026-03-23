@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { Download, Info, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { client } from '@/lib/orpc';
+import { InlineBrandLoader } from '@/components/inline-brand-loader';
 
 interface MonthlyData {
   month: string;
@@ -116,7 +117,7 @@ export function YearActivityChart({ data, year, loading }: YearActivityChartProp
     ],
   }), [data, peakMonth]);
 
-  const handleDownloadCSV = async () => {
+  const handleDownloadReport = async () => {
     setDownloading(true);
     try {
       const detail = await client.explore.getYearActivityChartDetail({ year });
@@ -197,7 +198,7 @@ export function YearActivityChart({ data, year, loading }: YearActivityChartProp
       link.click();
       URL.revokeObjectURL(link.href);
     } catch (err) {
-      console.error('Failed to download CSV:', err);
+      console.error('Failed to download report:', err);
     } finally {
       setDownloading(false);
     }
@@ -205,8 +206,8 @@ export function YearActivityChart({ data, year, loading }: YearActivityChartProp
 
   if (loading) {
     return (
-      <div className="h-80 rounded-xl border border-border bg-card/60 animate-pulse flex items-center justify-center">
-        <span className="text-muted-foreground">Loading chart...</span>
+      <div className="flex h-80 items-center justify-center rounded-xl border border-border bg-card/60">
+        <InlineBrandLoader label="Loading chart..." size="md" />
       </div>
     );
   }
@@ -240,7 +241,7 @@ export function YearActivityChart({ data, year, loading }: YearActivityChartProp
         </div>
         <button
           type="button"
-          onClick={handleDownloadCSV}
+          onClick={handleDownloadReport}
           disabled={loading || downloading}
           className={cn(
             'inline-flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors',
@@ -248,7 +249,7 @@ export function YearActivityChart({ data, year, loading }: YearActivityChartProp
           )}
         >
           <Download className="h-4 w-4" />
-          {downloading ? 'Downloading...' : 'Download Detailed CSV'}
+          {downloading ? 'Downloading...' : 'Download Reports'}
         </button>
       </div>
 

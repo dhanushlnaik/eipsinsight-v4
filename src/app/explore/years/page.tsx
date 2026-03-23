@@ -37,12 +37,19 @@ interface MonthlyData {
 interface EIP {
   id: number;
   number: number;
+  author: string | null;
   title: string;
   type: string | null;
   status: string;
   category: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  metricCount: number;
+  metricLatestAt: string | null;
+  prNumber: number | null;
+  prRepo: string | null;
+  prState: string | null;
+  linkedEipNumbers: number[];
 }
 
 interface AISummaryResponse {
@@ -92,6 +99,14 @@ function YearsPageContent() {
   const [chartData, setChartData] = useState<MonthlyData[]>([]);
   const [eips, setEips] = useState<EIP[]>([]);
   const [totalEips, setTotalEips] = useState(0);
+  const [metricTotal, setMetricTotal] = useState(0);
+  const [tableMode, setTableMode] = useState<'new_eips' | 'status_changes' | 'pr_activity'>('new_eips');
+  const [tableFilters, setTableFilters] = useState({
+    q: '',
+    status: '',
+    category: '',
+    type: '',
+  });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -194,7 +209,16 @@ function YearsPageContent() {
     Promise.allSettled([
       client.explore.getYearStats({ year: selectedYear }),
       client.explore.getYearActivityChart({ year: selectedYear }),
-      client.explore.getEIPsByYear({ year: selectedYear, limit: pageSize, offset: (page - 1) * pageSize }),
+      client.explore.getEIPsByYear({
+        year: selectedYear,
+        mode: tableMode,
+        q: tableFilters.q || undefined,
+        status: tableFilters.status || undefined,
+        category: tableFilters.category || undefined,
+        type: tableFilters.type || undefined,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      }),
     ]).then(([statsRes, chartRes, eipsRes]) => {
       if (cancelled) return;
       if (statsRes.status === 'fulfilled') setStats(statsRes.value);
@@ -202,6 +226,7 @@ function YearsPageContent() {
       if (eipsRes.status === 'fulfilled') {
         setEips(eipsRes.value.items);
         setTotalEips(eipsRes.value.total);
+        setMetricTotal(eipsRes.value.metricTotal ?? 0);
       }
     }).finally(() => {
       if (!cancelled) {
@@ -211,7 +236,7 @@ function YearsPageContent() {
       }
     });
     return () => { cancelled = true; };
-  }, [selectedYear, page]);
+  }, [selectedYear, page, tableMode, tableFilters.q, tableFilters.status, tableFilters.category, tableFilters.type]);
 
   const handleYearSelect = (year: number) => {
     setSelectedYear(year);
@@ -221,6 +246,58 @@ function YearsPageContent() {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
+  };
+
+  const handleTableModeChange = (mode: 'new_eips' | 'status_changes' | 'pr_activity') => {
+    setTableMode(mode);
+    setPage(1);
+  };
+
+  const handleFiltersChange = (next: { q: string; status: string; category: string; type: string }) => {
+    setTableFilters(next);
+    setPage(1);
+  };
+
+  const handleDownloadReport = async () => {
+    try {
+      const full = await client.explore.getEIPsByYear({
+        year: selectedYear,
+        mode: tableMode,
+        q: tableFilters.q || undefined,
+        status: tableFilters.status || undefined,
+        category: tableFilters.category || undefined,
+        type: tableFilters.type || undefined,
+        limit: 5000,
+        offset: 0,
+      });
+      const header = ['number', 'title', 'author', 'type', 'status', 'category', 'created_at', 'updated_at', 'metric_count', 'metric_latest_at', 'pr_number', 'pr_repo', 'pr_state', 'linked_eips'];
+      const rows = full.items.map((item) => [
+        item.number,
+        item.title,
+        item.author || '',
+        item.type || '',
+        item.status,
+        item.category || '',
+        item.createdAt || '',
+        item.updatedAt || '',
+        item.metricCount,
+        item.metricLatestAt || '',
+        item.prNumber || '',
+        item.prRepo || '',
+        item.prState || '',
+        item.linkedEipNumbers.join('|'),
+      ]);
+      const csv = [header.join(','), ...rows.map((row) => row.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `year-${selectedYear}-${tableMode}-breakdown.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download year breakdown report', error);
+    }
   };
 
   return (
@@ -271,7 +348,7 @@ function YearsPageContent() {
 
       <SectionSeparator />
 
-      <section className="relative w-full py-8">
+      <section className="relative w-full py-6">
         <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6">
           <div className="mb-4 rounded-xl border border-border bg-card/60 p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -334,13 +411,15 @@ function YearsPageContent() {
             selectedYearData={selectedYearData}
             previousYearData={previousYearData}
             loading={statsLoading}
+            activeBreakdown={tableMode}
+            onBreakdownSelect={handleTableModeChange}
           />
         </div>
       </section>
 
       <SectionSeparator />
 
-      <section className="relative w-full py-8">
+      <section className="relative w-full py-6">
         <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6">
           <YearActivityChart
             data={chartData}
@@ -352,7 +431,7 @@ function YearsPageContent() {
 
       <SectionSeparator />
 
-      <section className="relative w-full py-8">
+      <section className="relative w-full py-6">
         <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6">
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
             <TrendingUp className="h-3.5 w-3.5 text-primary" />
@@ -361,9 +440,14 @@ function YearsPageContent() {
           <YearEIPTable
             eips={eips}
             total={totalEips}
+            metricTotal={metricTotal}
+            mode={tableMode}
             loading={tableLoading}
             page={page}
             pageSize={pageSize}
+            filters={tableFilters}
+            onFiltersChange={handleFiltersChange}
+            onDownloadReport={handleDownloadReport}
             onPageChange={handlePageChange}
           />
         </div>

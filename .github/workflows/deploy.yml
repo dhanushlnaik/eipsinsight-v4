@@ -1,0 +1,144 @@
+name: Deploy v4 to Production Server
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: eips-insight-v4-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Notify Deployment Start
+        if: ${{ secrets.DISCORD_WEBHOOK != '' }}
+        uses: tsickert/discord-webhook@v7.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          embed-title: "Deploy Started (v4)"
+          embed-description: |
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Deployment for eipsinsight-v4 has started.
+          embed-color: 16776960
+          embed-footer-text: "GitHub Actions Deployment Bot"
+          embed-timestamp: ${{ github.event.head_commit.timestamp }}
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
+          timeout: 45m
+          command_timeout: 40m
+          script: |
+            set -e
+
+            BASE_DIR=/root/eip-client/eipsinsight-v4
+            RELEASES_DIR=$BASE_DIR/releases
+            SHARED_DIR=$BASE_DIR/shared
+            RELEASE_NAME=$(date +"%Y%m%d_%H%M%S")
+            NEW_RELEASE=$RELEASES_DIR/$RELEASE_NAME
+
+            echo "Creating new release: $RELEASE_NAME"
+
+            mkdir -p $RELEASES_DIR
+            git clone -b main https://github.com/AvarchLLC/eipsinsight-v4.git $NEW_RELEASE
+
+            if [ ! -f "$SHARED_DIR/.env.local" ]; then
+              echo "Missing .env.local in shared directory: $SHARED_DIR/.env.local"
+              exit 1
+            fi
+
+            ln -s $SHARED_DIR/.env.local $NEW_RELEASE/.env.local
+
+            cd $NEW_RELEASE
+            set -a
+            . ./.env.local
+            set +a
+
+            echo "Using Node 20"
+            source ~/.nvm/nvm.sh
+            nvm use 20
+
+            echo "Ensuring Bun is installed"
+            if ! command -v bun >/dev/null 2>&1; then
+              curl -fsSL https://bun.sh/install | bash
+            fi
+            export BUN_INSTALL="$HOME/.bun"
+            export PATH="$BUN_INSTALL/bin:$PATH"
+            bun --version
+
+            echo "Installing dependencies with Bun"
+            bun install --frozen-lockfile
+
+            echo "Running database migrations"
+            bunx prisma migrate deploy
+
+            echo "Building application"
+            bun run build
+
+            echo "Switching release symlink"
+            ln -sfn $NEW_RELEASE $BASE_DIR/current
+
+            echo "Reloading PM2 app eips-insight-v4"
+            pm2 reload eips-insight-v4 || pm2 start npm --name eips-insight-v4 --cwd $BASE_DIR/current -- start -- -p 3001
+
+            echo "Running health check on port 3001"
+            sleep 8
+            if ! curl -fs http://localhost:3001/ > /dev/null; then
+              echo "Health check failed, rolling back"
+
+              PREVIOUS_RELEASE=$(ls -dt $RELEASES_DIR/* | sed -n '2p')
+              if [ -n "$PREVIOUS_RELEASE" ]; then
+                ln -sfn $PREVIOUS_RELEASE $BASE_DIR/current
+                pm2 reload eips-insight-v4 || true
+              fi
+
+              exit 1
+            fi
+
+            echo "Cleaning old releases (keep last 3)"
+            cd $RELEASES_DIR
+            ls -dt */ | tail -n +4 | xargs rm -rf || true
+
+            echo "Deployment completed successfully"
+
+      - name: Discord Notification - Success
+        if: ${{ success() && secrets.DISCORD_WEBHOOK != '' }}
+        uses: tsickert/discord-webhook@v7.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          embed-title: "Deploy Successful (v4)"
+          embed-description: |
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            Production v4 updated successfully.
+          embed-color: 3066993
+          embed-footer-text: "GitHub Actions Deployment Bot"
+          embed-timestamp: ${{ github.event.head_commit.timestamp }}
+
+      - name: Discord Notification - Failure
+        if: ${{ failure() && secrets.DISCORD_WEBHOOK != '' }}
+        uses: tsickert/discord-webhook@v7.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          embed-title: "Deploy Failed (v4)"
+          embed-description: |
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            Deployment failed. Rollback attempted.
+          embed-color: 15158332
+          embed-footer-text: "GitHub Actions Deployment Bot"
+          embed-timestamp: ${{ github.event.head_commit.timestamp }}

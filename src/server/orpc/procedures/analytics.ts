@@ -1,6 +1,13 @@
 import { optionalAuthProcedure, requireTier } from './types'
 
 import { prisma } from '@/lib/prisma'
+import {
+  CANONICAL_EIP_EDITORS,
+  CANONICAL_EIP_EDITOR_LOWER,
+  CANONICAL_EIP_REVIEWERS,
+  CANONICAL_EIP_REVIEWER_LOWER,
+  OFFICIAL_EDITORS_BY_CATEGORY,
+} from '@/data/eip-contributor-roles'
 import * as z from 'zod'
 import { unstable_cache } from 'next/cache'
 
@@ -180,6 +187,158 @@ const getPRMonthlyActivityCached = unstable_cache(
   ['analytics-getPRMonthlyActivity'],
   { tags: ['analytics-prs-monthly'], revalidate: 600 }
 );
+
+const getPROpenStateCached = unstable_cache(
+  async (repo: string | null) => {
+    const results = await prisma.$queryRawUnsafe<Array<{
+      total_open: bigint;
+      median_age: number | null;
+      pr_number: number | null;
+      title: string | null;
+      author: string | null;
+      age_days: number | null;
+      repo_name: string | null;
+    }>>(`
+      WITH open_prs AS (
+        SELECT
+          pr.pr_number,
+          pr.title,
+          pr.author,
+          pr.created_at,
+          EXTRACT(DAY FROM (NOW() - pr.created_at))::int AS age_days,
+          r.name AS repo_name
+        FROM pull_requests pr
+        JOIN repositories r ON pr.repository_id = r.id
+        WHERE pr.state = 'open'
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+      ),
+      stats AS (
+        SELECT
+          COUNT(*)::bigint AS total_open,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY age_days)::numeric AS median_age
+        FROM open_prs
+      ),
+      oldest AS (
+        SELECT
+          pr_number,
+          title,
+          author,
+          age_days,
+          repo_name
+        FROM open_prs
+        ORDER BY created_at ASC
+        LIMIT 1
+      )
+      SELECT
+        s.total_open,
+        s.median_age,
+        o.pr_number,
+        o.title,
+        o.author,
+        o.age_days,
+        o.repo_name
+      FROM stats s
+      LEFT JOIN oldest o ON TRUE
+    `, repo);
+
+    const row = results[0];
+    return {
+      totalOpen: Number(row?.total_open ?? 0),
+      medianAge: Math.round(Number(row?.median_age ?? 0)),
+      oldestPR: row?.pr_number
+        ? {
+            pr_number: row.pr_number,
+            title: row.title ?? "",
+            author: row.author ?? "",
+            age_days: Number(row.age_days ?? 0),
+            repo: row.repo_name ?? "",
+          }
+        : null,
+    };
+  },
+  ['analytics-getPROpenState'],
+  { tags: ['analytics-prs-open-state'], revalidate: 120 }
+);
+
+const getPRMonthHeroKPIsCached = unstable_cache(
+  async (repo: string | null, monthStr: string) => {
+    const results = await prisma.$queryRawUnsafe<Array<{
+      open_prs: bigint;
+      new_prs: bigint;
+      merged_prs: bigint;
+      closed_unmerged: bigint;
+    }>>(`
+      WITH pr_base AS (
+        SELECT pr.pr_number, pr.repository_id, pr.created_at, pr.merged_at, pr.closed_at, pr.state
+        FROM pull_requests pr
+        JOIN repositories r ON pr.repository_id = r.id
+        WHERE pr.created_at >= '2015-01-01'
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+      ),
+      month_bounds AS (
+        SELECT
+          ($2::text || '-01')::date AS month_start,
+          (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+      ),
+      open_at_month_end AS (
+        SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
+        CROSS JOIN month_bounds m
+        WHERE pb.created_at <= m.month_end
+          AND (pb.merged_at IS NULL OR pb.merged_at > m.month_end)
+          AND (pb.closed_at IS NULL OR pb.closed_at > m.month_end)
+      ),
+      new_in_month AS (
+        SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
+        CROSS JOIN month_bounds m
+        WHERE pb.created_at >= m.month_start AND pb.created_at <= m.month_end
+      ),
+      merged_in_month AS (
+        SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
+        CROSS JOIN month_bounds m
+        WHERE pb.merged_at IS NOT NULL AND pb.merged_at >= m.month_start AND pb.merged_at <= m.month_end
+      ),
+      closed_unmerged_in_month AS (
+        SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
+        CROSS JOIN month_bounds m
+        WHERE pb.closed_at IS NOT NULL AND pb.merged_at IS NULL
+          AND pb.closed_at >= m.month_start AND pb.closed_at <= m.month_end
+      )
+      SELECT
+        (SELECT cnt FROM open_at_month_end) AS open_prs,
+        (SELECT cnt FROM new_in_month) AS new_prs,
+        (SELECT cnt FROM merged_in_month) AS merged_prs,
+        (SELECT cnt FROM closed_unmerged_in_month) AS closed_unmerged
+    `, repo, monthStr);
+
+    const r = results[0];
+    const openPRs = Number(r?.open_prs ?? 0);
+    const newPRs = Number(r?.new_prs ?? 0);
+    const mergedPRs = Number(r?.merged_prs ?? 0);
+    const closedUnmerged = Number(r?.closed_unmerged ?? 0);
+    const netDelta = newPRs - mergedPRs - closedUnmerged;
+
+    return {
+      month: monthStr,
+      openPRs,
+      newPRs,
+      mergedPRs,
+      closedUnmerged,
+      netDelta,
+    };
+  },
+  ['analytics-getPRMonthHeroKPIs'],
+  { tags: ['analytics-prs-month-hero'], revalidate: 120 }
+);
+
+function isConnectionSaturationError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    message.includes("max_client_conn") ||
+    message.includes("no more connections allowed") ||
+    message.includes("P2037") ||
+    message.includes("08P01")
+  );
+}
 
 const getContributorKPIsCached = unstable_cache(
   async () => {
@@ -767,47 +926,6 @@ const getReviewersLeaderboardCached = unstable_cache(
   ['analytics-getReviewersLeaderboard'],
   { tags: ['analytics-reviewers-leaderboard'], revalidate: 600 }
 );
-
-// Canonical editor handles used across editor analytics.
-const CANONICAL_EIP_EDITORS = [
-  'axic',              // Alex Beregszaszi
-  'Pandapip1',         // Gavin John
-  'gcolvin',           // Greg Colvin
-  'lightclient',       // Matt Garnett
-  'SamWilsn',          // Sam Wilson
-  'xinbenlv',
-  'nconsigny',
-  'yoavw',
-  'CarlBeek',
-  'adietrichs',
-  'jochem-brouwer',
-  'abcoathup',
-] as const;
-
-const CANONICAL_EIP_EDITOR_LOWER = CANONICAL_EIP_EDITORS.map((editor) => editor.toLowerCase());
-
-// Canonical reviewer handles used across reviewer analytics.
-const CANONICAL_EIP_REVIEWERS = [
-  'bomanaps',
-  'Marchhill',
-  'SkandaBhat',
-  'advaita-saha',
-  'nalepae',
-  'daniellehrner',
-] as const;
-
-const CANONICAL_EIP_REVIEWER_LOWER = CANONICAL_EIP_REVIEWERS.map((reviewer) => reviewer.toLowerCase());
-
-// Official EIP editor assignments per category (governance-defined view on the page).
-const OFFICIAL_EDITORS_BY_CATEGORY: Record<string, string[]> = {
-  governance: ['lightclient', 'SamWilsn', 'xinbenlv', 'nconsigny', 'jochem-brouwer'],
-  core: ['axic', 'Pandapip1', 'gcolvin', 'lightclient'],
-  erc: ['SamWilsn', 'xinbenlv', 'abcoathup'],
-  networking: ['yoavw', 'CarlBeek', 'adietrichs'],
-  interface: ['yoavw', 'CarlBeek', 'lightclient'],
-  meta: ['lightclient', 'SamWilsn', 'nconsigny', 'jochem-brouwer', 'abcoathup'],
-  informational: ['lightclient', 'SamWilsn', 'xinbenlv', 'abcoathup'],
-};
 
 const getEditorsByCategoryCached = unstable_cache(
   async (repo: string | null, from: string | null, to: string | null) => {
@@ -1567,53 +1685,19 @@ export const analyticsProcedures = {
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
     .handler(async ({ input }) => {
-
-      const [stats, oldest] = await Promise.all([
-        prisma.$queryRawUnsafe<Array<{
-          total_open: bigint;
-          median_age: number;
-        }>>(`
-          WITH open_prs AS (
-            SELECT 
-              pr.pr_number,
-              EXTRACT(DAY FROM (NOW() - pr.created_at))::int as age
-            FROM pull_requests pr
-            JOIN repositories r ON pr.repository_id = r.id
-            WHERE pr.state = 'open'
-              AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
-          )
-          SELECT 
-            COUNT(*)::bigint as total_open,
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY age)::numeric as median_age
-          FROM open_prs
-        `, input.repo || null),
-        prisma.$queryRawUnsafe<Array<{
-          pr_number: number;
-          title: string;
-          author: string;
-          age_days: number;
-          repo: string;
-        }>>(`
-          SELECT 
-            pr.pr_number,
-            pr.title,
-            pr.author,
-            EXTRACT(DAY FROM (NOW() - pr.created_at))::int as age_days,
-            r.name as repo
-          FROM pull_requests pr
-          JOIN repositories r ON pr.repository_id = r.id
-          WHERE pr.state = 'open'
-            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
-          ORDER BY pr.created_at ASC
-          LIMIT 1
-        `, input.repo || null),
-      ]);
-
-      return {
-        totalOpen: Number(stats[0]?.total_open || 0),
-        medianAge: Math.round(Number(stats[0]?.median_age || 0)),
-        oldestPR: oldest[0] || null,
-      };
+      try {
+        return await getPROpenStateCached(input.repo ?? null);
+      } catch (error) {
+        if (isConnectionSaturationError(error)) {
+          console.warn("analytics.getPROpenState: returning fallback due to DB connection saturation");
+          return {
+            totalOpen: 0,
+            medianAge: 0,
+            oldestPR: null,
+          };
+        }
+        throw error;
+      }
     }),
 
   getPRGovernanceStates: optionalAuthProcedure
@@ -1811,70 +1895,22 @@ export const analyticsProcedures = {
     }))
     .handler(async ({ input }) => {
       const monthStr = `${input.year}-${String(input.month).padStart(2, '0')}`;
-
-      const results = await prisma.$queryRawUnsafe<Array<{
-        open_prs: bigint;
-        new_prs: bigint;
-        merged_prs: bigint;
-        closed_unmerged: bigint;
-      }>>(`
-        WITH pr_base AS (
-          SELECT pr.pr_number, pr.repository_id, pr.created_at, pr.merged_at, pr.closed_at, pr.state
-          FROM pull_requests pr
-          JOIN repositories r ON pr.repository_id = r.id
-          WHERE pr.created_at >= '2015-01-01'
-            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
-        ),
-        month_bounds AS (
-          SELECT
-            ($2::text || '-01')::date AS month_start,
-            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
-        ),
-        open_at_month_end AS (
-          SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
-          CROSS JOIN month_bounds m
-          WHERE pb.created_at <= m.month_end
-            AND (pb.merged_at IS NULL OR pb.merged_at > m.month_end)
-            AND (pb.closed_at IS NULL OR pb.closed_at > m.month_end)
-        ),
-        new_in_month AS (
-          SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
-          CROSS JOIN month_bounds m
-          WHERE pb.created_at >= m.month_start AND pb.created_at <= m.month_end
-        ),
-        merged_in_month AS (
-          SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
-          CROSS JOIN month_bounds m
-          WHERE pb.merged_at IS NOT NULL AND pb.merged_at >= m.month_start AND pb.merged_at <= m.month_end
-        ),
-        closed_unmerged_in_month AS (
-          SELECT COUNT(*)::bigint AS cnt FROM pr_base pb
-          CROSS JOIN month_bounds m
-          WHERE pb.closed_at IS NOT NULL AND pb.merged_at IS NULL
-            AND pb.closed_at >= m.month_start AND pb.closed_at <= m.month_end
-        )
-        SELECT
-          (SELECT cnt FROM open_at_month_end) AS open_prs,
-          (SELECT cnt FROM new_in_month) AS new_prs,
-          (SELECT cnt FROM merged_in_month) AS merged_prs,
-          (SELECT cnt FROM closed_unmerged_in_month) AS closed_unmerged
-      `, input.repo || null, monthStr);
-
-      const r = results[0];
-      const openPRs = Number(r?.open_prs ?? 0);
-      const newPRs = Number(r?.new_prs ?? 0);
-      const mergedPRs = Number(r?.merged_prs ?? 0);
-      const closedUnmerged = Number(r?.closed_unmerged ?? 0);
-      const netDelta = newPRs - mergedPRs - closedUnmerged;
-
-      return {
-        month: monthStr,
-        openPRs,
-        newPRs,
-        mergedPRs,
-        closedUnmerged,
-        netDelta,
-      };
+      try {
+        return await getPRMonthHeroKPIsCached(input.repo ?? null, monthStr);
+      } catch (error) {
+        if (isConnectionSaturationError(error)) {
+          console.warn("analytics.getPRMonthHeroKPIs: returning fallback due to DB connection saturation");
+          return {
+            month: monthStr,
+            openPRs: 0,
+            newPRs: 0,
+            mergedPRs: 0,
+            closedUnmerged: 0,
+            netDelta: 0,
+          };
+        }
+        throw error;
+      }
     }),
 
   // Open PR classification (DRAFT, TYPO, NEW_EIP, STATUS_CHANGE, OTHER) — one bucket per PR
@@ -1978,14 +2014,12 @@ export const analyticsProcedures = {
         ),
         open_with_state AS (
           SELECT pr.pr_number, pr.repository_id, r.name AS repo_name,
-                 COALESCE(gs.subcategory,
-                   CASE COALESCE(gs.current_state, 'NO_STATE')
-                     WHEN 'WAITING_ON_EDITOR' THEN 'Waiting on Editor'
-                     WHEN 'WAITING_ON_AUTHOR' THEN 'Waiting on Author'
-                     WHEN 'DRAFT' THEN 'AWAITED'
-                     ELSE 'Uncategorized'
-                   END
-                 ) AS state,
+                 CASE
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_EDITOR', 'WAITING_EDITOR') THEN 'Waiting on Editor'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_AUTHOR', 'WAITING_AUTHOR') THEN 'Waiting on Author'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') = 'DRAFT' THEN 'AWAITED'
+                   ELSE COALESCE(gs.subcategory, 'Uncategorized')
+                 END AS state,
                  gs.waiting_since,
                  sc.snapshot_ts
           FROM pull_requests pr
@@ -2044,8 +2078,7 @@ export const analyticsProcedures = {
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
-    .handler(async ({ context, input }) => {
-      await requireTier(context, 'pro');
+    .handler(async ({ input }) => {
 
       const rows = await prisma.$queryRawUnsafe<Array<{
         pr_number: number;
@@ -2074,14 +2107,12 @@ export const analyticsProcedures = {
         )
         SELECT pr.pr_number, r.name AS repo, pr.title, pr.author,
                TO_CHAR(pr.created_at, 'YYYY-MM-DD') AS created_at,
-               COALESCE(gs.subcategory,
-                 CASE COALESCE(gs.current_state, 'NO_STATE')
-                   WHEN 'WAITING_ON_EDITOR' THEN 'Waiting on Editor'
-                   WHEN 'WAITING_ON_AUTHOR' THEN 'Waiting on Author'
-                   WHEN 'DRAFT' THEN 'AWAITED'
-                   ELSE 'Uncategorized'
-                 END
-               ) AS state,
+               CASE
+                 WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_EDITOR', 'WAITING_EDITOR') THEN 'Waiting on Editor'
+                 WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_AUTHOR', 'WAITING_AUTHOR') THEN 'Waiting on Author'
+                 WHEN COALESCE(gs.current_state, 'NO_STATE') = 'DRAFT' THEN 'AWAITED'
+                 ELSE COALESCE(gs.subcategory, 'Uncategorized')
+               END AS state,
                TO_CHAR(gs.waiting_since, 'YYYY-MM-DD') AS waiting_since,
                COALESCE(gs.reason, gs.last_event_type) AS last_event_type,
                (SELECT STRING_AGG(pre.eip_number::text, ',') FROM pull_request_eips pre WHERE pre.pr_number = pr.pr_number AND pre.repository_id = pr.repository_id) AS linked_eips
@@ -5062,6 +5093,9 @@ export const analyticsProcedures = {
         actor: string;
         total_actions: bigint;
         prs_touched: bigint;
+        eips_actions: bigint;
+        ercs_actions: bigint;
+        rips_actions: bigint;
         latest_occurred_at: Date | null;
       }>>(
         `
@@ -5074,6 +5108,7 @@ export const analyticsProcedures = {
             em.canonical AS actor,
             pe.pr_number,
             pe.repository_id,
+            LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) AS repo_short,
             CASE
               WHEN pe.created_at > COALESCE(pr.closed_at, pr.merged_at, NOW()) + INTERVAL '30 days'
                 THEN COALESCE(pr.closed_at, pr.merged_at, pr.created_at, pe.created_at)
@@ -5081,6 +5116,7 @@ export const analyticsProcedures = {
             END AS occurred_at
           FROM pr_events pe
           JOIN editor_map em ON LOWER(pe.actor) = em.actor_lc
+          LEFT JOIN repositories r ON r.id = pe.repository_id
           LEFT JOIN pull_requests pr ON pr.pr_number = pe.pr_number AND pr.repository_id = pe.repository_id
           WHERE pe.pr_number > 0
         )
@@ -5088,6 +5124,9 @@ export const analyticsProcedures = {
           re.actor AS actor,
           COUNT(*)::bigint AS total_actions,
           COUNT(DISTINCT re.pr_number)::bigint AS prs_touched,
+          COUNT(*) FILTER (WHERE re.repo_short = 'eips')::bigint AS eips_actions,
+          COUNT(*) FILTER (WHERE re.repo_short = 'ercs')::bigint AS ercs_actions,
+          COUNT(*) FILTER (WHERE re.repo_short = 'rips')::bigint AS rips_actions,
           MAX(re.occurred_at) AS latest_occurred_at
         FROM raw_events re
         WHERE re.occurred_at >= $2::date
@@ -5104,6 +5143,9 @@ export const analyticsProcedures = {
         actor: r.actor,
         totalActions: Number(r.total_actions),
         prsTouched: Number(r.prs_touched),
+        eipsActions: Number(r.eips_actions),
+        ercsActions: Number(r.ercs_actions),
+        ripsActions: Number(r.rips_actions),
       }));
       const updatedAt = results.reduce<Date | null>((latest, row) => {
         if (!row.latest_occurred_at) return latest;

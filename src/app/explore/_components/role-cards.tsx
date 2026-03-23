@@ -6,6 +6,7 @@ import { Shield, Eye, Users, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { client } from '@/lib/orpc';
 import Link from 'next/link';
+import { CopyLinkButton } from '@/components/header';
 
 interface RoleCount {
   role: string;
@@ -35,11 +36,11 @@ const roleConfig: Record<string, {
     label: 'Editors',
     description: 'Maintain standards and review proposals',
     color: {
-      border: 'border-cyan-300/60 dark:border-cyan-400/30',
-      bg: 'from-cyan-50/90 to-cyan-100/50 dark:from-cyan-500/10 dark:to-cyan-500/5',
-      text: 'text-cyan-700 dark:text-cyan-300',
-      iconBg: 'bg-cyan-500/20 dark:bg-cyan-500/15',
-      icon: 'text-cyan-600 dark:text-cyan-400',
+      border: 'border-primary/25',
+      bg: 'from-primary/10 via-background/70 to-background/70',
+      text: 'text-foreground',
+      iconBg: 'bg-primary/10',
+      icon: 'text-primary',
     },
   },
   'REVIEWER': {
@@ -47,11 +48,11 @@ const roleConfig: Record<string, {
     label: 'Reviewers',
     description: 'Provide feedback and technical review',
     color: {
-      border: 'border-violet-300/60 dark:border-violet-400/30',
-      bg: 'from-violet-50/90 to-violet-100/50 dark:from-violet-500/10 dark:to-violet-500/5',
-      text: 'text-violet-700 dark:text-violet-300',
-      iconBg: 'bg-violet-500/20 dark:bg-violet-500/15',
-      icon: 'text-violet-600 dark:text-violet-400',
+      border: 'border-primary/25',
+      bg: 'from-primary/10 via-background/70 to-background/70',
+      text: 'text-foreground',
+      iconBg: 'bg-primary/10',
+      icon: 'text-primary',
     },
   },
   'CONTRIBUTOR': {
@@ -59,11 +60,11 @@ const roleConfig: Record<string, {
     label: 'Contributors',
     description: 'Author and contribute to proposals',
     color: {
-      border: 'border-emerald-300/60 dark:border-emerald-400/30',
-      bg: 'from-emerald-50/90 to-emerald-100/50 dark:from-emerald-500/10 dark:to-emerald-500/5',
-      text: 'text-emerald-700 dark:text-emerald-300',
-      iconBg: 'bg-emerald-500/20 dark:bg-emerald-500/15',
-      icon: 'text-emerald-600 dark:text-emerald-400',
+      border: 'border-primary/25',
+      bg: 'from-primary/10 via-background/70 to-background/70',
+      text: 'text-foreground',
+      iconBg: 'bg-primary/10',
+      icon: 'text-primary',
     },
   },
 };
@@ -90,8 +91,8 @@ function RoleCard({
         className={cn(
           "relative p-6 rounded-xl border cursor-pointer overflow-hidden",
           "bg-gradient-to-br backdrop-blur-sm",
-          "shadow-sm dark:shadow-none ring-1 ring-slate-200/50 dark:ring-transparent",
-          "hover:shadow-xl hover:shadow-slate-200/40 dark:hover:shadow-cyan-500/10",
+          "bg-card shadow-sm ring-1 ring-border/50",
+          "hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10",
           "transition-all duration-200",
           config.color.border,
           config.color.bg
@@ -105,31 +106,31 @@ function RoleCard({
           )}>
             <Icon className={cn("h-6 w-6", config.color.icon)} />
           </div>
-          <ArrowRight className="h-5 w-5 text-slate-500" />
+          <ArrowRight className="h-5 w-5 text-muted-foreground" />
         </div>
 
         {/* Title & Description */}
         <h3 className={cn("dec-title text-lg font-semibold tracking-tight mb-1", config.color.text)}>
           {config.label}
         </h3>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+        <p className="mb-4 text-sm text-muted-foreground">
           {config.description}
         </p>
 
         {/* Stats */}
         <div className="flex items-baseline gap-2 mb-4">
-          <span className="dec-title text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <span className="dec-title text-3xl font-bold tracking-tight text-foreground">
             {count?.uniqueActors || 0}
           </span>
-          <span className="text-sm text-slate-600 dark:text-slate-400">
+          <span className="text-sm text-muted-foreground">
             total {config.label.toLowerCase()}
           </span>
         </div>
 
         {/* Top Actors */}
         {topActors.length > 0 && (
-          <div className="border-t border-slate-200 dark:border-slate-700/50 pt-4">
-            <p className="text-xs text-slate-600 dark:text-slate-500 mb-2">Most Active</p>
+          <div className="border-t border-border pt-4">
+            <p className="mb-2 text-xs text-muted-foreground">Most Active</p>
             <div className="space-y-2">
               {topActors.map((actor, i) => (
                 <div
@@ -137,14 +138,14 @@ function RoleCard({
                   className="flex items-center justify-between text-sm"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-400">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">
                       {i + 1}
                     </span>
-                    <span className="text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
+                    <span className="max-w-[120px] truncate text-foreground">
                       {actor.actor}
                     </span>
                   </div>
-                  <span className="text-xs text-slate-600 dark:text-slate-500">
+                  <span className="text-xs text-muted-foreground">
                     {actor.actions} actions
                   </span>
                 </div>
@@ -189,13 +190,13 @@ export function RoleCards() {
 
   if (loading) {
     return (
-      <section className="relative w-full py-8">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 xl:px-12">
+      <section id="browse-by-role" className="relative w-full py-8">
+        <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6">
           <div className="animate-pulse">
-            <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded mb-6" />
+            <div className="mb-6 h-8 w-48 rounded bg-muted/60" />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-64 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+                <div key={i} className="h-64 rounded-xl bg-muted/50" />
               ))}
             </div>
           </div>
@@ -207,14 +208,17 @@ export function RoleCards() {
   const roles = ['EDITOR', 'REVIEWER', 'CONTRIBUTOR'];
 
   return (
-    <section className="relative w-full py-8">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 xl:px-12">
+    <section id="browse-by-role" className="relative w-full py-8">
+        <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6">
         {/* Section Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 rounded-lg bg-violet-500/15 dark:bg-violet-500/10 border border-violet-400/30 dark:border-violet-400/20">
-            <Users className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+          <div className="rounded-lg border border-primary/30 bg-primary/10 p-2">
+            <Users className="h-5 w-5 text-primary" />
           </div>
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Browse by Role</h2>
+          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Browse by Role</h2>
+          </div>
+          <CopyLinkButton sectionId="browse-by-role" />
         </div>
 
         {/* Role Cards Grid */}
