@@ -16,6 +16,21 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const normalizeAuthError = (input: unknown) => {
+    const message = input instanceof Error ? input.message : "Failed to send verification code";
+    const lower = message.toLowerCase();
+
+    if (
+      lower.includes("unusual sending activity") ||
+      lower.includes("outgoing rate has exceeded") ||
+      lower.includes("temporarily limited by our mail provider")
+    ) {
+      return "Email delivery is temporarily limited. Please try again in a few minutes.";
+    }
+
+    return message;
+  };
+
   const handleEmailOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -31,7 +46,7 @@ export default function LoginForm() {
       });
       router.push(`/verify-request?email=${encodeURIComponent(email)}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to send verification code";
+      const message = normalizeAuthError(err);
       setError(message);
     } finally {
       setLoading(false);

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Libre_Baskerville as LibreBaskervilleFont, Space_Grotesk as SpaceGroteskFont } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "@/lib/orpc.server";
@@ -65,6 +64,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        <script
+          defer
+          src="https://analytics.eipsinsight.com/script.js"
+          data-website-id="a97f8bdd-320b-4fcf-9d87-9edd568f29d7"
+        />
+      </head>
       <body
         className={`${Libre_Baskerville.variable} ${Space_Grotesk.variable} antialiased`}
       >
@@ -89,7 +95,6 @@ export default function RootLayout({
           <SiteAssistant />
           <WhatsNewV4Dialog />
           <Toaster />
-          <Analytics />
         </Providers>
       </body>
     </html>

@@ -3,7 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { emailOTP } from "better-auth/plugins";
 import { env } from "@/env";
 import { prismaAuth } from "@/lib/prisma-auth";
-import { sendEmail } from "@/lib/email";
+import { EmailDeliveryError, sendEmail } from "@/lib/email";
 // The published @better-auth/core package may not expose the `SocialProviders`
 // type at its top-level exports across versions. Define a narrow local type
 // that matches the fields we use (github & google) and allow other providers.
@@ -45,6 +45,32 @@ const socialProviders: SocialProviders = {
     : {}),
 };
 
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
+type OtpCooldownStore = Map<string, number>;
+const otpCooldownStore = (globalThis as typeof globalThis & { __otpCooldownStore?: OtpCooldownStore }).__otpCooldownStore ??
+  new Map<string, number>();
+(globalThis as typeof globalThis & { __otpCooldownStore?: OtpCooldownStore }).__otpCooldownStore = otpCooldownStore;
+
+function getOtpCooldownKey(email: string, type: string) {
+  return `${type}:${email.trim().toLowerCase()}`;
+}
+
+function assertOtpCooldown(email: string, type: string) {
+  const key = getOtpCooldownKey(email, type);
+  const now = Date.now();
+  const nextAllowed = otpCooldownStore.get(key) ?? 0;
+  if (nextAllowed > now) {
+    const secondsLeft = Math.ceil((nextAllowed - now) / 1000);
+    throw new Error(`Please wait ${secondsLeft}s before requesting another code.`);
+  }
+  otpCooldownStore.set(key, now + OTP_RESEND_COOLDOWN_SECONDS * 1000);
+}
+
+function releaseOtpCooldownOnFailure(email: string, type: string) {
+  otpCooldownStore.delete(getOtpCooldownKey(email, type));
+}
+
 export const auth = betterAuth({
   database: prismaAdapter(prismaAuth, {
     provider: "postgresql",
@@ -63,6 +89,8 @@ export const auth = betterAuth({
   plugins: [
     emailOTP({
       async sendVerificationOTP({ email, otp, type }) {
+        assertOtpCooldown(email, type);
+
         let subject = "";
         let html = "";
 
@@ -100,11 +128,21 @@ export const auth = betterAuth({
           `;
         }
 
-        await sendEmail({
-          to: email,
-          subject,
-          html,
-        });
+        try {
+          await sendEmail({
+            to: email,
+            subject,
+            html,
+          });
+        } catch (error) {
+          releaseOtpCooldownOnFailure(email, type);
+
+          if (error instanceof EmailDeliveryError) {
+            throw new Error(error.message);
+          }
+
+          throw new Error("We couldn't send your code right now. Please try again in a minute.");
+        }
       },
       otpLength: 6,
       expiresIn: 300,

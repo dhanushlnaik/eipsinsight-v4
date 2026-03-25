@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,24 @@ function VerifyRequestContent() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((seconds) => (seconds > 0 ? seconds - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
+
+  const readCooldownFromMessage = (message: string): number | null => {
+    const match = message.match(/wait\s+(\d+)s/i);
+    if (!match) return null;
+    const seconds = Number.parseInt(match[1], 10);
+    return Number.isFinite(seconds) ? seconds : null;
+  };
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +66,7 @@ function VerifyRequestContent() {
   };
 
   const handleResend = async () => {
+    if (resendCooldown > 0) return;
     setResending(true);
     setError("");
 
@@ -59,11 +76,16 @@ function VerifyRequestContent() {
         type: "sign-in",
       });
       setError("");
+      setResendCooldown(60);
       toast.success("Verification code resent", {
         description: email,
       });
     } catch (err: Error | unknown) {
       const errorMessage = err instanceof Error ? err.message : "Failed to resend code";
+      const cooldown = readCooldownFromMessage(errorMessage);
+      if (cooldown && cooldown > 0) {
+        setResendCooldown(cooldown);
+      }
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -157,7 +179,7 @@ function VerifyRequestContent() {
                 <p className="mb-2 text-sm text-muted-foreground">Didn&apos;t receive the code?</p>
                 <Button
                   onClick={handleResend}
-                  disabled={resending}
+                  disabled={resending || resendCooldown > 0}
                   variant="ghost"
                   className="text-primary hover:bg-primary/10 hover:text-primary/80"
                 >
@@ -166,9 +188,7 @@ function VerifyRequestContent() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Sending...
                     </>
-                  ) : (
-                    "Resend code"
-                  )}
+                  ) : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
                 </Button>
               </div>
 
