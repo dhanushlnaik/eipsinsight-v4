@@ -34,6 +34,7 @@ import { client } from '@/lib/orpc';
 import ReactECharts from 'echarts-for-react';
 import { CopyLinkButton } from '@/components/header';
 import { LastUpdated } from '@/components/analytics/LastUpdated';
+import { InlineBrandLoader } from '@/components/inline-brand-loader';
 import { EIPsPageHeader } from './_components/eips-page-header';
 import HomeFAQs from './_components/home-faqs';
 import SocialCommunityUpdates from './_components/social-community-updates';
@@ -326,6 +327,7 @@ export default function EIPsHomePage() {
     category: '',
     updatedAt: '',
   });
+  const [debouncedColumnSearch, setDebouncedColumnSearch] = useState<ColumnSearch>(columnSearch);
   const [autoGithubFilter, setAutoGithubFilter] = useState(false);
 
   const [distribution, setDistribution] = useState<Array<{ bucket: string; count: number }>>([]);
@@ -386,8 +388,11 @@ export default function EIPsHomePage() {
   }, [dimension, activeBucket, sortBy, sortDir, columnSearch]);
 
   useEffect(() => {
-    setActiveBucket(null);
-  }, [dimension]);
+    const t = window.setTimeout(() => {
+      setDebouncedColumnSearch(columnSearch);
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [columnSearch]);
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -451,14 +456,14 @@ export default function EIPsHomePage() {
           dimension,
           bucket: activeBucket ?? undefined,
           columnSearch: {
-            github: columnSearch.github || undefined,
-            eip: columnSearch.eip || undefined,
-            title: columnSearch.title || undefined,
-            author: columnSearch.author || undefined,
-            type: columnSearch.type || undefined,
-            status: columnSearch.status || undefined,
-            category: columnSearch.category || undefined,
-            updatedAt: columnSearch.updatedAt || undefined,
+            github: debouncedColumnSearch.github || undefined,
+            eip: debouncedColumnSearch.eip || undefined,
+            title: debouncedColumnSearch.title || undefined,
+            author: debouncedColumnSearch.author || undefined,
+            type: debouncedColumnSearch.type || undefined,
+            status: debouncedColumnSearch.status || undefined,
+            category: debouncedColumnSearch.category || undefined,
+            updatedAt: debouncedColumnSearch.updatedAt || undefined,
           },
         });
         if (!cancelled) {
@@ -473,7 +478,7 @@ export default function EIPsHomePage() {
     return () => {
       cancelled = true;
     };
-  }, [dimension, page, sortBy, sortDir, activeBucket, columnSearch]);
+  }, [dimension, page, sortBy, sortDir, activeBucket, debouncedColumnSearch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -803,7 +808,12 @@ export default function EIPsHomePage() {
                     type="button"
                     role="tab"
                     aria-selected={active}
-                    onClick={() => setDimension(key)}
+                    onClick={() => {
+                      // Avoid a brief "wrong bucket" fetch when switching dimensions.
+                      setActiveBucket(null);
+                      setPage(1);
+                      setDimension(key);
+                    }}
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-sm whitespace-nowrap transition-colors',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
@@ -841,13 +851,19 @@ export default function EIPsHomePage() {
           type="button"
           onClick={() => setActiveBucket(null)}
           className={cn(
-            'rounded-xl border px-3 py-2 text-left transition hover:-translate-y-px active:translate-y-0 motion-reduce:transform-none',
+            'group relative overflow-hidden rounded-xl border px-3 py-2 text-left transition hover:-translate-y-px active:translate-y-0 motion-reduce:transform-none',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
             activeBucket === null
-              ? 'border-primary/40 bg-primary/10 shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.18)]'
+              ? cn(
+                  'persona-drift-glow border-primary/50 bg-primary/10',
+                  'shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.24),0_10px_28px_rgb(var(--persona-accent-rgb)/0.10)]',
+                  'ring-1 ring-primary/40',
+                  'before:pointer-events-none before:absolute before:inset-0 before:rounded-xl before:bg-[radial-gradient(420px_circle_at_30%_10%,rgba(var(--persona-accent-rgb),0.20),transparent_60%)]',
+                )
               : 'border-border bg-card/60 hover:border-primary/40',
           )}
         >
+          <div className="relative z-10">
           <div
             className={cn(
               'mb-1 inline-flex h-7 w-7 items-center justify-center rounded-lg',
@@ -858,6 +874,7 @@ export default function EIPsHomePage() {
           </div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Total</p>
           <p className="mt-0.5 text-lg font-semibold leading-none text-foreground sm:text-xl">{totalCount.toLocaleString()}</p>
+          </div>
         </button>
 
         {distribution.map((row) => {
@@ -876,17 +893,23 @@ export default function EIPsHomePage() {
               key={row.bucket}
               onClick={() => setActiveBucket((prev) => (prev === row.bucket ? null : row.bucket))}
               className={cn(
-                'rounded-xl border px-3 py-2 text-left transition hover:-translate-y-px active:translate-y-0 motion-reduce:transform-none',
+                'group relative overflow-hidden rounded-xl border px-3 py-2 text-left transition hover:-translate-y-px active:translate-y-0 motion-reduce:transform-none',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
                 selected
-                  ? 'border-primary/40 bg-primary/10 shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.18)]'
+                  ? cn(
+                      'persona-drift-glow border-primary/50 bg-primary/10',
+                      'shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.24),0_10px_28px_rgb(var(--persona-accent-rgb)/0.10)]',
+                      'ring-1 ring-primary/40',
+                      'before:pointer-events-none before:absolute before:inset-0 before:rounded-xl before:bg-[radial-gradient(420px_circle_at_30%_10%,rgba(var(--persona-accent-rgb),0.20),transparent_60%)]',
+                    )
                   : cn(theme.border, theme.surface, 'hover:border-primary/45'),
               )}
             >
+              <div className="relative z-10">
               <div
                 className={cn(
-                  'mb-1.5 inline-flex h-7 w-7 items-center justify-center rounded-lg',
-                  selected ? 'bg-primary/20' : theme.iconWrap,
+                  'mb-1.5 inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
+                  selected ? 'bg-primary/25 ring-1 ring-primary/25' : theme.iconWrap,
                 )}
               >
                 <Icon className={cn('h-3.5 w-3.5', selected ? 'text-primary' : theme.icon)} />
@@ -906,6 +929,7 @@ export default function EIPsHomePage() {
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted/80">
                 <div className={`h-full ${barColor}`} style={{ width: `${Math.max(8, (row.count / maxCardCount) * 100)}%` }} />
               </div>
+              </div>
             </button>
           );
         })}
@@ -914,11 +938,35 @@ export default function EIPsHomePage() {
       </div>
 
       <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card/60">
-        <div className="flex flex-col items-start justify-between gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs sm:flex-row sm:items-center">
-          <span className="text-muted-foreground">
+        <div className="flex flex-col items-start justify-between gap-2 border-b border-border/70 bg-muted/40 px-4 py-3 text-xs sm:flex-row sm:items-center">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">
             {isTableFiltered ? 'Filtered proposals' : 'Total proposals'}:{' '}
             <span className="font-semibold text-foreground">{tableData?.total.toLocaleString() || 0}</span>
-          </span>
+            </span>
+            {activeBucket && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {dimension}: <span className="text-foreground">{activeBucket}</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveBucket(null)}
+                  className="ml-1 rounded-full px-1 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear active bucket"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            {tableLoading && (
+              <span className="inline-flex items-center rounded-full border border-border bg-muted/60 px-2.5 py-1">
+                <InlineBrandLoader
+                  size="sm"
+                  label="Updating…"
+                  className="flex-row gap-2 [&>span]:text-[10px] [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-wider"
+                />
+              </span>
+            )}
+          </div>
           <button
             onClick={downloadDetailedCSV}
             disabled={downloading}
@@ -928,7 +976,7 @@ export default function EIPsHomePage() {
             {downloading ? 'Exporting...' : (isTableFiltered ? 'Download Filtered CSV' : 'Download CSV')}
           </button>
         </div>
-        <div className="hidden overflow-x-auto md:block">
+        <div className="relative hidden overflow-x-auto md:block" aria-busy={tableLoading}>
           <table className="min-w-[980px] text-sm">
             <thead>
               <tr className="border-b border-border/70 bg-muted/40 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -941,7 +989,7 @@ export default function EIPsHomePage() {
                   ['category', 'Category'],
                   ['status', 'Status'],
                 ].map(([key, label]) => (
-                  <th key={key} className="px-2 py-2">
+                  <th key={key} className="px-4 py-3">
                     <button onClick={() => toggleSort(key as SortBy)} className="inline-flex items-center gap-1 hover:text-foreground">
                       {label}
                       {sortBy === key ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3" />}
@@ -950,13 +998,13 @@ export default function EIPsHomePage() {
                 ))}
               </tr>
               <tr className="border-b border-border/60 bg-muted/40">
-                <th className="px-2 py-2"><input value={columnSearch.github} onChange={(e) => handleColumnSearch('github', e.target.value)} placeholder="/EIPs" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
-                <th className="px-2 py-2"><input value={columnSearch.eip} onChange={(e) => handleColumnSearch('eip', e.target.value)} placeholder="EIP-1559 / RIP-7212 / 1559" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
-                <th className="px-2 py-2"><input value={columnSearch.title} onChange={(e) => handleColumnSearch('title', e.target.value)} placeholder="Title" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
-                <th className="px-2 py-2"><input value={columnSearch.author} onChange={(e) => handleColumnSearch('author', e.target.value)} placeholder="Author" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
-                <th className="px-2 py-2"><input value={columnSearch.type} onChange={(e) => handleColumnSearch('type', e.target.value)} placeholder="Type" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
-                <th className="px-2 py-2"><input value={columnSearch.category} onChange={(e) => handleColumnSearch('category', e.target.value)} placeholder="Category" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
-                <th className="px-2 py-2"><input value={columnSearch.status} onChange={(e) => handleColumnSearch('status', e.target.value)} placeholder="Status" className="h-8 w-full rounded-md border border-border bg-muted/60 px-2 text-xs text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-4 py-3"><input value={columnSearch.github} onChange={(e) => handleColumnSearch('github', e.target.value)} placeholder="/EIPs" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-4 py-3"><input value={columnSearch.eip} onChange={(e) => handleColumnSearch('eip', e.target.value)} placeholder="EIP-1559 / RIP-7212 / 1559" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-4 py-3"><input value={columnSearch.title} onChange={(e) => handleColumnSearch('title', e.target.value)} placeholder="Title" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-4 py-3"><input value={columnSearch.author} onChange={(e) => handleColumnSearch('author', e.target.value)} placeholder="Author" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-4 py-3"><input value={columnSearch.type} onChange={(e) => handleColumnSearch('type', e.target.value)} placeholder="Type" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-4 py-3"><input value={columnSearch.category} onChange={(e) => handleColumnSearch('category', e.target.value)} placeholder="Category" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-4 py-3"><input value={columnSearch.status} onChange={(e) => handleColumnSearch('status', e.target.value)} placeholder="Status" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
               </tr>
             </thead>
             <tbody>
@@ -971,7 +1019,7 @@ export default function EIPsHomePage() {
               ) : (
                 (tableData?.rows || []).map((row) => (
                   <tr key={`${row.repo}-${row.kind}-${row.number}`} className="border-b border-border/60 text-foreground hover:bg-muted/40">
-                    <td className="px-2 py-2">
+                    <td className="px-4 py-3">
                       <a
                         href={githubProposalUrl(row.kind, row.number)}
                         target="_blank"
@@ -981,11 +1029,11 @@ export default function EIPsHomePage() {
                         {githubRepoLabel(row.repo, row.kind)}
                       </a>
                     </td>
-                    <td className="px-2 py-2 font-medium text-primary">
+                    <td className="px-4 py-3 font-medium text-primary">
                       <Link href={proposalUrl(row.repo, row.kind, row.number)} className="hover:underline">{row.kind}-{row.number}</Link>
                     </td>
-                    <td className="max-w-[420px] px-2 py-2 text-foreground">{row.title || `${row.kind}-${row.number}`}</td>
-                    <td className="px-2 py-2 text-muted-foreground">
+                    <td className="max-w-[420px] px-4 py-3 text-foreground">{row.title || `${row.kind}-${row.number}`}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
                       {(() => {
                         const author = row.author?.trim() || '';
                         if (!author) return '-';
@@ -1008,17 +1056,23 @@ export default function EIPsHomePage() {
                         );
                       })()}
                     </td>
-                    <td className="px-2 py-2 text-muted-foreground">{row.type || '-'}</td>
-                    <td className="px-2 py-2">{row.category}</td>
-                    <td className="px-2 py-2"><span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${BADGE_COLORS[row.status] || BADGE_COLORS.Unknown}`}>{row.status}</span></td>
+                    <td className="px-4 py-3 text-muted-foreground">{row.type || '-'}</td>
+                    <td className="px-4 py-3">{row.category}</td>
+                    <td className="px-4 py-3"><span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${BADGE_COLORS[row.status] || BADGE_COLORS.Unknown}`}>{row.status}</span></td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+
+          {tableLoading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/55 backdrop-blur-[2px]">
+              <InlineBrandLoader size="md" label="Updating table…" className="flex-row gap-3" />
+            </div>
+          )}
         </div>
 
-        <div className="space-y-2 p-2 md:hidden">
+        <div className="relative space-y-2 p-2 md:hidden" aria-busy={tableLoading}>
           {showTableSkeleton ? (
             Array.from({ length: 6 }).map((_, i) => (
               <div key={`mobile-row-skeleton-${i}`} className="rounded-lg border border-border bg-muted/40 p-3">
@@ -1054,6 +1108,12 @@ export default function EIPsHomePage() {
                 </div>
               </div>
             ))
+          )}
+
+          {tableLoading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-background/55 backdrop-blur-[2px]">
+              <InlineBrandLoader size="md" label="Updating table…" className="flex-row gap-3" />
+            </div>
           )}
         </div>
 
