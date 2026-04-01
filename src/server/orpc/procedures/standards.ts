@@ -1704,4 +1704,279 @@ const results = await prisma.$queryRawUnsafe<Array<{
         count: Number(r.count),
       }));
     }),
+
+  // ——— Status Sub-Distribution (for sub-filter chips when category/repo is selected) ———
+  getStatusSubDistribution: optionalAuthProcedure
+    .input(z.object({
+      dimension: z.enum(['category', 'repo']),
+      bucket: z.string(),
+    }))
+    .handler(async ({ input }) => {
+      const bucketField = input.dimension === 'category' ? 'category' : 'repo_group';
+
+      const results = await prisma.$queryRawUnsafe<Array<{ status: string; count: bigint }>>(
+        `
+        WITH unified AS (
+          SELECT
+            COALESCE(NULLIF(s.status, ''), 'Unknown') AS status,
+            COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Other') AS category,
+            CASE
+              WHEN LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = 'ercs' OR s.category = 'ERC' THEN 'ERCs'
+              ELSE 'EIPs'
+            END AS repo_group
+          FROM eip_snapshots s
+          JOIN eips e ON e.id = s.eip_id
+          LEFT JOIN repositories r ON r.id = s.repository_id
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
+          UNION ALL
+          SELECT
+            COALESCE(NULLIF(rp.status, ''), 'Unknown') AS status,
+            CASE
+              WHEN COALESCE(rp.title, '') ~* '\\\\mRRC[-\\\\s]?[0-9]+' OR COALESCE(rp.title, '') ~* '^RRC\\\\M'
+                THEN 'RRC'
+              ELSE 'RIP'
+            END AS category,
+            'RIPs'::text AS repo_group
+          FROM rips rp
+          WHERE rp.rip_number <> 0
+        )
+        SELECT status, COUNT(*)::bigint AS count
+        FROM unified
+        WHERE ${bucketField} = $1::text
+        GROUP BY status
+        ORDER BY count DESC
+        `,
+        input.bucket
+      );
+
+      return results.map(r => ({
+        status: r.status,
+        count: Number(r.count),
+      }));
+    }),
+
+  // ——— Stages Distribution (EIP inclusion stages from upgrade_composition_current) ———
+  getStagesDistribution: optionalAuthProcedure
+    .input(z.object({}))
+    .handler(async () => {
+      const results = await prisma.$queryRawUnsafe<Array<{ stage: string; count: bigint }>>(
+        `
+        SELECT
+          LOWER(ucc.bucket) AS stage,
+          COUNT(DISTINCT ucc.eip_number)::bigint AS count
+        FROM upgrade_composition_current ucc
+        WHERE ucc.bucket IS NOT NULL AND TRIM(ucc.bucket) <> ''
+        GROUP BY LOWER(ucc.bucket)
+        ORDER BY
+          CASE LOWER(ucc.bucket)
+            WHEN 'included' THEN 1
+            WHEN 'scheduled' THEN 2
+            WHEN 'considered' THEN 3
+            WHEN 'proposed' THEN 4
+            WHEN 'declined' THEN 5
+            ELSE 6
+          END
+        `
+      );
+
+      return results.map(r => ({
+        bucket: r.stage,
+        count: Number(r.count),
+      }));
+    }),
+
+  // ——— Stage Proposals (paginated proposals filtered by upgrade inclusion stage) ———
+  getStageProposals: optionalAuthProcedure
+    .input(z.object({
+      stage: z.string().optional(),
+      sortBy: z.enum(['eip', 'title', 'author', 'type', 'category', 'status', 'updated_at']).optional().default('updated_at'),
+      sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
+      page: z.number().optional().default(1),
+      pageSize: z.number().optional().default(25),
+      columnSearch: z.object({
+        eip: z.string().optional(),
+        github: z.string().optional(),
+        title: z.string().optional(),
+        author: z.string().optional(),
+        type: z.string().optional(),
+        status: z.string().optional(),
+        category: z.string().optional(),
+        updatedAt: z.string().optional(),
+      }).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const offset = ((input.page ?? 1) - 1) * (input.pageSize ?? 25);
+      const hasStage = Boolean(input.stage);
+      const columnSearch = input.columnSearch ?? {};
+      const eipSearch = columnSearch.eip?.trim() ?? '';
+      const githubSearch = columnSearch.github?.trim() ?? '';
+      const titleSearch = columnSearch.title?.trim() ?? '';
+      const authorSearch = columnSearch.author?.trim() ?? '';
+      const typeSearch = columnSearch.type?.trim() ?? '';
+      const statusSearch = columnSearch.status?.trim() ?? '';
+      const categorySearch = columnSearch.category?.trim() ?? '';
+      const updatedAtSearch = columnSearch.updatedAt?.trim() ?? '';
+      const hasEipSearch = eipSearch.length > 0;
+      const hasGithubSearch = githubSearch.length > 0;
+      const hasTitleSearch = titleSearch.length > 0;
+      const hasAuthorSearch = authorSearch.length > 0;
+      const hasTypeSearch = typeSearch.length > 0;
+      const hasStatusSearch = statusSearch.length > 0;
+      const hasCategorySearch = categorySearch.length > 0;
+      const hasUpdatedAtSearch = updatedAtSearch.length > 0;
+
+      const sortMap: Record<string, string> = {
+        eip: 'number',
+        title: 'title',
+        author: 'author',
+        type: 'type',
+        status: 'status',
+        category: 'category',
+        updated_at: 'updated_at',
+      };
+      const orderCol = sortMap[input.sortBy ?? 'updated_at'] ?? 'updated_at';
+      const orderDir = input.sortDir === 'asc' ? 'ASC' : 'DESC';
+
+      // Count query
+      const countResults = await prisma.$queryRawUnsafe<Array<{ total: bigint }>>(
+        `
+        WITH stage_eips AS (
+          SELECT DISTINCT eip_number, LOWER(bucket) AS stage
+          FROM upgrade_composition_current
+          WHERE bucket IS NOT NULL AND TRIM(bucket) <> ''
+        ),
+        proposals AS (
+          SELECT
+            e.eip_number AS number,
+            e.title,
+            e.author,
+            COALESCE(NULLIF(s.type, ''), 'Unknown') AS type,
+            COALESCE(NULLIF(s.status, ''), 'Unknown') AS status,
+            COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Other') AS category,
+            COALESCE(r.name, 'ethereum/EIPs') AS repo,
+            CASE
+              WHEN LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = 'ercs' OR s.category = 'ERC' THEN 'ERC'
+              ELSE 'EIP'
+            END AS kind,
+            COALESCE(s.updated_at, e.created_at, NOW()) AS updated_at,
+            se.stage
+          FROM stage_eips se
+          JOIN eips e ON e.eip_number = se.eip_number
+          JOIN eip_snapshots s ON s.eip_id = e.id
+          LEFT JOIN repositories r ON r.id = s.repository_id
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
+        )
+        SELECT COUNT(*)::bigint AS total
+        FROM proposals
+        WHERE (($1::boolean = false) OR stage = $2::text)
+          AND (($3::boolean = false) OR number::text ILIKE '%' || $4 || '%')
+          AND (($5::boolean = false) OR repo ILIKE '%' || $6 || '%')
+          AND (($7::boolean = false) OR COALESCE(title, '') ILIKE '%' || $8 || '%')
+          AND (($9::boolean = false) OR COALESCE(author, '') ILIKE '%' || $10 || '%')
+          AND (($11::boolean = false) OR COALESCE(type, '') ILIKE '%' || $12 || '%')
+          AND (($13::boolean = false) OR status ILIKE '%' || $14 || '%')
+          AND (($15::boolean = false) OR category ILIKE '%' || $16 || '%')
+          AND (($17::boolean = false) OR TO_CHAR(updated_at, 'YYYY-MM-DD') ILIKE '%' || $18 || '%')
+        `,
+        hasStage,
+        input.stage?.toLowerCase() ?? null,
+        hasEipSearch, eipSearch,
+        hasGithubSearch, githubSearch,
+        hasTitleSearch, titleSearch,
+        hasAuthorSearch, authorSearch,
+        hasTypeSearch, typeSearch,
+        hasStatusSearch, statusSearch,
+        hasCategorySearch, categorySearch,
+        hasUpdatedAtSearch, updatedAtSearch
+      );
+
+      const total = Number(countResults[0]?.total ?? 0);
+
+      // Data query
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        number: number;
+        title: string | null;
+        author: string | null;
+        type: string;
+        status: string;
+        category: string;
+        repo: string;
+        kind: string;
+        stage: string;
+        updated_at: Date;
+      }>>(
+        `
+        WITH stage_eips AS (
+          SELECT DISTINCT eip_number, LOWER(bucket) AS stage
+          FROM upgrade_composition_current
+          WHERE bucket IS NOT NULL AND TRIM(bucket) <> ''
+        ),
+        proposals AS (
+          SELECT
+            e.eip_number AS number,
+            e.title,
+            e.author,
+            COALESCE(NULLIF(s.type, ''), 'Unknown') AS type,
+            COALESCE(NULLIF(s.status, ''), 'Unknown') AS status,
+            COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Other') AS category,
+            COALESCE(r.name, 'ethereum/EIPs') AS repo,
+            CASE
+              WHEN LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = 'ercs' OR s.category = 'ERC' THEN 'ERC'
+              ELSE 'EIP'
+            END AS kind,
+            COALESCE(s.updated_at, e.created_at, NOW()) AS updated_at,
+            se.stage
+          FROM stage_eips se
+          JOIN eips e ON e.eip_number = se.eip_number
+          JOIN eip_snapshots s ON s.eip_id = e.id
+          LEFT JOIN repositories r ON r.id = s.repository_id
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
+        )
+        SELECT number, title, author, type, status, category, repo, kind, stage, updated_at
+        FROM proposals
+        WHERE (($1::boolean = false) OR stage = $2::text)
+          AND (($3::boolean = false) OR number::text ILIKE '%' || $4 || '%')
+          AND (($5::boolean = false) OR repo ILIKE '%' || $6 || '%')
+          AND (($7::boolean = false) OR COALESCE(title, '') ILIKE '%' || $8 || '%')
+          AND (($9::boolean = false) OR COALESCE(author, '') ILIKE '%' || $10 || '%')
+          AND (($11::boolean = false) OR COALESCE(type, '') ILIKE '%' || $12 || '%')
+          AND (($13::boolean = false) OR status ILIKE '%' || $14 || '%')
+          AND (($15::boolean = false) OR category ILIKE '%' || $16 || '%')
+          AND (($17::boolean = false) OR TO_CHAR(updated_at, 'YYYY-MM-DD') ILIKE '%' || $18 || '%')
+        ORDER BY ${orderCol} ${orderDir} NULLS LAST, number DESC
+        LIMIT $19 OFFSET $20
+        `,
+        hasStage,
+        input.stage?.toLowerCase() ?? null,
+        hasEipSearch, eipSearch,
+        hasGithubSearch, githubSearch,
+        hasTitleSearch, titleSearch,
+        hasAuthorSearch, authorSearch,
+        hasTypeSearch, typeSearch,
+        hasStatusSearch, statusSearch,
+        hasCategorySearch, categorySearch,
+        hasUpdatedAtSearch, updatedAtSearch,
+        input.pageSize ?? 25,
+        offset
+      );
+
+      return {
+        total,
+        page: input.page ?? 1,
+        pageSize: input.pageSize ?? 25,
+        totalPages: Math.ceil(total / (input.pageSize ?? 25)),
+        rows: rows.map(r => ({
+          number: r.number,
+          title: r.title,
+          author: r.author,
+          type: r.type,
+          status: r.status,
+          category: r.category,
+          repo: r.repo,
+          kind: r.kind,
+          stage: r.stage,
+          updatedAt: r.updated_at.toISOString(),
+        })),
+      };
+    }),
 };

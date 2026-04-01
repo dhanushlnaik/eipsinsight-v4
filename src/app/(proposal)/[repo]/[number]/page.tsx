@@ -763,11 +763,6 @@ export default function ProposalDetailPage() {
                             <span className={cn('inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium', getBucketBadgeClass(latestUpgrade?.bucket || null))}>
                               {formatInclusionBucket(latestUpgrade?.bucket || null)}
                             </span>
-                            {latestUpgrade?.name && (
-                              <span className="text-muted-foreground">
-                                Latest: {latestUpgrade.name}
-                              </span>
-                            )}
                           </div>
                         </td>
                       </tr>
