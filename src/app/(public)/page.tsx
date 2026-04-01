@@ -59,12 +59,12 @@ type ColumnSearch = {
 
 const STATUS_COLORS: Record<string, string> = {
   Draft: 'bg-slate-500',
-  Review: 'bg-amber-500',
-  'Last Call': 'bg-orange-500',
-  Final: 'bg-emerald-500',
+  Review: 'bg-yellow-500',
+  'Last Call': 'bg-green-700',
+  Final: 'bg-blue-500',
   Living: 'bg-cyan-500',
-  Stagnant: 'bg-gray-500',
-  Withdrawn: 'bg-red-500',
+  Stagnant: 'bg-red-500',
+  Withdrawn: 'bg-red-600',
   Unknown: 'bg-slate-400',
   EIPs: 'bg-cyan-500',
   ERCs: 'bg-emerald-500',
@@ -72,24 +72,24 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_PIE_COLORS: Record<string, string> = {
-  Draft: '#60a5fa',
-  Review: '#f59e0b',
-  'Last Call': '#f97316',
-  Final: '#10b981',
+  Draft: '#64748b',
+  Review: '#eab308',
+  'Last Call': '#15803d',
+  Final: '#3b82f6',
   Living: '#22d3ee',
-  Stagnant: '#94a3b8',
-  Withdrawn: '#ef4444',
+  Stagnant: '#ef4444',
+  Withdrawn: '#dc2626',
   Unknown: '#94a3b8',
 };
 
 const BADGE_COLORS: Record<string, string> = {
   Draft: 'bg-slate-500/20 text-muted-foreground border-slate-500/30',
-  Review: 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30',
-  'Last Call': 'bg-orange-500/20 text-orange-700 dark:text-orange-300 border-orange-500/30',
-  Final: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+  Review: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 border-yellow-500/30',
+  'Last Call': 'bg-green-700/20 text-green-800 dark:text-green-300 border-green-700/30',
+  Final: 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30',
   Living: 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/30',
-  Stagnant: 'bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/30',
-  Withdrawn: 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30',
+  Stagnant: 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30',
+  Withdrawn: 'bg-red-600/20 text-red-700 dark:text-red-300 border-red-600/30',
   Unknown: 'bg-slate-500/20 text-muted-foreground border-slate-500/30',
 };
 
@@ -151,11 +151,11 @@ const DEFAULT_BUCKET_THEME: BucketTheme = {
 
 const BUCKET_THEME_BY_STATUS: Record<string, BucketTheme> = {
   Draft: { border: 'border-slate-400/30', surface: 'bg-slate-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-slate-500/15', icon: 'text-slate-600 dark:text-slate-300' },
-  Review: { border: 'border-amber-500/30', surface: 'bg-amber-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-amber-500/15', icon: 'text-amber-700 dark:text-amber-300' },
-  'Last Call': { border: 'border-orange-500/30', surface: 'bg-orange-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-orange-500/15', icon: 'text-orange-700 dark:text-orange-300' },
-  Final: { border: 'border-emerald-500/30', surface: 'bg-emerald-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-emerald-500/15', icon: 'text-emerald-700 dark:text-emerald-300' },
-  Stagnant: { border: 'border-zinc-400/30', surface: 'bg-zinc-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-zinc-500/15', icon: 'text-zinc-600 dark:text-zinc-400' },
-  Withdrawn: { border: 'border-red-500/30', surface: 'bg-red-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-red-500/15', icon: 'text-red-700 dark:text-red-300' },
+  Review: { border: 'border-yellow-500/30', surface: 'bg-yellow-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-yellow-500/15', icon: 'text-yellow-700 dark:text-yellow-300' },
+  'Last Call': { border: 'border-green-700/30', surface: 'bg-green-700/[0.07]', title: 'text-foreground', iconWrap: 'bg-green-700/15', icon: 'text-green-800 dark:text-green-300' },
+  Final: { border: 'border-blue-500/30', surface: 'bg-blue-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-blue-500/15', icon: 'text-blue-700 dark:text-blue-300' },
+  Stagnant: { border: 'border-red-500/30', surface: 'bg-red-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-red-500/15', icon: 'text-red-700 dark:text-red-300' },
+  Withdrawn: { border: 'border-red-600/30', surface: 'bg-red-600/[0.07]', title: 'text-foreground', iconWrap: 'bg-red-600/15', icon: 'text-red-700 dark:text-red-300' },
   Living: { border: 'border-cyan-500/30', surface: 'bg-cyan-500/[0.07]', title: 'text-foreground', iconWrap: 'bg-cyan-500/15', icon: 'text-cyan-700 dark:text-cyan-300' },
   Unknown: { border: 'border-slate-400/25', surface: 'bg-slate-500/[0.06]', title: 'text-foreground', iconWrap: 'bg-slate-500/12', icon: 'text-slate-600 dark:text-slate-400' },
 };
@@ -329,6 +329,7 @@ export default function EIPsHomePage() {
   });
   const [debouncedColumnSearch, setDebouncedColumnSearch] = useState<ColumnSearch>(columnSearch);
   const [autoGithubFilter, setAutoGithubFilter] = useState(false);
+  const [eipDisplayValue, setEipDisplayValue] = useState('');
 
   const [distribution, setDistribution] = useState<Array<{ bucket: string; count: number }>>([]);
   const [faqCategoryBreakdown, setFaqCategoryBreakdown] = useState<Array<{ category: string; count: number }>>([]);
@@ -601,6 +602,12 @@ export default function EIPsHomePage() {
     return '/RIPs';
   };
 
+  const stripEipPrefix = (raw: string): string => {
+    // Strip prefixes like "EIP-", "EIP ", "ERC-", "RIP-" etc. to get just the number
+    const match = raw.trim().match(/^(?:eip|erc|rip|rrc)[-\s]*(.+)$/i);
+    return match ? match[1].trim() : raw.trim();
+  };
+
   const handleColumnSearch = (key: keyof ColumnSearch, value: string) => {
     if (key === 'github') {
       setAutoGithubFilter(false);
@@ -609,9 +616,11 @@ export default function EIPsHomePage() {
     }
 
     if (key === 'eip') {
+      setEipDisplayValue(value);
       const inferredGithub = inferGithubFilterFromProposalId(value);
+      const strippedNumber = stripEipPrefix(value);
       setColumnSearch((prev) => {
-        const next: ColumnSearch = { ...prev, eip: value };
+        const next: ColumnSearch = { ...prev, eip: strippedNumber };
         if (inferredGithub) {
           next.github = inferredGithub;
           setAutoGithubFilter(true);
@@ -629,6 +638,7 @@ export default function EIPsHomePage() {
 
   const clearFilters = () => {
     setActiveBucket(null);
+    setEipDisplayValue('');
     setColumnSearch({
       github: '',
       eip: '',
@@ -880,7 +890,7 @@ export default function EIPsHomePage() {
         {distribution.map((row) => {
           const pct = totalCount > 0 ? Math.round((row.count / totalCount) * 100) : 0;
           const selected = activeBucket === row.bucket;
-          const barColor = STATUS_COLORS[row.bucket] || 'bg-cyan-500';
+          const barColor = selected ? (STATUS_COLORS[row.bucket] || 'bg-cyan-500') : 'bg-muted-foreground/40';
           const theme = getBucketTheme(dimension, row.bucket);
           const StatusIcon = statusIconMap[row.bucket] ?? Layers;
           const CategoryIcon = categoryIconMap[row.bucket] ?? Layers;
@@ -897,28 +907,27 @@ export default function EIPsHomePage() {
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
                 selected
                   ? cn(
-                      'persona-drift-glow border-primary/50 bg-primary/10',
-                      'shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.24),0_10px_28px_rgb(var(--persona-accent-rgb)/0.10)]',
-                      'ring-1 ring-primary/40',
-                      'before:pointer-events-none before:absolute before:inset-0 before:rounded-xl before:bg-[radial-gradient(420px_circle_at_30%_10%,rgba(var(--persona-accent-rgb),0.20),transparent_60%)]',
+                      theme.border, theme.surface,
+                      'shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.12),0_6px_16px_rgb(var(--persona-accent-rgb)/0.06)]',
+                      'ring-1 ring-primary/30',
                     )
-                  : cn(theme.border, theme.surface, 'hover:border-primary/45'),
+                  : 'border-border bg-card/60 hover:border-primary/30',
               )}
             >
               <div className="relative z-10">
               <div
                 className={cn(
                   'mb-1.5 inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors',
-                  selected ? 'bg-primary/25 ring-1 ring-primary/25' : theme.iconWrap,
+                  selected ? theme.iconWrap : 'bg-muted/60',
                 )}
               >
-                <Icon className={cn('h-3.5 w-3.5', selected ? 'text-primary' : theme.icon)} />
+                <Icon className={cn('h-3.5 w-3.5', selected ? theme.icon : 'text-muted-foreground')} />
               </div>
               <div className="mb-0.5 flex items-center justify-between gap-2">
                 <p
                   className={cn(
                     'truncate text-[13px] font-medium leading-tight',
-                    selected ? 'text-foreground' : theme.title,
+                    selected ? theme.title : 'text-muted-foreground',
                   )}
                 >
                   {row.bucket}
@@ -999,7 +1008,7 @@ export default function EIPsHomePage() {
               </tr>
               <tr className="border-b border-border/60 bg-muted/40">
                 <th className="px-4 py-3"><input value={columnSearch.github} onChange={(e) => handleColumnSearch('github', e.target.value)} placeholder="/EIPs" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
-                <th className="px-4 py-3"><input value={columnSearch.eip} onChange={(e) => handleColumnSearch('eip', e.target.value)} placeholder="EIP-1559 / RIP-7212 / 1559" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
+                <th className="px-4 py-3"><input value={eipDisplayValue} onChange={(e) => handleColumnSearch('eip', e.target.value)} placeholder="EIP-1559 / RIP-7212 / 1559" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
                 <th className="px-4 py-3"><input value={columnSearch.title} onChange={(e) => handleColumnSearch('title', e.target.value)} placeholder="Title" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
                 <th className="px-4 py-3"><input value={columnSearch.author} onChange={(e) => handleColumnSearch('author', e.target.value)} placeholder="Author" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>
                 <th className="px-4 py-3"><input value={columnSearch.type} onChange={(e) => handleColumnSearch('type', e.target.value)} placeholder="Type" className="h-9 w-full rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30" /></th>

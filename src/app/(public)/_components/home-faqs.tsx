@@ -34,8 +34,8 @@ const STATUS_TERMS = [
 ];
 
 const STATUS_DOT_COLORS: Record<string, string> = {
-  Draft: 'bg-slate-400', Review: 'bg-amber-400', 'Last Call': 'bg-orange-400', Final: 'bg-emerald-400',
-  Stagnant: 'bg-gray-500', Withdrawn: 'bg-red-400', Living: 'bg-cyan-400',
+  Draft: 'bg-slate-400', Review: 'bg-yellow-400', 'Last Call': 'bg-green-600', Final: 'bg-blue-400',
+  Stagnant: 'bg-red-500', Withdrawn: 'bg-red-400', Living: 'bg-cyan-400',
 };
 
 type HomeFAQsProps = {
