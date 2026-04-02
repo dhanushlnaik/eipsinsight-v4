@@ -20,6 +20,7 @@ import {
   Cpu,
   Download,
   Eye,
+  ExternalLink,
   FileText,
   Filter,
   GitBranch,
@@ -30,6 +31,7 @@ import {
   Pause,
   Trophy,
   XCircle,
+  Wrench,
   Zap,
 } from 'lucide-react';
 import { client } from '@/lib/orpc';
@@ -44,6 +46,7 @@ import { useSession } from '@/hooks/useSession';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { ASSOCIATE_EIP_EDITORS, CANONICAL_EIP_EDITORS } from '@/data/eip-contributor-roles';
+import { useEffectivePersona, useIsHydrated } from '@/stores/personaStore';
 
 type Dimension = 'status' | 'category' | 'repo' | 'stages';
 type SortBy = 'github' | 'eip' | 'title' | 'author' | 'type' | 'category' | 'status' | 'updated_at';
@@ -66,6 +69,32 @@ type HomepageEditorRow = {
   totalActions: number;
   prsTouched: number;
 };
+
+type BoardPreviewRow = {
+  prNumber: number;
+  title: string | null;
+  author: string | null;
+  createdAt: string;
+  repo: string;
+  repoShort: string;
+  govState: string;
+  waitDays: number;
+  processType: string;
+};
+
+type ProcessBreakdownRow = {
+  category: string;
+  count: number;
+};
+
+type ParticipantBreakdownRow = {
+  label: string;
+  count: number;
+};
+
+type EditorRepoFilter = '' | 'eips' | 'ercs' | 'rips';
+
+type HomePersona = 'developer' | 'editor' | 'builder' | 'newcomer';
 
 const STATUS_COLORS: Record<string, string> = {
   Draft: 'bg-slate-500',
@@ -90,6 +119,18 @@ const STATUS_PIE_COLORS: Record<string, string> = {
   Stagnant: '#ef4444',
   Withdrawn: '#dc2626',
   Unknown: '#94a3b8',
+};
+
+const PROCESS_STACK_COLORS: Record<string, string> = {
+  'Status Change': '#34d399',
+  'New EIP': '#60a5fa',
+  'PR DRAFT': '#f59e0b',
+  Typo: '#f97316',
+  Website: '#a78bfa',
+  'EIP-1': '#22d3ee',
+  Tooling: '#fb7185',
+  'Content Edit': '#94a3b8',
+  Misc: '#64748b',
 };
 
 const BADGE_COLORS: Record<string, string> = {
@@ -255,6 +296,76 @@ const ENTRY_PATHS = [
   },
 ];
 
+const PERSONA_HOME_PLANS: Record<HomePersona, {
+  title: string;
+  description: string;
+  goal: string;
+  tools: Array<{
+    key: string;
+    title: string;
+    href: string;
+    cta: string;
+    icon: React.ComponentType<{ className?: string }>;
+    blurb: string;
+  }>;
+}> = {
+  developer: {
+    title: 'Developer Home',
+    description: 'See what is changing, what is active, and where to dive deeper next.',
+    goal: 'Quickly understand ongoing protocol changes and identify actionable items.',
+    tools: [
+      { key: 'upgrade', title: 'Upgrade Watch', href: '/upgrade', cta: 'Open', icon: Zap, blurb: 'Protocol changes and rollout context.' },
+      { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Open', icon: Activity, blurb: 'Most active standards this week.' },
+      { key: 'browse', title: 'Browse by Filters', href: '/explore', cta: 'Open', icon: Filter, blurb: 'Filter by status, category, and repo.' },
+      { key: 'board', title: 'Board Shortcut', href: '/tools/board', cta: 'Open', icon: GitPullRequest, blurb: 'Jump into active proposal queue.' },
+      { key: 'timeline', title: 'Timeline', href: '/tools/timeline', cta: 'Open', icon: GitBranch, blurb: 'Recent lifecycle and PR movement.' },
+      { key: 'dependencies', title: 'Dependencies', href: '/tools/dependencies', cta: 'Open', icon: Network, blurb: 'Track proposal dependencies.' },
+    ],
+  },
+  editor: {
+    title: 'Editor Home',
+    description: 'Stay on top of review queue, editorial workload, and proposal progression.',
+    goal: 'Efficiently manage review workload and track proposal progression.',
+    tools: [
+      { key: 'editing-board', title: 'Editing Board', href: '/tools/board', cta: 'Open', icon: GitPullRequest, blurb: 'Review queue and status lanes.' },
+      { key: 'open-editor-prs', title: 'EIP Open PRs', href: '/tools/board?status=Waiting+on+Editor&page=1', cta: 'Open', icon: GitPullRequest, blurb: 'Direct view: waiting on editor.' },
+      { key: 'pr-analytics', title: 'PR Analytics', href: '/analytics/prs', cta: 'Open', icon: ArrowUpDown, blurb: 'PR flow, velocity, and waiting states.' },
+      { key: 'editor-leaderboard', title: 'Editor Leaderboard', href: '/analytics/editors', cta: 'Open', icon: Trophy, blurb: 'Monthly editorial activity snapshot.' },
+      { key: 'composition-timeline', title: 'EIP Composition Timeline', href: '/tools/timeline', cta: 'Open', icon: GitBranch, blurb: 'Track EIP status changes for Glamsterdam.' },
+      { key: 'browse', title: 'Browse by Filters', href: '/explore', cta: 'Open', icon: Filter, blurb: 'Status, category, and repo exploration.' },
+    ],
+  },
+  builder: {
+    title: 'Builder Home',
+    description: 'Discover active standards quickly and jump into contribution workflows.',
+    goal: 'Discover active standards and contribute quickly.',
+    tools: [
+      { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Open', icon: Activity, blurb: 'Find active standards quickly.' },
+      { key: 'erc-focus', title: 'Browse by Filters (ERC)', href: '/explore?repo=ercs', cta: 'Open', icon: Boxes, blurb: 'ERC-focused exploration and filtering.' },
+      { key: 'eip-builder', title: 'EIP Builder', href: '/tools/eip-builder', cta: 'Open', icon: Code, blurb: 'Primary drafting and validation workflow.' },
+      { key: 'resources', title: 'Practical Resources', href: '/resources/docs', cta: 'Open', icon: BookOpen, blurb: 'Guides, references, and examples.' },
+    ],
+  },
+  newcomer: {
+    title: 'Newcomer Home',
+    description: 'Start with clear context, then explore proposals and tools at your pace.',
+    goal: 'Make Ethereum standards approachable and easy to get started with.',
+    tools: [
+      { key: 'learn', title: 'Learning Resources', href: '/resources', cta: 'Open', icon: BookOpen, blurb: 'Primary entry point for beginners.' },
+      { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Open', icon: Activity, blurb: 'Simple view of current activity.' },
+      { key: 'upgrade', title: 'Upgrade Watch', href: '/upgrade', cta: 'Open', icon: Zap, blurb: 'Simplified network-upgrade summary.' },
+      { key: 'tools', title: 'Beginner Tool Shortcuts', href: '/tools', cta: 'Open', icon: Wrench, blurb: 'Board, timeline, dependencies, and builder.' },
+    ],
+  },
+};
+
+const PERSONA_LABELS: Record<HomePersona, string> = {
+  developer: 'Developer',
+  editor: 'Editor',
+  builder: 'Builder',
+  newcomer: 'Newcomer',
+};
+
 function monthLabel(monthYear: string) {
   const [y, m] = monthYear.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', {
@@ -369,6 +480,9 @@ function getBucketTheme(dimension: Dimension, bucket: string): BucketTheme {
 export default function EIPsHomePage() {
   const { data: session, loading: sessionLoading } = useSession();
   const { resolvedTheme } = useTheme();
+  const personaFromStore = useEffectivePersona();
+  const personaHydrated = useIsHydrated();
+  const activePersona: HomePersona = (personaHydrated ? personaFromStore : 'newcomer') as HomePersona;
   const isDark = resolvedTheme === 'dark';
   const [dimension, setDimension] = useState<Dimension>('status');
   const [sortBy, setSortBy] = useState<SortBy>('updated_at');
@@ -450,6 +564,17 @@ export default function EIPsHomePage() {
   const [downloadingLeaderboard, setDownloadingLeaderboard] = useState(false);
   const [monthlyDeltaUpdatedAt, setMonthlyDeltaUpdatedAt] = useState<string | null>(null);
   const [monthlyLeaderboardUpdatedAt, setMonthlyLeaderboardUpdatedAt] = useState<string | null>(null);
+  const [showProposalTable, setShowProposalTable] = useState(true);
+  const [showPersonaWorkspace, setShowPersonaWorkspace] = useState(true);
+  const [editorRepoFilter, setEditorRepoFilter] = useState<EditorRepoFilter>('');
+  const [editorQueuePage, setEditorQueuePage] = useState(1);
+  const [editorCategoryPage, setEditorCategoryPage] = useState(1);
+  const [boardPreviewRows, setBoardPreviewRows] = useState<BoardPreviewRow[]>([]);
+  const [boardPreviewTotal, setBoardPreviewTotal] = useState(0);
+  const [boardPreviewTotalPages, setBoardPreviewTotalPages] = useState(1);
+  const [processBreakdownRows, setProcessBreakdownRows] = useState<ProcessBreakdownRow[]>([]);
+  const [participantBreakdownRows, setParticipantBreakdownRows] = useState<ParticipantBreakdownRow[]>([]);
+  const [boardPreviewLoading, setBoardPreviewLoading] = useState(false);
   const defaultMonthYear = useMemo(() => {
     const now = new Date();
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -473,6 +598,76 @@ export default function EIPsHomePage() {
   useEffect(() => {
     setPage(1);
   }, [dimension, activeBucket, sortBy, sortDir, columnSearch]);
+
+  useEffect(() => {
+    setShowProposalTable(activePersona !== 'editor');
+  }, [activePersona]);
+
+  useEffect(() => {
+    setEditorQueuePage(1);
+    setEditorCategoryPage(1);
+  }, [editorRepoFilter]);
+
+  useEffect(() => {
+    setShowPersonaWorkspace(true);
+  }, [activePersona]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (activePersona !== 'editor') {
+      setBoardPreviewRows([]);
+      setBoardPreviewTotal(0);
+      setBoardPreviewTotalPages(1);
+      setProcessBreakdownRows([]);
+      setParticipantBreakdownRows([]);
+      return;
+    }
+    (async () => {
+      setBoardPreviewLoading(true);
+      try {
+        const [data, processData, participantData] = await Promise.all([
+          client.tools.getOpenPRBoard({
+            repo: editorRepoFilter || undefined,
+            govState: ['Waiting on Editor'],
+            page: editorQueuePage,
+            pageSize: 5,
+          }),
+          client.analytics.getPROpenClassification({
+            repo: editorRepoFilter || undefined,
+            month: currentMonthYear,
+          }),
+          client.analytics.getPRGovernanceWaitingState({
+            repo: editorRepoFilter || undefined,
+            month: currentMonthYear,
+          }),
+        ]);
+        if (!cancelled) {
+          setBoardPreviewRows(data.rows ?? []);
+          setBoardPreviewTotal(Number(data.total ?? 0));
+          setBoardPreviewTotalPages(Math.max(1, Number(data.totalPages ?? 1)));
+          setProcessBreakdownRows(
+            (processData ?? []).map((row) => ({
+              category: row.category,
+              count: Number(row.count ?? 0),
+            })),
+          );
+          setParticipantBreakdownRows(
+            (participantData ?? []).map((row) => ({
+              label: row.label,
+              count: Number(row.count ?? 0),
+            })),
+          );
+        }
+      } catch (err) {
+        console.error('Failed to load board preview:', err);
+      } finally {
+        if (!cancelled) setBoardPreviewLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activePersona, currentMonthYear, editorRepoFilter, editorQueuePage]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -1027,14 +1222,112 @@ export default function EIPsHomePage() {
     'mt-1 text-sm leading-relaxed text-muted-foreground';
   const panelTitleClass =
     'text-base font-semibold tracking-tight text-foreground sm:text-lg';
+  const personaPlan = PERSONA_HOME_PLANS[activePersona];
+  const showLearningSection = activePersona === 'newcomer' || activePersona === 'builder' || activePersona === 'editor';
+  const sectionOrder = useMemo(() => {
+    if (activePersona === 'editor') {
+      return { reviewQueue: 2, categoryBreakdown: 3, browse: 4, monthly: 5, governance: 6, social: 7, learning: 8 };
+    }
+    if (activePersona === 'developer') {
+      return { reviewQueue: 0, categoryBreakdown: 0, browse: 2, monthly: 1, governance: 3, social: 4, learning: 5 };
+    }
+    if (activePersona === 'builder') {
+      return { reviewQueue: 0, categoryBreakdown: 0, browse: 1, monthly: 2, governance: 4, social: 5, learning: 3 };
+    }
+    return { reviewQueue: 0, categoryBreakdown: 0, browse: 2, monthly: 3, governance: 4, social: 5, learning: 1 };
+  }, [activePersona]);
+  const normalizedProcessRows = useMemo(
+    () => processBreakdownRows.filter((row) => row.count > 0),
+    [processBreakdownRows],
+  );
+  const normalizedParticipantRows = useMemo(
+    () => participantBreakdownRows.filter((row) => row.count > 0),
+    [participantBreakdownRows],
+  );
+  const editorCategoryPageSize = 6;
+  const editorCategoryTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(normalizedParticipantRows.length / editorCategoryPageSize)),
+    [normalizedParticipantRows.length],
+  );
+  const paginatedParticipantRows = useMemo(() => {
+    const start = (editorCategoryPage - 1) * editorCategoryPageSize;
+    return normalizedParticipantRows.slice(start, start + editorCategoryPageSize);
+  }, [normalizedParticipantRows, editorCategoryPage]);
+  const stackedCrossTabRows = useMemo(() => {
+    if (!normalizedProcessRows.length || !paginatedParticipantRows.length) return [];
+    const procTotal = normalizedProcessRows.reduce((sum, row) => sum + row.count, 0);
+    if (procTotal === 0) return [];
+    return paginatedParticipantRows.map((participant) => {
+      const row: Record<string, number | string> = { participant: participant.label };
+      normalizedProcessRows.forEach((processRow) => {
+        const share = processRow.count / procTotal;
+        row[processRow.category] = Math.round(participant.count * share);
+      });
+      return row;
+    });
+  }, [normalizedProcessRows, paginatedParticipantRows]);
+  const categoryBreakdownChartOption = useMemo(() => {
+    if (!stackedCrossTabRows.length) return null;
+    const participants = stackedCrossTabRows.map((row) => String(row.participant));
+    return {
+      animationDuration: 450,
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        backgroundColor: isDark ? '#020617' : '#ffffff',
+        borderColor: isDark ? '#1f2937' : '#e2e8f0',
+        textStyle: { color: isDark ? '#e5e7eb' : '#0f172a' },
+      },
+      legend: {
+        top: 0,
+        textStyle: { color: isDark ? '#94a3b8' : '#64748b', fontSize: 11 },
+      },
+      grid: { top: 34, left: 56, right: 16, bottom: 24 },
+      xAxis: {
+        type: 'category',
+        data: participants,
+        axisLabel: { color: isDark ? '#94a3b8' : '#64748b', fontSize: 11 },
+      },
+      yAxis: {
+        type: 'value',
+        minInterval: 1,
+        axisLabel: { color: isDark ? '#94a3b8' : '#64748b' },
+        splitLine: { lineStyle: { color: isDark ? 'rgba(148,163,184,0.14)' : 'rgba(148,163,184,0.2)', type: 'dashed' } },
+      },
+      series: normalizedProcessRows.map((processRow) => ({
+        name: processRow.category,
+        type: 'bar',
+        stack: 'total',
+        data: stackedCrossTabRows.map((row) => Number(row[processRow.category] || 0)),
+        itemStyle: {
+          color: PROCESS_STACK_COLORS[processRow.category] || '#94a3b8',
+          borderRadius: [2, 2, 0, 0],
+        },
+      })),
+    };
+  }, [stackedCrossTabRows, normalizedProcessRows, isDark]);
   const hasColumnFilters = useMemo(
     () => Object.values(columnSearch).some((value) => value.trim().length > 0),
     [columnSearch]
   );
+  useEffect(() => {
+    if (editorQueuePage > boardPreviewTotalPages) {
+      setEditorQueuePage(boardPreviewTotalPages);
+    }
+  }, [editorQueuePage, boardPreviewTotalPages]);
+  useEffect(() => {
+    if (editorCategoryPage > editorCategoryTotalPages) {
+      setEditorCategoryPage(editorCategoryTotalPages);
+    }
+  }, [editorCategoryPage, editorCategoryTotalPages]);
   const isTableFiltered = hasColumnFilters || activeBucket !== null;
   const dismissNewUserGuide = () => {
     window.localStorage.setItem('eipsinsight_home_start_here_dismissed', '1');
     setShowNewUserGuide(false);
+  };
+  const togglePersonaWorkspace = () => {
+    setShowPersonaWorkspace((prev) => !prev);
   };
 
   return (
@@ -1045,7 +1338,7 @@ export default function EIPsHomePage() {
 
       <hr className="mb-6 border-border" />
 
-      {showNewUserGuide && (
+      {showNewUserGuide && activePersona === 'newcomer' && (
         <section className="mb-5 rounded-xl border border-primary/25 bg-primary/5 p-2.5 sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
@@ -1080,6 +1373,309 @@ export default function EIPsHomePage() {
         </section>
       )}
 
+      {(activePersona !== 'editor' || showPersonaWorkspace) && (
+        <section className="mb-5" id="persona-home-workspace">
+          <div className="rounded-xl border border-border bg-card/60 p-2.5 sm:p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                  {PERSONA_LABELS[activePersona]} Shortcuts
+                </p>
+                {activePersona !== 'editor' && (
+                  <p className="text-xs text-muted-foreground">{personaPlan.goal}</p>
+                )}
+              </div>
+              <div className="inline-flex items-center gap-1.5">
+                {activePersona === 'editor' ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowPersonaWorkspace(false)}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                  >
+                    Close
+                    <XCircle className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={togglePersonaWorkspace}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                  >
+                    {showPersonaWorkspace ? 'Close' : 'Show'}
+                    <ChevronDown className={cn('h-3 w-3 transition-transform', showPersonaWorkspace && 'rotate-180')} />
+                  </button>
+                )}
+                <Link
+                  href="/p"
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                >
+                  Persona
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            </div>
+            {showPersonaWorkspace && (
+              activePersona === 'editor' ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[
+                    { title: 'PR Analytics', href: '/analytics/prs' },
+                    { title: 'Editing Board', href: '/tools/board?status=Waiting+on+Editor&page=1' },
+                    { title: 'Editor Leaderboard', href: '/analytics/editors' },
+                  ].map((item, idx) => (
+                    <Link
+                      key={item.title}
+                      href={item.href}
+                      className={cn(
+                        'inline-flex h-9 items-center rounded-lg border px-3 text-xs font-semibold transition',
+                        idx === 0
+                          ? 'border-primary/40 bg-primary/10 text-primary hover:border-primary/60'
+                          : 'border-border bg-background text-foreground hover:border-primary/35 hover:text-primary',
+                      )}
+                    >
+                      {item.title}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {personaPlan.tools.map((tool) => {
+                    const Icon = tool.icon;
+                    return (
+                      <Link
+                        key={tool.key}
+                        href={tool.href}
+                        className="group rounded-lg border border-border bg-background/70 px-2.5 py-2.5 transition hover:border-primary/35 hover:bg-primary/[0.04]"
+                      >
+                        <div className="mb-1.5 inline-flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <p className="text-sm font-semibold text-foreground">{tool.title}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">{tool.blurb}</p>
+                        <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                          {tool.cta}
+                          <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
+        </section>
+      )}
+
+      <div className="flex flex-col">
+      {activePersona === 'editor' && (
+        <section className="mb-6" style={{ order: sectionOrder.reviewQueue }}>
+          <hr className="mb-4 border-border/70" />
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <div>
+              <h2 className={sectionTitleClass}>Editor Review Queue</h2>
+              <p className={sectionSubtitleClass}>Open PRs currently waiting on editor action.</p>
+            </div>
+            <Link href="/tools/board?status=Waiting+on+Editor&page=1" className="text-xs font-medium text-primary hover:underline">
+              Show more
+            </Link>
+          </div>
+          <div className="mb-3 inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 p-0.5 text-xs">
+            {(
+              [
+                { key: '', label: 'All' },
+                { key: 'eips', label: 'EIPs' },
+                { key: 'ercs', label: 'ERCs' },
+                { key: 'rips', label: 'RIPs' },
+              ] as const
+            ).map((item) => (
+              <button
+                key={`editor-queue-repo-${item.label}`}
+                onClick={() => setEditorRepoFilter(item.key)}
+                className={cn(
+                  'rounded px-2.5 py-1',
+                  editorRepoFilter === item.key ? 'bg-card text-foreground' : 'text-muted-foreground',
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="overflow-hidden rounded-lg border border-border/70 bg-card/40">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] text-xs">
+                <thead>
+                  <tr className="border-b border-border/70 bg-muted/40">
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">PR</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Title</th>
+                    <th className="w-28 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Author</th>
+                    <th className="w-20 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Wait</th>
+                    <th className="w-28 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Process</th>
+                    <th className="w-36 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                    <th className="w-20 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Repo</th>
+                    <th className="w-16 px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {boardPreviewLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={`board-row-skeleton-${i}`} className="border-b border-border/60">
+                        <td colSpan={8} className="px-3 py-2.5">
+                          <div className="h-5 animate-pulse rounded bg-muted" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : boardPreviewRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
+                        No PRs currently waiting on editor.
+                      </td>
+                    </tr>
+                  ) : (
+                    boardPreviewRows.map((row) => (
+                      <tr key={`board-row-${row.repo}-${row.prNumber}`} className="border-b border-border/60 align-top transition-colors hover:bg-muted/30">
+                        <td className="px-3 py-2.5 font-mono font-semibold text-primary">
+                          <Link href={`/pr/${githubRepoFromShort(row.repoShort)}/${row.prNumber}`} className="font-semibold text-primary hover:underline">
+                            #{row.prNumber}
+                          </Link>
+                        </td>
+                        <td className="max-w-[420px] px-3 py-2.5">
+                          <p className="truncate leading-snug text-foreground">{row.title || 'Untitled PR'}</p>
+                          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{new Date(`${row.createdAt}T00:00:00`).toLocaleDateString()}</p>
+                        </td>
+                        <td className="px-3 py-2.5 text-muted-foreground">{row.author || '—'}</td>
+                        <td className="px-3 py-2.5 text-muted-foreground tabular-nums">{row.waitDays}d</td>
+                        <td className="px-3 py-2.5">
+                          <span className="whitespace-nowrap rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {row.processType}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className="whitespace-nowrap rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            {row.govState}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-muted-foreground">{row.repoShort.toUpperCase()}</td>
+                        <td className="px-3 py-2.5 text-center">
+                          <a
+                            href={`https://github.com/${row.repo}/pull/${row.prNumber}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[10px] text-primary transition-colors hover:bg-primary/15"
+                          >
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span>
+                Showing {(boardPreviewTotal === 0 ? 0 : (editorQueuePage - 1) * 5 + 1)}–
+                {Math.min(editorQueuePage * 5, boardPreviewTotal)} of {boardPreviewTotal}
+              </span>
+              <div className="inline-flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditorQueuePage((p) => Math.max(1, p - 1))}
+                  disabled={editorQueuePage <= 1}
+                  className="rounded-md border border-border bg-muted/60 px-2 py-1 disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <span className="tabular-nums">Page {editorQueuePage} / {boardPreviewTotalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setEditorQueuePage((p) => Math.min(boardPreviewTotalPages, p + 1))}
+                  disabled={editorQueuePage >= boardPreviewTotalPages}
+                  className="rounded-md border border-border bg-muted/60 px-2 py-1 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {activePersona === 'editor' && (
+        <section className="mb-6" style={{ order: sectionOrder.categoryBreakdown }}>
+          <hr className="mb-4 border-border/70" />
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className={sectionTitleClass}>Category Breakdown</h2>
+              <p className={sectionSubtitleClass}>Participants × process stacked distribution for open PRs.</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Month context: {monthLabel(currentMonthYear)}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/analytics/prs" className="text-xs font-medium text-primary hover:underline">
+                Show more
+              </Link>
+            </div>
+          </div>
+          <div className="mb-3 inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 p-0.5 text-xs">
+            {(
+              [
+                { key: '', label: 'All' },
+                { key: 'eips', label: 'EIPs' },
+                { key: 'ercs', label: 'ERCs' },
+                { key: 'rips', label: 'RIPs' },
+              ] as const
+            ).map((item) => (
+              <button
+                key={`editor-category-repo-${item.label}`}
+                onClick={() => setEditorRepoFilter(item.key)}
+                className={cn(
+                  'rounded px-2.5 py-1',
+                  editorRepoFilter === item.key ? 'bg-card text-foreground' : 'text-muted-foreground',
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="overflow-hidden rounded-lg border border-border/70 bg-card/40 p-3">
+            {boardPreviewLoading ? (
+              <div className="h-[260px] animate-pulse rounded bg-muted" />
+            ) : !categoryBreakdownChartOption ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">No category data available.</p>
+            ) : (
+              <ReactECharts
+                option={categoryBreakdownChartOption}
+                style={{ height: '300px', width: '100%' }}
+                opts={{ renderer: 'svg' }}
+              />
+            )}
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/70 pt-2 text-xs text-muted-foreground">
+              <span>
+                Showing {paginatedParticipantRows.length} participant buckets
+              </span>
+              <div className="inline-flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditorCategoryPage((p) => Math.max(1, p - 1))}
+                  disabled={editorCategoryPage <= 1}
+                  className="rounded-md border border-border bg-muted/60 px-2 py-1 disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <span className="tabular-nums">Page {editorCategoryPage} / {editorCategoryTotalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setEditorCategoryPage((p) => Math.min(editorCategoryTotalPages, p + 1))}
+                  disabled={editorCategoryPage >= editorCategoryTotalPages}
+                  className="rounded-md border border-border bg-muted/60 px-2 py-1 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div style={{ order: sectionOrder.browse }}>
       <div className="mb-3 space-y-2">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start">
@@ -1466,6 +2062,20 @@ export default function EIPsHomePage() {
         )}
       </AnimatePresence>
 
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          Proposal table view{activePersona === 'editor' ? ' (hidden by default for editor workflow)' : ''}
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowProposalTable((prev) => !prev)}
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/30 hover:text-primary"
+        >
+          {showProposalTable ? 'Hide table' : 'Show table'}
+          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', showProposalTable && 'rotate-180')} />
+        </button>
+      </div>
+
       <div className="mb-6 overflow-hidden rounded-xl border border-border bg-card/60">
         <div className="flex flex-col items-start justify-between gap-2 border-b border-border/70 bg-muted/40 px-4 py-3 text-xs sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-2">
@@ -1505,6 +2115,8 @@ export default function EIPsHomePage() {
             {downloading ? 'Exporting...' : (isTableFiltered ? 'Download Filtered CSV' : 'Download CSV')}
           </button>
         </div>
+        {showProposalTable ? (
+          <>
         <div className="relative hidden overflow-x-auto md:block" aria-busy={tableLoading}>
           <table className="min-w-[980px] text-sm">
             <thead>
@@ -1689,12 +2301,24 @@ export default function EIPsHomePage() {
             </button>
           </div>
         </div>
+          </>
+        ) : (
+          <div className="px-4 py-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              Proposal table is hidden for faster scanning. Click <span className="font-medium text-foreground">Show table</span> when you need detailed rows.
+            </p>
+          </div>
+        )}
+      </div>
       </div>
 
-      <section className="mb-6">
-        <HomeFAQs categoryBreakdown={faqCategoryBreakdown} statusDist={faqStatusDist} />
-      </section>
+      {showLearningSection && (
+        <section className="mb-6" style={{ order: sectionOrder.learning }}>
+          <HomeFAQs categoryBreakdown={faqCategoryBreakdown} statusDist={faqStatusDist} />
+        </section>
+      )}
 
+      <div style={{ order: sectionOrder.monthly }}>
       <hr className="my-6 border-border" />
 
       <div className="mb-3 flex items-center justify-end gap-2">
@@ -1908,6 +2532,8 @@ export default function EIPsHomePage() {
         </div>
       </div>
 
+      </div>
+      <div style={{ order: sectionOrder.governance }}>
       <hr className="my-6 border-border" />
 
       <section className="mb-6 w-full" id="recent-governance-activity">
@@ -2048,10 +2674,12 @@ export default function EIPsHomePage() {
       </section>
 
       <hr className="my-6 border-border" />
+      </div>
 
-      <section>
+      <section style={{ order: sectionOrder.social }}>
         <SocialCommunityUpdates />
       </section>
+      </div>
     </div>
   );
 }
