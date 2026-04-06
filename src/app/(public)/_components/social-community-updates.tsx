@@ -74,69 +74,41 @@ const communityDiscussions = [
   },
 ];
 
-const upcomingEvents = [
-  {
-    id: 1,
-    title: 'ACDT #73',
-    date: 'Mar 9, 2026',
-    time: 'Recent meeting',
-    url: 'https://github.com/ethereum/pm/issues/1956',
-    icon: Users,
-    type: 'Testing',
-  },
-  {
-    id: 2,
-    title: 'ACDT #72',
-    date: 'Mar 2, 2026',
-    time: 'Recent meeting',
-    url: 'https://github.com/ethereum/pm/issues/1948',
-    icon: MessageSquare,
-    type: 'Testing',
-  },
-  {
-    id: 3,
-    title: 'ACDE #231',
-    date: 'Feb 26, 2026',
-    time: 'Recent meeting',
-    url: 'https://github.com/ethereum/pm/issues/1931',
-    icon: Calendar,
-    type: 'Execution',
-  },
-  {
-    id: 4,
-    title: 'ACDC #175',
-    date: 'Feb 19, 2026',
-    time: 'Recent meeting',
-    url: 'https://github.com/ethereum/pm/issues/1930',
-    icon: Calendar,
-    type: 'Consensus',
-  },
-];
+type UpcomingEvent = {
+  id: number;
+  title: string;
+  date: string;
+  time: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string }>;
+  type: string;
+  sortTs: number;
+};
 
 const communityChannels = [
   {
-    name: 'Discord',
-    description: 'Real-time governance and standards discussions',
-    members: '12.5k',
-    url: 'https://discord.gg/ethereum',
-    icon: MessageCircle,
+    name: 'Ethereum Magicians (EIPs)',
+    description: 'Primary forum for EIP proposal discussions and feedback.',
+    meta: 'Forum',
+    url: 'https://ethereum-magicians.org/c/eips/14',
+    icon: Hash,
+    color: 'violet',
+  },
+  {
+    name: 'Ethereum Research (Protocol)',
+    description: 'Deep protocol research threads connected to standards work.',
+    meta: 'Research',
+    url: 'https://ethresear.ch/c/protocol/14',
+    icon: MessageSquare,
     color: 'indigo',
   },
   {
-    name: 'GitHub Discussions',
-    description: 'Proposal feedback and technical design debate',
-    members: '8.3k',
-    url: 'https://github.com/ethereum/EIPs/discussions',
+    name: 'Ethereum PM (AllCoreDevs)',
+    description: 'Official meeting agendas, updates, and coordination issues.',
+    meta: 'Agendas',
+    url: 'https://github.com/ethereum/pm/issues',
     icon: Github,
     color: 'slate',
-  },
-  {
-    name: 'Ethereum Magicians',
-    description: 'Long-form EIP and governance conversations',
-    members: '15.2k',
-    url: 'https://ethereum-magicians.org/',
-    icon: Hash,
-    color: 'violet',
   },
 ];
 
@@ -183,6 +155,102 @@ type SocialCommunityUpdatesProps = {
 };
 
 export default function SocialCommunityUpdates({ showCommunityResources = true }: SocialCommunityUpdatesProps) {
+  const [upcomingEvents, setUpcomingEvents] = React.useState<UpcomingEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = React.useState(true);
+  const [eventsSyncedAt, setEventsSyncedAt] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const parseMeetingDate = (raw: string): Date | null => {
+      const monthPattern = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})\b/i;
+      const isoPattern = /\b(\d{4})-(\d{2})-(\d{2})\b/;
+      const monthMatch = raw.match(monthPattern);
+      if (monthMatch) {
+        const d = new Date(`${monthMatch[1]} ${monthMatch[2]}, ${monthMatch[3]} UTC`);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      const isoMatch = raw.match(isoPattern);
+      if (isoMatch) {
+        const d = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00.000Z`);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    };
+
+    const parseTimeLabel = (raw: string) => {
+      const match = raw.match(/\b(\d{1,2}:\d{2})\s*(UTC|GMT)\b/i);
+      if (!match) return 'Agenda open';
+      return `${match[1]} ${match[2].toUpperCase()}`;
+    };
+
+    const typeAndIcon = (title: string): { type: string; icon: UpcomingEvent['icon'] } => {
+      const t = title.toLowerCase();
+      if (t.includes('acde') || t.includes('execution')) return { type: 'Execution', icon: Calendar };
+      if (t.includes('acdc') || t.includes('consensus')) return { type: 'Consensus', icon: Users };
+      if (t.includes('acdt') || t.includes('testing')) return { type: 'Testing', icon: MessageSquare };
+      return { type: 'Protocol', icon: Calendar };
+    };
+
+    (async () => {
+      setEventsLoading(true);
+      try {
+        const res = await fetch('https://api.github.com/repos/ethereum/pm/issues?state=open&per_page=40&sort=updated&direction=desc');
+        if (!res.ok) throw new Error(`GitHub response ${res.status}`);
+        const data: Array<{
+          number: number;
+          title: string;
+          body: string | null;
+          html_url: string;
+          updated_at: string;
+          pull_request?: unknown;
+        }> = await res.json();
+
+        const now = new Date();
+        const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+        const items = data
+          .filter((row) => !row.pull_request)
+          .filter((row) => /(acd|all core devs|protocol|breakout|interop|allwalletdevs|eipip)/i.test(row.title))
+          .map((row) => {
+            const combined = `${row.title}\n${row.body ?? ''}`;
+            const parsedDate = parseMeetingDate(combined);
+            const { type, icon } = typeAndIcon(row.title);
+            const sortTs = parsedDate?.getTime() ?? new Date(row.updated_at).getTime();
+            return {
+              id: row.number,
+              title: row.title,
+              date: parsedDate
+                ? parsedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : 'TBD',
+              time: parseTimeLabel(combined),
+              url: row.html_url,
+              icon,
+              type,
+              sortTs,
+              hasFutureDate: parsedDate ? parsedDate.getTime() >= todayUtc.getTime() : false,
+            };
+          })
+          .filter((item) => item.hasFutureDate || item.date === 'TBD')
+          .sort((a, b) => a.sortTs - b.sortTs)
+          .slice(0, 6)
+          .map(({ hasFutureDate: _drop, ...rest }) => rest);
+
+        if (!cancelled) setUpcomingEvents(items);
+      } catch (err) {
+        if (!cancelled) setUpcomingEvents([]);
+      } finally {
+        if (!cancelled) {
+          setEventsLoading(false);
+          setEventsSyncedAt(new Date().toISOString());
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section className="w-full" id="social-community">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -285,7 +353,7 @@ export default function SocialCommunityUpdates({ showCommunityResources = true }
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-foreground">{channel.name}</p>
                   <p className="text-xs text-muted-foreground">{channel.description}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{channel.members}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{channel.meta}</p>
                 </div>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
               </a>
@@ -309,7 +377,22 @@ export default function SocialCommunityUpdates({ showCommunityResources = true }
             </div>
             <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
           </a>
-          {upcomingEvents.map((event) => {
+          {eventsSyncedAt ? (
+            <p className="text-[11px] text-muted-foreground">
+              Last synced {new Date(eventsSyncedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          ) : null}
+          {eventsLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={`upcoming-event-skeleton-${i}`} className="h-16 animate-pulse rounded-md border border-border bg-muted/40" />
+              ))}
+            </div>
+          ) : upcomingEvents.length === 0 ? (
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-4 text-xs text-muted-foreground">
+              No upcoming meeting agendas found right now. Check the full PM issue list.
+            </div>
+          ) : upcomingEvents.map((event) => {
             const Icon = event.icon;
             return (
               <a key={event.id} href={event.url} target="_blank" rel="noopener noreferrer" className="group flex items-start gap-3 rounded-lg border border-border bg-card/60 p-3 transition hover:border-primary/40">
@@ -318,7 +401,7 @@ export default function SocialCommunityUpdates({ showCommunityResources = true }
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">{event.title}</p>
-                  <p className="text-xs text-muted-foreground">{event.date} · {event.type}</p>
+                  <p className="text-xs text-muted-foreground">{event.date} · {event.time} · {event.type}</p>
                 </div>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
               </a>
