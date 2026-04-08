@@ -375,9 +375,9 @@ const PERSONA_HOME_PLANS: Record<HomePersona, {
     description: 'See what is changing, what is active, and where to dive deeper next.',
     goal: 'Quickly understand ongoing protocol changes and identify actionable items.',
     tools: [
-      { key: 'upgrade', title: 'Upgrade Watch', href: '/upgrade', cta: 'Open', icon: Zap, blurb: 'Protocol changes and rollout context.' },
-      { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Open', icon: Activity, blurb: 'Most active standards this week.' },
-      { key: 'browse', title: 'Browse by Filters', href: '/explore', cta: 'Open', icon: Filter, blurb: 'Filter by status, category, and repo.' },
+      { key: 'upgrade', title: 'Upgrade Watch', href: '/upgrade', cta: 'Explore Upgrades', icon: Zap, blurb: 'Protocol changes and rollout context.' },
+      { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Explore Trending', icon: Activity, blurb: 'Most active standards this week.' },
+      { key: 'browse', title: 'Browse by Filters', href: '/explore', cta: 'Explore Browse', icon: Filter, blurb: 'Filter by status, category, and repo.' },
       { key: 'board', title: 'Editing Board Snapshot', href: '/tools/board', cta: 'Explore Board', icon: GitPullRequest, blurb: 'Jump into active proposal queue.' },
       { key: 'timeline', title: 'Timeline Snapshot', href: '/tools/timeline', cta: 'Explore Timeline', icon: GitBranch, blurb: 'Recent lifecycle and PR movement.' },
       { key: 'dependencies', title: 'Dependencies Snapshot', href: '/tools/dependencies', cta: 'Explore Dependencies', icon: Network, blurb: 'Track proposal dependencies.' },
@@ -401,7 +401,7 @@ const PERSONA_HOME_PLANS: Record<HomePersona, {
     tools: [
       { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Explore Trending', icon: Activity, blurb: 'Find active standards quickly.' },
       { key: 'erc-focus', title: 'ERC-focused Browse', href: '/explore?repo=ercs', cta: 'Explore ERCs', icon: Boxes, blurb: 'ERC-focused exploration and filtering.' },
-      { key: 'eip-builder', title: 'EIP Builder', href: '/tools/eip-builder', cta: 'Open Builder', icon: Code, blurb: 'Primary drafting and validation workflow.' },
+      { key: 'eip-builder', title: 'EIP Builder', href: '/tools/eip-builder', cta: 'Explore EIP Builder', icon: Code, blurb: 'Primary drafting and validation workflow.' },
       { key: 'resources', title: 'Practical Docs/Resources', href: '/resources/docs', cta: 'Explore Resources', icon: BookOpen, blurb: 'Guides, references, and examples.' },
       { key: 'contributors', title: 'Recent Activity Snapshot', href: '/analytics/contributors', cta: 'Explore Contributors', icon: Activity, blurb: 'Latest contributor movement and momentum.' },
     ],
@@ -1851,7 +1851,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/resources"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Resources
               <ArrowRight className="h-3 w-3" />
@@ -1875,7 +1875,7 @@ export default function EIPsHomePage() {
           <div className="mt-2 flex justify-center">
             <Link
               href="/explore/trending"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Trending
               <ArrowRight className="h-3 w-3" />
@@ -1929,7 +1929,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/explore/trending"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Trending
               <ArrowRight className="h-3 w-3" />
@@ -1972,7 +1972,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/upgrade"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Upgrades
               <ArrowRight className="h-3 w-3" />
@@ -1993,7 +1993,7 @@ export default function EIPsHomePage() {
           <div className="mt-2 flex justify-center">
             <Link
               href="/dashboard"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Governance
               <ArrowRight className="h-3 w-3" />
@@ -2026,7 +2026,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/tools/eip-builder"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore EIP Builder
               <ArrowRight className="h-3 w-3" />
@@ -2188,7 +2188,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/tools/board"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Board
               <ArrowRight className="h-3 w-3" />
@@ -2235,7 +2235,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/tools"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Tools
               <ArrowRight className="h-3 w-3" />
@@ -2282,7 +2282,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/tools"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Tools
               <ArrowRight className="h-3 w-3" />
@@ -2974,7 +2974,7 @@ export default function EIPsHomePage() {
       <div className="mt-3 flex justify-center">
         <Link
           href="/explore"
-          className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+          className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
         >
           Explore Browse
           <ArrowRight className="h-3 w-3" />
@@ -3002,7 +3002,7 @@ export default function EIPsHomePage() {
             <div className="mt-3 flex justify-center">
               <Link
                 href="/resources/faq"
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+                className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
               >
                 Explore FAQ
                 <ArrowRight className="h-3 w-3" />
@@ -3088,7 +3088,7 @@ export default function EIPsHomePage() {
                 href={`/insights/year-month-analysis?month=${currentMonthYear}`}
                 className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
               >
-                Open month analysis
+                Explore Month Analysis
                 <ArrowRight className="h-3 w-3" />
               </Link>
               <button
@@ -3172,7 +3172,7 @@ export default function EIPsHomePage() {
                 href="/analytics/editors"
                 className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
               >
-                Open full leaderboard
+                Explore Editor Leaderboard
                 <ArrowRight className="h-3 w-3" />
               </Link>
               <button
@@ -3273,14 +3273,14 @@ export default function EIPsHomePage() {
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <Link
             href="/insights/year-month-analysis"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+            className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
             Explore Month Analysis
             <ArrowRight className="h-3 w-3" />
           </Link>
           <Link
             href="/analytics/editors"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+            className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
             Explore Editor Leaderboard
             <ArrowRight className="h-3 w-3" />
@@ -3439,7 +3439,7 @@ export default function EIPsHomePage() {
         <div className="mt-3 flex justify-center">
           <Link
             href="/analytics/prs"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+            className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
             Explore PR Analytics
             <ArrowRight className="h-3 w-3" />
@@ -3489,7 +3489,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/resources/docs"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Resources
               <ArrowRight className="h-3 w-3" />

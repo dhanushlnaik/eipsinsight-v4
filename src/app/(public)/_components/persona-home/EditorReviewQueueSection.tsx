@@ -224,7 +224,7 @@ export default function EditorReviewQueueSection({
       <div className="mt-3 flex justify-center">
         <Link
           href="/tools/board?status=Waiting+on+Editor&page=1"
-          className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+          className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
         >
           Explore Board
           <ArrowRight className="h-3 w-3" />

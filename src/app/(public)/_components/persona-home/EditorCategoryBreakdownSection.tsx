@@ -131,7 +131,7 @@ export default function EditorCategoryBreakdownSection({
       <div className="mt-3 flex justify-center">
         <Link
           href="/analytics/prs"
-          className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+          className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
         >
           Explore PR Analytics
           <ArrowRight className="h-3 w-3" />
