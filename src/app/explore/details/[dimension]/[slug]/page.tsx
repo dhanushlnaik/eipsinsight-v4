@@ -200,6 +200,12 @@ export default function ExploreDetailPage({
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [loadingRepoStats, setLoadingRepoStats] = useState(false);
   const [loadingTable, setLoadingTable] = useState(true);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
+  const [tableError, setTableError] = useState<string | null>(null);
+  const [repoStatsError, setRepoStatsError] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   const fromMonth = useMemo(() => {
     const now = new Date();
@@ -233,11 +239,13 @@ export default function ExploreDetailPage({
     let cancelled = false;
     (async () => {
       setLoadingOverview(true);
+      setOverviewError(null);
       try {
         const data = await client.explore.getDetailOverview({ dimension, slug });
         if (!cancelled) setOverview(data as DetailOverview);
       } catch (err) {
         console.error('Failed to load detail overview:', err);
+        if (!cancelled) setOverviewError('Failed to load overview data.');
       } finally {
         if (!cancelled) setLoadingOverview(false);
       }
@@ -245,22 +253,25 @@ export default function ExploreDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [dimension, slug, validDimension]);
+  }, [dimension, slug, validDimension, refreshToken]);
 
   useEffect(() => {
     if (!validDimension || dimension !== 'repo') {
       setRepoStats(null);
       setLoadingRepoStats(false);
+      setRepoStatsError(null);
       return;
     }
     let cancelled = false;
     (async () => {
       setLoadingRepoStats(true);
+      setRepoStatsError(null);
       try {
         const data = await client.explore.getDetailRepoGithubStats({ slug });
         if (!cancelled) setRepoStats(data as RepoGithubStats);
       } catch (err) {
         console.error('Failed to load repo GitHub stats:', err);
+        if (!cancelled) setRepoStatsError('Failed to load repository stats.');
       } finally {
         if (!cancelled) setLoadingRepoStats(false);
       }
@@ -268,18 +279,20 @@ export default function ExploreDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [dimension, slug, validDimension]);
+  }, [dimension, slug, validDimension, refreshToken]);
 
   useEffect(() => {
     if (!validDimension) return;
     let cancelled = false;
     (async () => {
       setLoadingTimeline(true);
+      setTimelineError(null);
       try {
         const data = await client.explore.getDetailTimeline({ dimension, slug, fromMonth, toMonth });
         if (!cancelled) setTimeline(data as DetailTimeline);
       } catch (err) {
         console.error('Failed to load detail timeline:', err);
+        if (!cancelled) setTimelineError('Failed to load timeline data.');
       } finally {
         if (!cancelled) setLoadingTimeline(false);
       }
@@ -287,13 +300,14 @@ export default function ExploreDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [dimension, slug, fromMonth, toMonth, validDimension]);
+  }, [dimension, slug, fromMonth, toMonth, validDimension, refreshToken]);
 
   useEffect(() => {
     if (!validDimension) return;
     let cancelled = false;
     (async () => {
       setLoadingReviews(true);
+      setReviewsError(null);
       try {
         const data = await client.analytics.getEditorReviewsLast24h({
           repo: toRepoFilterForReviews(dimension, slug),
@@ -302,6 +316,7 @@ export default function ExploreDetailPage({
         if (!cancelled) setReviews(data as ReviewRow[]);
       } catch (err) {
         console.error('Failed to load 24h editor reviews:', err);
+        if (!cancelled) setReviewsError('Failed to load editor reviews.');
       } finally {
         if (!cancelled) setLoadingReviews(false);
       }
@@ -309,13 +324,14 @@ export default function ExploreDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [dimension, slug, validDimension]);
+  }, [dimension, slug, validDimension, refreshToken]);
 
   useEffect(() => {
     if (!validDimension) return;
     let cancelled = false;
     (async () => {
       setLoadingTable(true);
+      setTableError(null);
       try {
         const data = await client.explore.getDetailProposals({
           dimension,
@@ -330,6 +346,7 @@ export default function ExploreDetailPage({
         if (!cancelled) setTable(data as DetailProposals);
       } catch (err) {
         console.error('Failed to load detail proposals:', err);
+        if (!cancelled) setTableError('Failed to load proposal rows.');
       } finally {
         if (!cancelled) setLoadingTable(false);
       }
@@ -337,7 +354,7 @@ export default function ExploreDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [dimension, slug, q, statusFilter, categoryFilter, sort, page, validDimension]);
+  }, [dimension, slug, q, statusFilter, categoryFilter, sort, page, validDimension, refreshToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -489,6 +506,19 @@ export default function ExploreDetailPage({
             </div>
           </div>
 
+          {overviewError ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              <span>{overviewError}</span>
+              <button
+                type="button"
+                onClick={() => setRefreshToken((v) => v + 1)}
+                className="rounded-md border border-destructive/35 bg-destructive/10 px-2 py-0.5 font-medium text-destructive hover:bg-destructive/15"
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+
           {dimension === 'repo' ? (
             <div className="mt-3 rounded-2xl border border-border/80 bg-gradient-to-br from-card/90 via-card/75 to-muted/30 p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between gap-2">
@@ -549,6 +579,18 @@ export default function ExploreDetailPage({
                   ) : null}
                 </div>
               </div>
+              {repoStatsError ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-destructive">
+                  <span>{repoStatsError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRefreshToken((v) => v + 1)}
+                    className="rounded-md border border-destructive/35 bg-destructive/10 px-2 py-0.5 font-medium text-destructive hover:bg-destructive/15"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : null}
               {repoStats?.updatedAt ? (
                 <div className="mt-3 border-t border-border/70 pt-3">
                   <LastUpdated timestamp={repoStats.updatedAt} prefix="Stats updated" className="bg-muted/40 text-xs" />
@@ -585,6 +627,17 @@ export default function ExploreDetailPage({
           <div className="rounded-xl border border-border bg-card/60 p-3">
             {loadingTimeline ? (
               <div className="h-[320px] animate-pulse rounded-lg bg-muted" />
+            ) : timelineError ? (
+              <div className="flex h-[320px] flex-col items-center justify-center gap-2 rounded-lg border border-border/70 bg-muted/30 text-sm text-muted-foreground">
+                <p>{timelineError}</p>
+                <button
+                  type="button"
+                  onClick={() => setRefreshToken((v) => v + 1)}
+                  className="rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+                >
+                  Retry
+                </button>
+              </div>
             ) : !timelineOption ? (
               <div className="flex h-[320px] items-center justify-center rounded-lg border border-border/70 bg-muted/30 text-sm text-muted-foreground">
                 No timeline data for this bucket.
@@ -616,6 +669,17 @@ export default function ExploreDetailPage({
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={`reviews-skeleton-${i}`} className="h-14 animate-pulse rounded-lg bg-muted" />
                 ))}
+              </div>
+            ) : reviewsError ? (
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-8 text-center text-sm text-muted-foreground">
+                <p>{reviewsError}</p>
+                <button
+                  type="button"
+                  onClick={() => setRefreshToken((v) => v + 1)}
+                  className="mt-2 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+                >
+                  Retry
+                </button>
               </div>
             ) : reviews.length === 0 ? (
               <div className="rounded-lg border border-border bg-muted/30 px-3 py-8 text-center text-sm text-muted-foreground">
@@ -659,7 +723,7 @@ export default function ExploreDetailPage({
             </div>
           </div>
 
-          <div className="mb-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="sticky top-14 z-10 mb-2 grid gap-2 rounded-lg border border-border bg-background/95 p-2 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:grid-cols-2 lg:grid-cols-5">
             <label className="sm:col-span-2">
               <span className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <Search className="h-3 w-3" />
@@ -741,6 +805,19 @@ export default function ExploreDetailPage({
                         </td>
                       </tr>
                     ))
+                  ) : tableError ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground">
+                        <p>{tableError}</p>
+                        <button
+                          type="button"
+                          onClick={() => setRefreshToken((v) => v + 1)}
+                          className="mt-2 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+                        >
+                          Retry
+                        </button>
+                      </td>
+                    </tr>
                   ) : table?.rows.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground">
@@ -801,6 +878,17 @@ export default function ExploreDetailPage({
                 Array.from({ length: 6 }).map((_, i) => (
                   <div key={`mobile-detail-skeleton-${i}`} className="h-20 animate-pulse rounded-lg bg-muted" />
                 ))
+              ) : tableError ? (
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-7 text-center text-sm text-muted-foreground">
+                  <p>{tableError}</p>
+                  <button
+                    type="button"
+                    onClick={() => setRefreshToken((v) => v + 1)}
+                    className="mt-2 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : table?.rows.length === 0 ? (
                 <div className="rounded-lg border border-border bg-muted/30 px-3 py-7 text-center text-sm text-muted-foreground">
                   No proposals found for this bucket.

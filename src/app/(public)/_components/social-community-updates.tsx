@@ -80,8 +80,7 @@ type UpcomingEvent = {
   date: string;
   time: string;
   url: string;
-  icon: React.ComponentType<{ className?: string }>;
-  type: string;
+  type: 'Execution' | 'Consensus' | 'Testing' | 'Protocol';
   sortTs: number;
 };
 
@@ -162,86 +161,22 @@ export default function SocialCommunityUpdates({ showCommunityResources = true }
   React.useEffect(() => {
     let cancelled = false;
 
-    const parseMeetingDate = (raw: string): Date | null => {
-      const monthPattern = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})\b/i;
-      const isoPattern = /\b(\d{4})-(\d{2})-(\d{2})\b/;
-      const monthMatch = raw.match(monthPattern);
-      if (monthMatch) {
-        const d = new Date(`${monthMatch[1]} ${monthMatch[2]}, ${monthMatch[3]} UTC`);
-        return Number.isNaN(d.getTime()) ? null : d;
-      }
-      const isoMatch = raw.match(isoPattern);
-      if (isoMatch) {
-        const d = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00.000Z`);
-        return Number.isNaN(d.getTime()) ? null : d;
-      }
-      return null;
-    };
-
-    const parseTimeLabel = (raw: string) => {
-      const match = raw.match(/\b(\d{1,2}:\d{2})\s*(UTC|GMT)\b/i);
-      if (!match) return 'Agenda open';
-      return `${match[1]} ${match[2].toUpperCase()}`;
-    };
-
-    const typeAndIcon = (title: string): { type: string; icon: UpcomingEvent['icon'] } => {
-      const t = title.toLowerCase();
-      if (t.includes('acde') || t.includes('execution')) return { type: 'Execution', icon: Calendar };
-      if (t.includes('acdc') || t.includes('consensus')) return { type: 'Consensus', icon: Users };
-      if (t.includes('acdt') || t.includes('testing')) return { type: 'Testing', icon: MessageSquare };
-      return { type: 'Protocol', icon: Calendar };
-    };
-
     (async () => {
       setEventsLoading(true);
       try {
-        const res = await fetch('https://api.github.com/repos/ethereum/pm/issues?state=open&per_page=40&sort=updated&direction=desc');
+        const res = await fetch('/api/community/upcoming-protocol-events');
         if (!res.ok) throw new Error(`GitHub response ${res.status}`);
-        const data: Array<{
-          number: number;
-          title: string;
-          body: string | null;
-          html_url: string;
-          updated_at: string;
-          pull_request?: unknown;
-        }> = await res.json();
-
-        const now = new Date();
-        const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-        const items = data
-          .filter((row) => !row.pull_request)
-          .filter((row) => /(acd|all core devs|protocol|breakout|interop|allwalletdevs|eipip)/i.test(row.title))
-          .map((row) => {
-            const combined = `${row.title}\n${row.body ?? ''}`;
-            const parsedDate = parseMeetingDate(combined);
-            const { type, icon } = typeAndIcon(row.title);
-            const sortTs = parsedDate?.getTime() ?? new Date(row.updated_at).getTime();
-            return {
-              id: row.number,
-              title: row.title,
-              date: parsedDate
-                ? parsedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                : 'TBD',
-              time: parseTimeLabel(combined),
-              url: row.html_url,
-              icon,
-              type,
-              sortTs,
-              hasFutureDate: parsedDate ? parsedDate.getTime() >= todayUtc.getTime() : false,
-            };
-          })
-          .filter((item) => item.hasFutureDate || item.date === 'TBD')
-          .sort((a, b) => a.sortTs - b.sortTs)
-          .slice(0, 6)
-          .map(({ hasFutureDate: _drop, ...rest }) => rest);
-
-        if (!cancelled) setUpcomingEvents(items);
+        const payload = await res.json() as { events?: UpcomingEvent[]; syncedAt?: string };
+        if (!cancelled) {
+          setUpcomingEvents(payload.events ?? []);
+          setEventsSyncedAt(payload.syncedAt ?? new Date().toISOString());
+        }
       } catch (err) {
         if (!cancelled) setUpcomingEvents([]);
       } finally {
         if (!cancelled) {
           setEventsLoading(false);
-          setEventsSyncedAt(new Date().toISOString());
+          setEventsSyncedAt((prev) => prev ?? new Date().toISOString());
         }
       }
     })();
@@ -393,7 +328,11 @@ export default function SocialCommunityUpdates({ showCommunityResources = true }
               No upcoming meeting agendas found right now. Check the full PM issue list.
             </div>
           ) : upcomingEvents.map((event) => {
-            const Icon = event.icon;
+            const Icon = event.type === 'Consensus'
+              ? Users
+              : event.type === 'Testing'
+                ? MessageSquare
+                : Calendar;
             return (
               <a key={event.id} href={event.url} target="_blank" rel="noopener noreferrer" className="group flex items-start gap-3 rounded-lg border border-border bg-card/60 p-3 transition hover:border-primary/40">
                 <div className="rounded-lg border border-primary/30 bg-primary/10 p-2">

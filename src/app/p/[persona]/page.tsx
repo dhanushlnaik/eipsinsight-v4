@@ -6,7 +6,6 @@ import { usePersonaStore } from "@/stores/personaStore";
 import { ThemedLogoGif } from "@/components/themed-logo-gif";
 import {
   isValidPersona,
-  PERSONA_DEFAULTS,
   type Persona,
 } from "@/lib/persona";
 
@@ -32,13 +31,8 @@ export default function PersonaRedirectPage() {
     }
 
     // Save persona to store
-    setPersona(personaParam as Persona);
-
-    // Get default route for this persona
-    const defaultRoute = PERSONA_DEFAULTS[personaParam as Persona];
-
-    // Redirect to persona default
-    router.push(defaultRoute);
+    setPersona(personaParam as Persona, { redirect: false });
+    router.push("/");
   }, [isHydrated, params.persona, router, setPersona]);
 
   if (error) {
@@ -53,10 +47,10 @@ export default function PersonaRedirectPage() {
               unoptimized
             />
           </div>
-          <h1 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
             Unknown Persona
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">{error}</p>
           <p className="mt-3 text-sm text-muted-foreground">
             Redirecting to persona selection...
           </p>
@@ -76,7 +70,10 @@ export default function PersonaRedirectPage() {
             unoptimized
           />
         </div>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          Setting Up Your Persona
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Setting up your personalized experience...
         </p>
       </div>

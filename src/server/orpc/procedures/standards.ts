@@ -1606,34 +1606,7 @@ if (input.repo === 'rips') {
         return { csv: [header, ...csvRows].join('\n'), filename: 'rips-standards.csv' };
       }
 
-      // EIPs/ERCs export
-      const conditions: string[] = ['1=1'];
-      const params: unknown[] = [];
-      let paramIdx = 1;
-
-      if (input.repo) {
-        conditions.push(`LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($${paramIdx})`);
-        params.push(input.repo);
-        paramIdx++;
-      }
-      if (input.status && input.status.length > 0) {
-        conditions.push(`s.status = ANY($${paramIdx}::text[])`);
-        params.push(input.status);
-        paramIdx++;
-      }
-      if (input.type && input.type.length > 0) {
-        conditions.push(`s.type = ANY($${paramIdx}::text[])`);
-        params.push(input.type);
-        paramIdx++;
-      }
-      if (input.category && input.category.length > 0) {
-        conditions.push(`s.category = ANY($${paramIdx}::text[])`);
-        params.push(input.category);
-        paramIdx++;
-      }
-
-      const whereClause = conditions.join(' AND ');
-
+      // Unified export for "all", repo-scoped export for EIPs/ERCs.
       const rows = await prisma.$queryRawUnsafe<Array<{
         repo: string;
         eip_number: number;
@@ -1645,22 +1618,66 @@ if (input.repo === 'rips') {
         updated_at: string;
         linked_prs: bigint;
       }>>(
-        `SELECT
-          COALESCE(SPLIT_PART(r.name, '/', 2), 'unknown') AS repo,
-          e.eip_number,
-          e.title,
-          s.status,
-          s.type,
-          s.category,
-          TO_CHAR(e.created_at, 'YYYY-MM-DD') AS created_at,
-          TO_CHAR(s.updated_at, 'YYYY-MM-DD') AS updated_at,
-          (SELECT COUNT(*)::bigint FROM pull_request_eips pre WHERE pre.eip_number = e.eip_number AND pre.repository_id = s.repository_id) AS linked_prs
-        FROM eip_snapshots s
-        JOIN eips e ON s.eip_id = e.id
-        LEFT JOIN repositories r ON s.repository_id = r.id
-        WHERE ${whereClause}
-        ORDER BY e.eip_number ASC`,
-        ...params
+        `
+        WITH eip_rows AS (
+          SELECT
+            COALESCE(SPLIT_PART(r.name, '/', 2), 'unknown') AS repo,
+            e.eip_number,
+            e.title,
+            COALESCE(NULLIF(s.status, ''), 'Unknown') AS status,
+            COALESCE(NULLIF(s.type, ''), 'Unknown') AS type,
+            COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Other') AS category,
+            TO_CHAR(e.created_at, 'YYYY-MM-DD') AS created_at,
+            TO_CHAR(s.updated_at, 'YYYY-MM-DD') AS updated_at,
+            (SELECT COUNT(*)::bigint FROM pull_request_eips pre WHERE pre.eip_number = e.eip_number AND pre.repository_id = s.repository_id) AS linked_prs
+          FROM eip_snapshots s
+          JOIN eips e ON s.eip_id = e.id
+          LEFT JOIN repositories r ON s.repository_id = r.id
+          WHERE e.eip_number NOT IN ${HOMEPAGE_EXCLUDED_EIP_NUMBERS_SQL}
+            AND (
+              ($1::text IS NULL AND LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) IN ('eips', 'ercs'))
+              OR ($1::text IS NOT NULL AND LOWER(SPLIT_PART(COALESCE(r.name, ''), '/', 2)) = LOWER($1::text))
+            )
+        ),
+        rip_rows AS (
+          SELECT
+            'rips'::text AS repo,
+            rp.rip_number AS eip_number,
+            rp.title,
+            COALESCE(NULLIF(rp.status, ''), 'Unknown') AS status,
+            'RIP'::text AS type,
+            CASE
+              WHEN COALESCE(rp.title, '') ~* '\\mRRC[-\\s]?[0-9]+' OR COALESCE(rp.title, '') ~* '^RRC\\M' THEN 'RRC'
+              ELSE 'RIP'
+            END AS category,
+            TO_CHAR(rp.created_at, 'YYYY-MM-DD') AS created_at,
+            TO_CHAR(COALESCE(MAX(rc.commit_date), rp.created_at::timestamp, NOW()), 'YYYY-MM-DD') AS updated_at,
+            0::bigint AS linked_prs
+          FROM rips rp
+          LEFT JOIN rip_commits rc ON rc.rip_id = rp.id
+          WHERE rp.${EXCLUDE_PLACEHOLDER_RIPS_SQL}
+            AND ($1::text IS NULL OR LOWER($1::text) = 'rips')
+          GROUP BY rp.rip_number, rp.title, rp.status, rp.created_at
+        ),
+        unified AS (
+          SELECT * FROM eip_rows
+          UNION ALL
+          SELECT * FROM rip_rows
+        )
+        SELECT repo, eip_number, title, status, type, category, created_at, updated_at, linked_prs
+        FROM unified
+        WHERE ($2::boolean = false OR status = ANY($3::text[]))
+          AND ($4::boolean = false OR type = ANY($5::text[]))
+          AND ($6::boolean = false OR category = ANY($7::text[]))
+        ORDER BY eip_number ASC
+        `,
+        input.repo ?? null,
+        Boolean(input.status && input.status.length > 0),
+        input.status ?? [],
+        Boolean(input.type && input.type.length > 0),
+        input.type ?? [],
+        Boolean(input.category && input.category.length > 0),
+        input.category ?? []
       );
 
       const header = 'repo,number,title,status,type,category,created_at,last_updated_at,linked_prs';

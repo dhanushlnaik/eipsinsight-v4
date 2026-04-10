@@ -375,9 +375,9 @@ const PERSONA_HOME_PLANS: Record<HomePersona, {
     description: 'See what is changing, what is active, and where to dive deeper next.',
     goal: 'Quickly understand ongoing protocol changes and identify actionable items.',
     tools: [
-      { key: 'upgrade', title: 'Upgrade Watch', href: '/upgrade', cta: 'Open', icon: Zap, blurb: 'Protocol changes and rollout context.' },
-      { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Open', icon: Activity, blurb: 'Most active standards this week.' },
-      { key: 'browse', title: 'Browse by Filters', href: '/explore', cta: 'Open', icon: Filter, blurb: 'Filter by status, category, and repo.' },
+      { key: 'upgrade', title: 'Upgrade Watch', href: '/upgrade', cta: 'Explore Upgrades', icon: Zap, blurb: 'Protocol changes and rollout context.' },
+      { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Explore Trending', icon: Activity, blurb: 'Most active standards this week.' },
+      { key: 'browse', title: 'Browse by Filters', href: '/explore', cta: 'Explore Browse', icon: Filter, blurb: 'Filter by status, category, and repo.' },
       { key: 'board', title: 'Editing Board Snapshot', href: '/tools/board', cta: 'Explore Board', icon: GitPullRequest, blurb: 'Jump into active proposal queue.' },
       { key: 'timeline', title: 'Timeline Snapshot', href: '/tools/timeline', cta: 'Explore Timeline', icon: GitBranch, blurb: 'Recent lifecycle and PR movement.' },
       { key: 'dependencies', title: 'Dependencies Snapshot', href: '/tools/dependencies', cta: 'Explore Dependencies', icon: Network, blurb: 'Track proposal dependencies.' },
@@ -401,7 +401,7 @@ const PERSONA_HOME_PLANS: Record<HomePersona, {
     tools: [
       { key: 'trending', title: 'Trending Proposals', href: '/explore/trending', cta: 'Explore Trending', icon: Activity, blurb: 'Find active standards quickly.' },
       { key: 'erc-focus', title: 'ERC-focused Browse', href: '/explore?repo=ercs', cta: 'Explore ERCs', icon: Boxes, blurb: 'ERC-focused exploration and filtering.' },
-      { key: 'eip-builder', title: 'EIP Builder', href: '/tools/eip-builder', cta: 'Open Builder', icon: Code, blurb: 'Primary drafting and validation workflow.' },
+      { key: 'eip-builder', title: 'EIP Builder', href: '/tools/eip-builder', cta: 'Explore EIP Builder', icon: Code, blurb: 'Primary drafting and validation workflow.' },
       { key: 'resources', title: 'Practical Docs/Resources', href: '/resources/docs', cta: 'Explore Resources', icon: BookOpen, blurb: 'Guides, references, and examples.' },
       { key: 'contributors', title: 'Recent Activity Snapshot', href: '/analytics/contributors', cta: 'Explore Contributors', icon: Activity, blurb: 'Latest contributor movement and momentum.' },
     ],
@@ -1167,7 +1167,7 @@ export default function EIPsHomePage() {
           client.standards.getMonthlyDelta({ monthYear: currentMonthYear }),
           client.analytics.getMonthlyEditorLeaderboard({ monthYear: currentMonthYear, limit: 50 }),
           client.analytics.getRecentChanges({ limit: 8 }),
-          client.analytics.getRecentEditorActivity({ limit: 5, onlyOpenPRs: false }),
+          client.analytics.getRecentEditorActivity({ limit: 40, onlyOpenPRs: false }),
         ]);
         if (!cancelled) {
           setFebDelta(deltaRes.items);
@@ -1194,10 +1194,11 @@ export default function EIPsHomePage() {
           setFebEditors(merged);
           setMonthlyLeaderboardUpdatedAt(editorRes.updatedAt);
           setRecentChanges(recentRes as typeof recentChanges);
-          const canonicalEditorSet = new Set(CANONICAL_EIP_EDITORS.map((editor) => editor.toLowerCase()));
-          setRecentEditorActivities(
-            editorActivityRes.filter((item) => canonicalEditorSet.has(item.editor.toLowerCase()))
+          const leaderboardEditorSet = new Set(merged.map((row) => row.actor.toLowerCase()));
+          const matchedActivities = editorActivityRes.filter((item) =>
+            leaderboardEditorSet.has(item.editor.toLowerCase())
           );
+          setRecentEditorActivities(matchedActivities.slice(0, 8));
         }
       } catch (err) {
         console.error('Failed to load homepage widgets:', err);
@@ -1851,7 +1852,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/resources"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Resources
               <ArrowRight className="h-3 w-3" />
@@ -1875,7 +1876,7 @@ export default function EIPsHomePage() {
           <div className="mt-2 flex justify-center">
             <Link
               href="/explore/trending"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Trending
               <ArrowRight className="h-3 w-3" />
@@ -1929,7 +1930,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/explore/trending"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Trending
               <ArrowRight className="h-3 w-3" />
@@ -1972,7 +1973,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/upgrade"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Upgrades
               <ArrowRight className="h-3 w-3" />
@@ -1993,7 +1994,7 @@ export default function EIPsHomePage() {
           <div className="mt-2 flex justify-center">
             <Link
               href="/dashboard"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Governance
               <ArrowRight className="h-3 w-3" />
@@ -2026,7 +2027,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/tools/eip-builder"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore EIP Builder
               <ArrowRight className="h-3 w-3" />
@@ -2188,7 +2189,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/tools/board"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Board
               <ArrowRight className="h-3 w-3" />
@@ -2235,7 +2236,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/tools"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Tools
               <ArrowRight className="h-3 w-3" />
@@ -2282,7 +2283,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/tools"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Tools
               <ArrowRight className="h-3 w-3" />
@@ -2974,7 +2975,7 @@ export default function EIPsHomePage() {
       <div className="mt-3 flex justify-center">
         <Link
           href="/explore"
-          className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+          className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
         >
           Explore Browse
           <ArrowRight className="h-3 w-3" />
@@ -3002,7 +3003,7 @@ export default function EIPsHomePage() {
             <div className="mt-3 flex justify-center">
               <Link
                 href="/resources/faq"
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+                className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
               >
                 Explore FAQ
                 <ArrowRight className="h-3 w-3" />
@@ -3014,7 +3015,7 @@ export default function EIPsHomePage() {
       {visibleSections.monthly && (
       <div
         style={activePersona === 'editor' ? undefined : { order: sectionOrder.monthly }}
-        className={cn(activePersona === 'editor' && 'border-t border-border/70 pt-4 pb-4')}
+        className={cn(activePersona === 'editor' && 'mb-6 border-t border-border/70 pt-6')}
         id="editor-monthly-insight"
       >
       {activePersona !== 'editor' && <hr className="my-6 border-border" />}
@@ -3026,11 +3027,11 @@ export default function EIPsHomePage() {
             <p className={sectionSubtitleClass}>Monthly status distribution and editor activity snapshot.</p>
           </div>
           <div className="flex items-center gap-2">
-            <label htmlFor="homepage-month-select" className="text-xs font-medium text-muted-foreground">
+            <label htmlFor="homepage-month-select-editor" className="text-xs font-medium text-muted-foreground">
               Month
             </label>
             <select
-              id="homepage-month-select"
+              id="homepage-month-select-editor"
               value={currentMonthYear}
               onChange={(e) => setCurrentMonthYear(e.target.value)}
               className="h-8 rounded-md border border-border bg-muted/40 px-2.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
@@ -3048,11 +3049,11 @@ export default function EIPsHomePage() {
 
       {activePersona !== 'editor' && (
       <div className="mb-3 flex items-center justify-end gap-2">
-        <label htmlFor="homepage-month-select" className="text-xs font-medium text-muted-foreground">
+        <label htmlFor="homepage-month-select-default" className="text-xs font-medium text-muted-foreground">
           Month
         </label>
         <select
-          id="homepage-month-select"
+          id="homepage-month-select-default"
           value={currentMonthYear}
           onChange={(e) => setCurrentMonthYear(e.target.value)}
           className="h-8 rounded-md border border-border bg-muted/40 px-2.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
@@ -3088,7 +3089,7 @@ export default function EIPsHomePage() {
                 href={`/insights/year-month-analysis?month=${currentMonthYear}`}
                 className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
               >
-                Open month analysis
+                Explore Month Analysis
                 <ArrowRight className="h-3 w-3" />
               </Link>
               <button
@@ -3172,7 +3173,7 @@ export default function EIPsHomePage() {
                 href="/analytics/editors"
                 className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
               >
-                Open full leaderboard
+                Explore Editor Leaderboard
                 <ArrowRight className="h-3 w-3" />
               </Link>
               <button
@@ -3273,14 +3274,14 @@ export default function EIPsHomePage() {
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <Link
             href="/insights/year-month-analysis"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+            className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
             Explore Month Analysis
             <ArrowRight className="h-3 w-3" />
           </Link>
           <Link
             href="/analytics/editors"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+            className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
             Explore Editor Leaderboard
             <ArrowRight className="h-3 w-3" />
@@ -3293,7 +3294,7 @@ export default function EIPsHomePage() {
       {visibleSections.governance && (
       <div
         style={activePersona === 'editor' ? undefined : { order: sectionOrder.governance }}
-        className={cn(activePersona === 'editor' && 'border-t border-border/70 pt-4')}
+        className={cn(activePersona === 'editor' && 'border-t border-border/70 pt-6')}
       >
       {activePersona !== 'editor' && <hr className="my-6 border-border" />}
 
@@ -3390,6 +3391,7 @@ export default function EIPsHomePage() {
                 {recentEditorActivities.length}
               </span>
             </div>
+            <p className="mb-2 text-[11px] text-muted-foreground">Ranked by editor actions this month (open + closed PRs).</p>
             <div className="space-y-2">
               {widgetsLoading && recentEditorActivities.length === 0 ? (
                 Array.from({ length: 6 }).map((_, i) => (
@@ -3401,7 +3403,7 @@ export default function EIPsHomePage() {
                 ))
               ) : recentEditorActivities.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No recent editor activity found right now.
+                  No editor activities found for this month.
                 </p>
               ) : (
                 recentEditorActivities.slice(0, 5).map((item, idx) => (
@@ -3417,7 +3419,7 @@ export default function EIPsHomePage() {
                         <Image src={editorAvatar(item.editor)} alt={item.editor} width={28} height={28} className="h-full w-full object-cover" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-medium text-foreground">{item.editor}</p>
+                        <p className="truncate text-xs font-medium text-foreground">#{idx + 1} {item.editor}</p>
                         <p className="text-[11px] text-muted-foreground">
                           {formatEditorAction(item.eventType)} · {new Date(item.actedAt).toLocaleString()}
                         </p>
@@ -3439,7 +3441,7 @@ export default function EIPsHomePage() {
         <div className="mt-3 flex justify-center">
           <Link
             href="/analytics/prs"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+            className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
             Explore PR Analytics
             <ArrowRight className="h-3 w-3" />
@@ -3489,7 +3491,7 @@ export default function EIPsHomePage() {
           <div className="mt-3 flex justify-center">
             <Link
               href="/resources/docs"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+              className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
             >
               Explore Resources
               <ArrowRight className="h-3 w-3" />

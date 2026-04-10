@@ -60,6 +60,7 @@ interface SidebarSubItem {
   title: string;
   href: string;
   sectionId?: string; // Backward compat; prefer href hash sections (/path#section)
+  items?: SidebarSubItem[];
 }
 
 interface SidebarItem {
@@ -349,6 +350,29 @@ function sortItemsByPersonaPriority(
   });
 }
 
+const SECTION_LABEL_OVERRIDES: Record<string, string> = {
+  "persona-home-workspace": "Workspace",
+  "developer-upgrade-watch": "Upgrade Watch",
+  "developer-governance-over-time": "Over Time",
+  "developer-board-snapshot": "Board",
+  "editor-review-queue": "Review Queue",
+  "editor-category-breakdown": "Breakdown",
+  "editor-browse-snapshot": "Browse",
+  "editor-monthly-insight": "Monthly",
+  "builder-eip-builder-focus": "EIP Builder",
+  "builder-tool-shortcuts": "Tool Shortcuts",
+  "builder-practical-resources": "Resources",
+  "newcomer-learning-resources": "Learning",
+  "newcomer-trending-proposals": "Trending",
+  "newcomer-upgrade-watch": "Upgrade Watch",
+  "newcomer-tools-shortcuts": "Tool Shortcuts",
+  "recent-governance-activity": "Recent Activity",
+  "explore-detail-header": "Overview",
+  "explore-detail-timeline": "Over Time",
+  "explore-detail-editor-reviews-24h": "Reviews (24h)",
+  "explore-detail-proposals-table": "Table",
+};
+
 function getOrderedSections(persona: Persona | null): SidebarSection[] {
   const sectionMap = new Map(sidebarSections.map((s) => [s.id, s]));
   const mainSection = sectionMap.get("main")!;
@@ -424,6 +448,7 @@ function AppSidebarContent() {
     const active = getActiveItemTitle(pathname);
     return active ?? null;
   });
+  const [openSubTrees, setOpenSubTrees] = React.useState<Record<string, boolean>>({});
   const rememberedOpen = React.useRef<string | null>(openItem);
 
   // Scroll spy state (kept for future use)
@@ -485,7 +510,11 @@ function AppSidebarContent() {
         seen.add(id);
         const fromData = node.getAttribute("data-sidebar-label")?.trim();
         const heading = node.querySelector<HTMLElement>("h1, h2, h3");
-        const title = fromData || heading?.textContent?.trim() || toTitle(id);
+        const title =
+          SECTION_LABEL_OVERRIDES[id] ||
+          fromData ||
+          heading?.textContent?.trim() ||
+          toTitle(id);
         const titleKey = title.toLowerCase().replace(/\s+/g, " ").trim();
         if (seenTitles.has(titleKey)) continue;
         seenTitles.add(titleKey);
@@ -544,6 +573,9 @@ function AppSidebarContent() {
   const toggleItem = (title: string) => {
     setOpenItem((prev) => (prev === title ? null : title));
   };
+  const toggleSubTree = React.useCallback((key: string) => {
+    setOpenSubTrees((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   const prevState = React.useRef(state);
 
@@ -641,6 +673,9 @@ function AppSidebarContent() {
    */
   const isSubItemActive = React.useCallback(
     (subItem: SidebarSubItem): boolean => {
+      if (subItem.items?.length) {
+        return subItem.items.some((child) => isSubItemActive(child));
+      }
       // Parse the href into path + search
       const url = new URL(subItem.href, "http://localhost");
       const hrefPath = url.pathname;
@@ -686,7 +721,7 @@ function AppSidebarContent() {
   const hasActiveChild = React.useCallback(
     (items?: SidebarSubItem[]): boolean => {
       if (!items) return false;
-      return items.some((item) => isSubItemActive(item));
+      return items.some((item) => isSubItemActive(item) || hasActiveChild(item.items));
     },
     [isSubItemActive]
   );
@@ -695,11 +730,44 @@ function AppSidebarContent() {
   // Render
   // ========================================================================
 
-  const renderSubItem = (subItem: SidebarSubItem) => {
+  const renderSubItem = (subItem: SidebarSubItem, keyPath: string) => {
     const isActive = isSubItemActive(subItem);
+    const hasNested = Boolean(subItem.items?.length);
+    const subtreeKey = `${pathname}::${keyPath}`;
+    const nestedOpen = openSubTrees[subtreeKey] || isActive;
+
+    if (hasNested) {
+      return (
+        <SidebarMenuSubItem key={`${subtreeKey}-${subItem.title}`}>
+          <Collapsible open={nestedOpen} onOpenChange={() => toggleSubTree(subtreeKey)}>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuSubButton
+                isActive={isActive}
+                className={cn(
+                  "rounded-md py-1.5 motion-safe:transition-all motion-safe:duration-300",
+                  "border border-transparent hover:border-border hover:bg-muted/60",
+                  "data-[active=true]:!bg-primary/15 data-[active=true]:!text-foreground",
+                  isActive && "bg-primary/10 text-foreground font-medium border-primary/30"
+                )}
+              >
+                <span className="inline-flex w-full items-center justify-between text-xs">
+                  <span>{subItem.title}</span>
+                  <ChevronRight className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", nestedOpen && "rotate-90 text-primary")} />
+                </span>
+              </SidebarMenuSubButton>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+              <SidebarMenuSub className="ml-0 border-l border-border/70 pl-3 pt-1">
+                {subItem.items?.map((child, idx) => renderSubItem(child, `${keyPath}.${idx}`))}
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        </SidebarMenuSubItem>
+      );
+    }
 
     return (
-      <SidebarMenuSubItem key={subItem.title + subItem.href}>
+      <SidebarMenuSubItem key={subItem.title + subItem.href + keyPath}>
         <SidebarMenuSubButton
           asChild
           isActive={isActive}
@@ -738,8 +806,8 @@ function AppSidebarContent() {
 
   const renderItem = (item: SidebarItem) => {
     const isActive = isParentPathActive(item.href);
-    const contextualSections = isActive ? pageSectionItems : [];
-    const mergedSubItems = [...(item.items ?? []), ...contextualSections];
+    const contextualSectionItems: SidebarSubItem[] = isActive ? pageSectionItems : [];
+    const mergedSubItems = [...(item.items ?? []), ...contextualSectionItems];
     const hasSubItems = mergedSubItems.length > 0;
     const isItemOpen = openItem === item.title;
     const isChildActive = hasActiveChild(mergedSubItems);
@@ -813,15 +881,7 @@ function AppSidebarContent() {
                 )}
               >
                 <SidebarMenuSub className="ml-0 border-l-2 border-border/80 pl-6 pt-2">
-                  {item.items?.map(renderSubItem)}
-                  {contextualSections.length > 0 && (
-                    <>
-                      <div className="mb-1 mt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/90">
-                        Sections
-                      </div>
-                      {contextualSections.map(renderSubItem)}
-                    </>
-                  )}
+                  {mergedSubItems.map((sub, idx) => renderSubItem(sub, `${item.title}.${idx}`))}
                 </SidebarMenuSub>
               </CollapsibleContent>
             )}

@@ -18,9 +18,11 @@ import {
   BarChart3,
   Users,
   ChevronDown,
+  CircleHelp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface PRMonthlyPoint {
   month: string;
@@ -210,6 +212,8 @@ export default function PRsAnalyticsPage() {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [crossTabMode, setCrossTabMode] = useState<CrossTabMode>("process_x_state");
   const [openPRDistributionMode, setOpenPRDistributionMode] = useState<OpenPRDistributionMode>("process");
+  const awaitedHelpText =
+    "Awaited means the PR is in Draft state.";
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
 
@@ -715,6 +719,26 @@ export default function PRsAnalyticsPage() {
         <p className="mb-3 text-xs text-muted-foreground">
           Open PRs by Process type (Typo, NEW EIP, PR DRAFT) or by Participants status (Waiting on Editor, Awaited). Sum of bars = total open PRs for that month.
         </p>
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span>Need help with</span>
+          <span className="font-medium text-foreground/90">Awaited</span>
+          <TooltipProvider delayDuration={120}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="What Awaited means"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  <CircleHelp className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                {awaitedHelpText}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
         <div className="mb-3 inline-flex rounded-md border border-border bg-muted/60 p-0.5 text-xs">
           <button
             onClick={() => setOpenPRDistributionMode("process")}
@@ -764,6 +788,26 @@ export default function PRsAnalyticsPage() {
         <p className="mb-3 text-xs text-muted-foreground">
           X: Process. Open PRs by Process type and Participants status for {monthContext}. Choose Process or Participants on the X-axis (the other is stacked). Sum of segments = total open PRs in that month context.
         </p>
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span>Status note:</span>
+          <span className="font-medium text-foreground/90">Awaited</span>
+          <TooltipProvider delayDuration={120}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="What Awaited means"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  <CircleHelp className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                {awaitedHelpText}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
           {!processParticipantOption ? (
             <p className="text-sm text-muted-foreground">Not enough data for process × participants breakdown.</p>
           ) : (

@@ -3,9 +3,10 @@
 import React from 'react';
 import Link from 'next/link';
 import ReactECharts from 'echarts-for-react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, CircleHelp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CopyLinkButton } from '@/components/header';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type EditorRepoFilter = '' | 'eips' | 'ercs' | 'rips';
 
@@ -47,6 +48,9 @@ export default function EditorCategoryBreakdownSection({
   editorCategoryTotalPages,
   setEditorCategoryPage,
 }: EditorCategoryBreakdownSectionProps) {
+  const awaitedHelpText =
+    'Awaited means the PR is in Draft state.';
+
   return (
     <section className="mb-6 border-t border-border/70 pt-6" id="editor-category-breakdown">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -92,6 +96,26 @@ export default function EditorCategoryBreakdownSection({
         ))}
       </div>
       <div className="overflow-hidden rounded-lg border border-border/70 bg-card/40 p-3">
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span>Participant state includes</span>
+          <span className="font-medium text-foreground/90">Awaited</span>
+          <TooltipProvider delayDuration={120}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="What Awaited means"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  <CircleHelp className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                {awaitedHelpText}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
         {boardPreviewLoading ? (
           <div className="h-[260px] animate-pulse rounded bg-muted" />
         ) : !categoryBreakdownChartOption ? (
@@ -131,7 +155,7 @@ export default function EditorCategoryBreakdownSection({
       <div className="mt-3 flex justify-center">
         <Link
           href="/analytics/prs"
-          className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+          className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
         >
           Explore PR Analytics
           <ArrowRight className="h-3 w-3" />
@@ -140,4 +164,3 @@ export default function EditorCategoryBreakdownSection({
     </section>
   );
 }
-

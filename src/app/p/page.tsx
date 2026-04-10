@@ -3,13 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePersonaStore } from "@/stores/personaStore";
 import { ThemedLogoGif } from "@/components/themed-logo-gif";
 import {
   PERSONAS,
   PERSONA_LIST,
-  PERSONA_DEFAULTS,
   type Persona,
 } from "@/lib/persona";
 
@@ -29,11 +29,8 @@ export default function PersonaOnboardingPage() {
     if (!selectedPersona) return;
 
     setIsNavigating(true);
-    setPersona(selectedPersona);
-
-    // Navigate to persona default route
-    const defaultRoute = PERSONA_DEFAULTS[selectedPersona];
-    router.push(defaultRoute);
+    setPersona(selectedPersona, { redirect: false });
+    router.push("/");
   };
 
   // Wait for hydration to avoid flash
@@ -106,8 +103,17 @@ export default function PersonaOnboardingPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="mx-auto mb-8 grid max-w-6xl grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+          className="mx-auto mb-8"
         >
+          <div className="mb-3">
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+              Pick Your Persona
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              We’ll prioritize pages and defaults around this workflow.
+            </p>
+          </div>
+          <div className="grid max-w-6xl grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {PERSONA_LIST.map((personaId, index) => {
             const persona = PERSONAS[personaId];
             const isSelected = selectedPersona === personaId;
@@ -121,7 +127,7 @@ export default function PersonaOnboardingPage() {
                 transition={{ duration: 0.3, delay: 0.1 * index }}
                 onClick={() => handleSelectPersona(personaId)}
                 className={cn(
-                  "group relative rounded-xl border p-4 text-left transition-all duration-300",
+                  "group relative flex h-full flex-col rounded-xl border p-4 text-left transition-all duration-300",
                   "bg-card/60 hover:border-primary/40 hover:bg-primary/[0.05]",
                   "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
                   isSelected
@@ -166,18 +172,18 @@ export default function PersonaOnboardingPage() {
                     {persona.shortLabel}
                   </h3>
 
-                  <p
-                    className={cn(
-                      "text-sm leading-relaxed transition-colors duration-300",
-                      isSelected ? "text-muted-foreground" : "text-muted-foreground"
-                    )}
-                  >
+                  <p className="text-sm leading-relaxed text-muted-foreground">
                     {persona.description}
                   </p>
+                  <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                    Opens Home
+                    <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+                  </div>
                 </div>
               </motion.button>
             );
           })}
+          </div>
         </motion.div>
 
         <hr className="mb-6 border-border/70" />
@@ -233,7 +239,7 @@ export default function PersonaOnboardingPage() {
             <button
               onClick={() => {
                 // Set default persona (newcomer) and mark as onboarded
-                setPersona("newcomer");
+                setPersona("newcomer", { redirect: false });
                 router.push("/");
               }}
               disabled={isNavigating}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import ReactECharts from 'echarts-for-react';
 import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CopyLinkButton } from '@/components/header';
 
 type UpgradeOption = {
   slug: string;
@@ -41,7 +42,7 @@ export default function DeveloperUpgradeWatchSection({
   latestCounts,
 }: DeveloperUpgradeWatchSectionProps) {
   return (
-    <section className="mb-6">
+    <section className="mb-6 border-t border-border/70 pt-6" id="developer-upgrade-watch">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h2 className={sectionTitleClass}>Upgrade Watch</h2>
@@ -61,11 +62,12 @@ export default function DeveloperUpgradeWatchSection({
           </select>
           <Link
             href="/upgrade"
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary hover:bg-primary/15"
+            className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
-            Explore Upgrade
+            Explore Upgrades
             <ArrowRight className="h-3 w-3" />
           </Link>
+          <CopyLinkButton sectionId="developer-upgrade-watch" className="h-8 w-8 rounded-md" />
         </div>
       </div>
 
@@ -96,4 +98,3 @@ export default function DeveloperUpgradeWatchSection({
     </section>
   );
 }
-

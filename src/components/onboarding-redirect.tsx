@@ -9,7 +9,6 @@ import {
   PERSONA_PAGE_CONFIG,
   PERSONAS,
   PERSONA_LIST,
-  PERSONA_DEFAULTS,
   type Persona,
 } from "@/lib/persona";
 import { usePersonaStore } from "@/stores/personaStore";
@@ -58,7 +57,7 @@ export function OnboardingRedirect() {
   const ready = isHydrated && !sessionLoading && (!isAuthed || hasSyncedFromServer);
   const firstTime = ready && !persona && !isOnboarded;
   const onHome = pathname === "/";
-  const recommendedHome = persona ? PERSONA_DEFAULTS[persona] : "/";
+  const recommendedHome = "/";
 
   React.useEffect(() => {
     if (!ready || !persona) return;
@@ -187,7 +186,7 @@ export function OnboardingRedirect() {
     setShowPicker(false);
     setShowNudge(false);
     setSaving(false);
-    router.push(PERSONA_DEFAULTS[selectedPersona]);
+    router.push("/");
   }, [isAuthenticated, router, selectedPersona, setPersona, syncPersonaToServer]);
 
   const handleSkip = React.useCallback(() => {
@@ -388,7 +387,7 @@ export function OnboardingRedirect() {
                     <p className="text-sm font-semibold text-foreground">{meta.shortLabel}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{meta.description}</p>
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                      Starts at <span className="font-medium text-foreground/90">{PERSONA_DEFAULTS[personaId]}</span>
+                      Starts at <span className="font-medium text-foreground/90">/</span>
                     </p>
                   </button>
                 );

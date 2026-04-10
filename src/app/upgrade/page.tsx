@@ -659,6 +659,11 @@ export default function UpgradePage() {
                       ? 'Core EIPs deployed in upgrades from the distribution chart.'
                       : 'Select either stats card above to jump here and inspect the linked EIPs.'}
                 </p>
+                {activeTable === 'meta' && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Data source: Meta-EIP mappings are curated from Ethereum upgrade references and EIP metadata in the network upgrades dataset.
+                  </p>
+                )}
               </div>
               {activeTable && activeTable !== 'authors' && (
                 <button

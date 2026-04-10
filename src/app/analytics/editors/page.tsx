@@ -9,6 +9,7 @@ import { Loader2, UserCheck, Clock, FileText, Download, AlertCircle, ChevronDown
 import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
 import ReactECharts from "echarts-for-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
+import { CopyLinkButton } from "@/components/header";
 
 interface EditorLeaderboardRow {
   actor: string;
@@ -167,6 +168,7 @@ export default function EditorsAnalyticsPage() {
   const [activityActionFilter, setActivityActionFilter] = useState<string>("all");
   const [visibleActivityCount, setVisibleActivityCount] = useState<number>(20);
   const [expandedActivityKeys, setExpandedActivityKeys] = useState<Record<string, boolean>>({});
+  const [leaderboardHeroView, setLeaderboardHeroView] = useState<"chart" | "list">("chart");
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
   const { from, to } = getTimeWindow(timeRange);
@@ -429,6 +431,10 @@ export default function EditorsAnalyticsPage() {
   const topEditorCards = useMemo(
     () => leaderboard.filter((e) => e.totalActions > 0).slice(0, 6),
     [leaderboard],
+  );
+  const leaderboardHeroRows = useMemo(
+    () => [...leaderboard].sort((a, b) => b.totalActions - a.totalActions).slice(0, 12),
+    [leaderboard]
   );
 
   // Get unique actors from monthly trend for legend
@@ -801,6 +807,89 @@ export default function EditorsAnalyticsPage() {
     };
   }, [dailyActivityStacked]);
 
+  const leaderboardHeroOption = useMemo(() => {
+    const palette = [
+      "#79d2e8",
+      "#8b7dff",
+      "#ff8a80",
+      "#7ea8ff",
+      "#6f9bff",
+      "#ffd166",
+      "#ff9f68",
+      "#b794f4",
+      "#4fd1c5",
+      "#f687b3",
+      "#90cdf4",
+      "#c6f6d5",
+    ];
+    const ordered = [...leaderboardHeroRows].reverse();
+    const maxValue = Math.max(1, ...leaderboardHeroRows.map((row) => row.totalActions));
+
+    return {
+      backgroundColor: "transparent",
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: (params: Array<{ dataIndex: number }>) => {
+          const idx = params?.[0]?.dataIndex ?? 0;
+          const row = ordered[idx];
+          if (!row) return "";
+          return [
+            `<strong>${row.actor}</strong>`,
+            `Actions: ${row.totalActions.toLocaleString()}`,
+            `PRs touched: ${row.prsTouched.toLocaleString()}`,
+            `Reviews: ${row.reviews.toLocaleString()}`,
+            `Comments: ${row.comments.toLocaleString()}`,
+          ].join("<br/>");
+        },
+      },
+      grid: { top: 8, left: 120, right: 18, bottom: 8, containLabel: false },
+      xAxis: {
+        type: "value",
+        max: Math.ceil(maxValue * 1.15),
+        axisLabel: { color: "rgba(203,213,225,0.8)", fontSize: 11 },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+        axisLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+      },
+      yAxis: {
+        type: "category",
+        data: ordered.map((row) => row.actor),
+        axisLabel: { color: "rgba(226,232,240,0.9)", fontSize: 11, width: 110, overflow: "truncate" },
+        axisTick: { show: false },
+        axisLine: { show: false },
+      },
+      series: [
+        {
+          type: "bar",
+          barWidth: 20,
+          data: ordered.map((row, index) => ({
+            value: row.totalActions,
+            itemStyle: {
+              color: palette[(ordered.length - 1 - index) % palette.length],
+              borderRadius: [0, 4, 4, 0],
+            },
+          })),
+          label: {
+            show: true,
+            position: "insideRight",
+            color: "rgba(10,15,28,0.95)",
+            fontWeight: 700,
+            formatter: ({ value }: { value: number }) => Number(value).toLocaleString(),
+          },
+          markPoint: {
+            symbolKeepAspect: true,
+            label: { show: false },
+            data: ordered.map((row) => ({
+              coord: [row.totalActions + maxValue * 0.045, row.actor],
+              symbol: `image://${getGitHubAvatarUrl(row.actor)}`,
+              symbolSize: 24,
+            })),
+          },
+        },
+      ],
+    };
+  }, [leaderboardHeroRows]);
+
   const downloadTrendReport = useCallback(() => {
     const headers = ["Month", ...trendActors];
     const rows = monthlyTrend.map((row) => [row.month, ...trendActors.map((actor) => Number(row[actor] || 0))]);
@@ -889,13 +978,94 @@ export default function EditorsAnalyticsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {error && (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
+
+      <section
+        id="editor-leaderboard-hero"
+        className="rounded-xl border border-border bg-card/60 p-4 backdrop-blur-sm sm:p-5"
+      >
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Editors - {leaderboardLabel}</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Ranked by actions with PR coverage context.</p>
+          </div>
+          <CopyLinkButton sectionId="editor-leaderboard-hero" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
+        </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 p-0.5 text-xs">
+            <button
+              onClick={() => setLeaderboardHeroView("list")}
+              className={`rounded px-2 py-1 ${leaderboardHeroView === "list" ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setLeaderboardHeroView("chart")}
+              className={`rounded px-2 py-1 ${leaderboardHeroView === "chart" ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+            >
+              Chart
+            </button>
+          </div>
+          <button
+            onClick={downloadLeaderboardCSV}
+            disabled={exporting || leaderboard.length === 0}
+            className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            Download CSV
+          </button>
+        </div>
+
+        {leaderboardHeroView === "chart" ? (
+          leaderboardHeroRows.length === 0 ? (
+            <p className="py-6 text-sm text-muted-foreground">No leaderboard data found for the current filters.</p>
+          ) : (
+            <div className="h-[460px] w-full rounded-lg border border-border/70 bg-background/35 p-2">
+              <ReactECharts option={leaderboardHeroOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+            </div>
+          )
+        ) : (
+          <div className="space-y-2.5">
+            {leaderboardHeroRows.map((editor, index) => (
+              <div
+                key={`top-leaderboard-${editor.actor}`}
+                className="flex items-center justify-between rounded-lg border border-border/60 bg-background/35 px-3 py-2.5"
+              >
+                <div className="flex items-center gap-3">
+                  <img
+                    src={getGitHubAvatarUrl(editor.actor)}
+                    alt={`${editor.actor} avatar`}
+                    className="h-8 w-8 rounded-full border border-border object-cover"
+                    loading="lazy"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      #{index + 1} {editor.actor}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {editor.totalActions.toLocaleString()} actions · {editor.prsTouched.toLocaleString()} PRs touched
+                    </p>
+                  </div>
+                </div>
+                <p className="text-lg font-semibold tabular-nums text-foreground">{editor.totalActions.toLocaleString()}</p>
+              </div>
+            ))}
+            {leaderboardHeroRows.length === 0 && (
+              <p className="py-4 text-sm text-muted-foreground">No leaderboard data found for the current filters.</p>
+            )}
+          </div>
+        )}
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+          <span>EIPsInsight.com</span>
+          <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+        </div>
+      </section>
 
       <div className="rounded-xl border border-border/70 bg-card/60 p-4 backdrop-blur-sm sm:p-5">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -956,8 +1126,8 @@ export default function EditorsAnalyticsPage() {
       <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Editor Activity Over Time</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">How workload changes month to month.</p>
+            <h2 className="text-lg font-semibold text-foreground">Editor Actions Over Time</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Monthly count of all editor actions (reviews, comments, labels, updates).</p>
           </div>
           <button onClick={downloadTrendReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
             <Download className="h-3.5 w-3.5" />
@@ -971,7 +1141,7 @@ export default function EditorsAnalyticsPage() {
           </div>
         </div>
         <div className="mt-3 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Shows overall editor activity momentum by month.</p>
+          <p className="text-xs text-muted-foreground">Shows monthly total editor actions, not cumulative totals.</p>
           <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
         </div>
       </div>
@@ -980,7 +1150,7 @@ export default function EditorsAnalyticsPage() {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-foreground">PRs Reviewed (Monthly)</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">Monthly distinct PRs reviewed by each editor.</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Monthly distinct PRs with review events by each editor.</p>
           </div>
         </div>
         <div className="relative h-72 w-full">
