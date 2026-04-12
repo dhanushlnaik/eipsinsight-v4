@@ -795,17 +795,27 @@ const getEditorsLeaderboardCached = unstable_cache(
           AND pe.pr_number > 0
           AND pe.event_type NOT IN ('subscribed', 'mentioned', 'referenced')
       ),
+      deduped_events AS (
+        SELECT
+          actor,
+          pr_number,
+          repository_id,
+          event_type,
+          date_trunc('second', occurred_at) AS occurred_at
+        FROM raw_events
+        GROUP BY actor, pr_number, repository_id, event_type, date_trunc('second', occurred_at)
+      ),
       editor_activity AS (
         SELECT actor, pr_number, repository_id, event_type, occurred_at
-        FROM raw_events
+        FROM deduped_events
         WHERE ($2::text IS NULL OR occurred_at >= $2::timestamp)
-          AND ($3::text IS NULL OR occurred_at <= $3::timestamp)
+          AND ($3::text IS NULL OR occurred_at < (($3::date + INTERVAL '1 day')::timestamp))
       ),
       by_actor AS (
         SELECT
           actor,
           COUNT(*)::bigint AS total_actions,
-          COUNT(DISTINCT pr_number)::bigint AS prs_touched,
+          COUNT(DISTINCT CONCAT(repository_id::text, ':', pr_number::text))::bigint AS prs_touched,
           COUNT(*) FILTER (WHERE event_type IN ('reviewed', 'approved', 'changes_requested'))::bigint AS reviews,
           COUNT(*) FILTER (WHERE event_type IN ('commented', 'issue_comment', 'review_comment'))::bigint AS comments,
           MAX(occurred_at) AS latest_occurred_at
@@ -4730,6 +4740,8 @@ export const analyticsProcedures = {
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       months: z.number().optional().default(12),
+      from: z.string().optional(),
+      to: z.string().optional(),
     }))
     .handler(async ({ input }) => {
       const results = await prisma.$queryRawUnsafe<Array<{
@@ -4740,7 +4752,7 @@ export const analyticsProcedures = {
         `
         WITH editor_map AS (
           SELECT canonical, actor_lc
-          FROM UNNEST($3::text[], $4::text[]) AS x(canonical, actor_lc)
+          FROM UNNEST($5::text[], $6::text[]) AS x(canonical, actor_lc)
         ),
         raw_events AS (
           SELECT
@@ -4776,12 +4788,19 @@ export const analyticsProcedures = {
           COUNT(*)::bigint as count
         FROM deduped_events de
         LEFT JOIN repositories r ON r.id = de.repository_id
-        WHERE de.occurred_at >= date_trunc('month', NOW() - INTERVAL '1 month' * $2)
-          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+          AND ($2::text IS NULL OR de.occurred_at >= $2::timestamp)
+          AND ($3::text IS NULL OR de.occurred_at < (($3::date + INTERVAL '1 day')::timestamp))
+          AND (
+            ($2::text IS NOT NULL OR $3::text IS NOT NULL)
+            OR de.occurred_at >= date_trunc('month', NOW() - INTERVAL '1 month' * $4)
+          )
         GROUP BY date_trunc('month', de.occurred_at), de.actor
         ORDER BY month ASC, count DESC
       `,
         input.repo ?? null,
+        input.from ?? null,
+        input.to ?? null,
         (input.months || 12) - 1,
         Array.from(CANONICAL_EIP_EDITORS),
         CANONICAL_EIP_EDITOR_LOWER
@@ -4814,6 +4833,8 @@ export const analyticsProcedures = {
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
       months: z.number().optional().default(12),
+      from: z.string().optional(),
+      to: z.string().optional(),
     }))
     .handler(async ({ input }) => {
       const results = await prisma.$queryRawUnsafe<Array<{
@@ -4824,7 +4845,7 @@ export const analyticsProcedures = {
         `
         WITH editor_map AS (
           SELECT canonical, actor_lc
-          FROM UNNEST($3::text[], $4::text[]) AS x(canonical, actor_lc)
+          FROM UNNEST($5::text[], $6::text[]) AS x(canonical, actor_lc)
         ),
         raw_reviews AS (
           SELECT
@@ -4860,12 +4881,19 @@ export const analyticsProcedures = {
           COUNT(DISTINCT CONCAT(dr.repository_id::text, ':', dr.pr_number::text))::bigint as count
         FROM deduped_reviews dr
         LEFT JOIN repositories r ON r.id = dr.repository_id
-        WHERE dr.occurred_at >= date_trunc('month', NOW() - INTERVAL '1 month' * $2)
-          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        WHERE ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+          AND ($2::text IS NULL OR dr.occurred_at >= $2::timestamp)
+          AND ($3::text IS NULL OR dr.occurred_at < (($3::date + INTERVAL '1 day')::timestamp))
+          AND (
+            ($2::text IS NOT NULL OR $3::text IS NOT NULL)
+            OR dr.occurred_at >= date_trunc('month', NOW() - INTERVAL '1 month' * $4)
+          )
         GROUP BY date_trunc('month', dr.occurred_at), dr.actor
         ORDER BY month ASC, count DESC
       `,
         input.repo ?? null,
+        input.from ?? null,
+        input.to ?? null,
         (input.months || 12) - 1,
         Array.from(CANONICAL_EIP_EDITORS),
         CANONICAL_EIP_EDITOR_LOWER

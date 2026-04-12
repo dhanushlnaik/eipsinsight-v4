@@ -5,7 +5,26 @@ import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
 import { CANONICAL_EIP_EDITORS } from "@/data/eip-contributor-roles";
-import { Loader2, UserCheck, Clock, FileText, Download, AlertCircle, ChevronDown } from "lucide-react";
+import { 
+  Loader2, 
+  UserCheck, 
+  Clock, 
+  FileText, 
+  Download, 
+  AlertCircle, 
+  ChevronDown,
+  BarChart3,
+  TrendingUp,
+  Users,
+  Grid3x3,
+  Activity,
+  Zap,
+  LineChart,
+  List,
+  BarChart4,
+  Filter,
+  X
+} from "lucide-react";
 import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
 import ReactECharts from "echarts-for-react";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
@@ -322,30 +341,34 @@ export default function EditorsAnalyticsPage() {
           client.analytics.getEditorsMonthlyTrend({
             repo: repoParam,
             months,
+            from: leaderboardWindow.from,
+            to: leaderboardWindow.to,
           }),
           client.analytics.getEditorsMonthlyReviewedPRs({
             repo: repoParam,
             months,
+            from: leaderboardWindow.from,
+            to: leaderboardWindow.to,
           }),
           client.analytics.getEditorsByCategory({
             repo: repoParam,
-            from,
-            to,
+            from: leaderboardWindow.from,
+            to: leaderboardWindow.to,
           }),
           client.analytics.getEditorsRepoDistribution({
             repo: repoParam,
-            from,
-            to,
+            from: leaderboardWindow.from,
+            to: leaderboardWindow.to,
           }),
           client.analytics.getEditorDailyActivityStacked({
             repo: repoParam,
-            from,
-            to,
+            from: leaderboardWindow.from,
+            to: leaderboardWindow.to,
           }),
           client.analytics.getEditorActionDetails({
             repo: repoParam,
-            from,
-            to,
+            from: leaderboardWindow.from,
+            to: leaderboardWindow.to,
             limit: 1200,
           }),
         ]);
@@ -570,60 +593,98 @@ export default function EditorsAnalyticsPage() {
 
   const trendOption = useMemo(() => ({
     backgroundColor: "transparent",
-    tooltip: { trigger: "axis" },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: Array<any>) => {
+        if (!Array.isArray(params)) return "";
+        const title = params[0]?.axisValue || "";
+        const items = params
+          .map(
+            (p) =>
+              `<div style="color: ${p.color}; padding: 2px 0;"><strong>${p.seriesName}</strong>: ${p.value.toLocaleString()}</div>`
+          )
+          .join("");
+        return `<div style="padding: 6px;"><div style="margin-bottom: 4px; font-weight: 600;">${title}</div>${items}</div>`;
+      },
+    },
     legend: {
       top: 0,
-      textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+      textStyle: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
       type: "scroll",
     },
     grid: { top: 36, left: 28, right: 20, bottom: 28 },
     xAxis: {
       type: "category",
       data: monthlyTrend.map((m) => m.month),
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
       axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+      splitLine: { show: true, lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-      splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
+      splitLine: { lineStyle: { color: "rgba(148,163,184,0.2)", type: "dashed" } },
     },
     series: trendActors.map((actor, idx) => ({
       name: actor,
       type: "line",
       smooth: false,
-      symbol: "none",
+      symbol: "circle",
+      symbolSize: 4,
       lineStyle: { width: 2, color: `hsl(${(idx * 360) / Math.max(trendActors.length, 1)}, 70%, 55%)` },
+      itemStyle: { color: `hsl(${(idx * 360) / Math.max(trendActors.length, 1)}, 70%, 55%)` },
+      areaStyle: {
+        color: `hsl(${(idx * 360) / Math.max(trendActors.length, 1)}, 70%, 55%, 0.08)`,
+      },
       data: monthlyTrend.map((p) => Number(p[actor] || 0)),
     })),
   }), [monthlyTrend, trendActors]);
 
   const reviewedTrendOption = useMemo(() => ({
     backgroundColor: "transparent",
-    tooltip: { trigger: "axis" },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: Array<any>) => {
+        if (!Array.isArray(params)) return "";
+        const title = params[0]?.axisValue || "";
+        const items = params
+          .map(
+            (p) =>
+              `<div style="color: ${p.color}; padding: 2px 0;"><strong>${p.seriesName}</strong>: ${p.value.toLocaleString()}</div>`
+          )
+          .join("");
+        return `<div style="padding: 6px;"><div style="margin-bottom: 4px; font-weight: 600;">${title}</div>${items}</div>`;
+      },
+    },
     legend: {
       top: 0,
-      textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+      textStyle: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
       type: "scroll",
     },
     grid: { top: 36, left: 28, right: 20, bottom: 28 },
     xAxis: {
       type: "category",
       data: monthlyReviewedTrend.map((m) => m.month),
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
       axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+      splitLine: { show: true, lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-      splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
+      splitLine: { lineStyle: { color: "rgba(148,163,184,0.2)", type: "dashed" } },
     },
     series: reviewedTrendActors.map((actor, idx) => ({
       name: actor,
       type: "line",
       smooth: false,
-      symbol: "none",
+      symbol: "circle",
+      symbolSize: 4,
       lineStyle: { width: 2, color: `hsl(${(idx * 360) / Math.max(reviewedTrendActors.length, 1)}, 70%, 55%)` },
+      itemStyle: { color: `hsl(${(idx * 360) / Math.max(reviewedTrendActors.length, 1)}, 70%, 55%)` },
+      areaStyle: {
+        color: `hsl(${(idx * 360) / Math.max(reviewedTrendActors.length, 1)}, 70%, 55%, 0.08)`,
+      },
       data: monthlyReviewedTrend.map((p) => Number(p[actor] || 0)),
     })),
   }), [monthlyReviewedTrend, reviewedTrendActors]);
@@ -647,17 +708,27 @@ export default function EditorsAnalyticsPage() {
 
   const categoryOption = useMemo(() => ({
     backgroundColor: "transparent",
-    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: (params: Array<any>) => {
+        if (!Array.isArray(params) || !params[0]) return "";
+        const dataIndex = params[0].dataIndex;
+        const category = categoryData[dataIndex];
+        if (!category) return "";
+        return `<div style="padding: 6px;"><div style="font-weight: 600; margin-bottom: 4px; font-size: 12px;">${category.category}</div><div style="font-size: 11px; color: var(--muted-foreground);">Coverage: <strong style="color: var(--foreground);">${category.count.toLocaleString()}</strong> editors</div></div>`;
+      },
+    },
     grid: { top: 16, left: 90, right: 18, bottom: 24 },
     xAxis: {
       type: "value",
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
       splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
     },
     yAxis: {
       type: "category",
       data: categoryData.map((c) => c.category),
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
+      axisLabel: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
       axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
     },
     series: [
@@ -730,12 +801,20 @@ export default function EditorsAnalyticsPage() {
 
   const repoOption = useMemo(() => ({
     backgroundColor: "transparent",
-    tooltip: { trigger: "item" },
+    tooltip: {
+      trigger: "item",
+      formatter: (params: any) => {
+        if (!params) return "";
+        const pct = ((params.value / repoCards.reduce((s, r) => s + r.count, 0)) * 100).toFixed(1);
+        return `<div style="padding: 6px;"><div style="font-weight: 600; margin-bottom: 4px;">${params.name}</div><div style="font-size: 11px; color: var(--muted-foreground);">Count: <strong style="color: var(--foreground);">${params.value.toLocaleString()}</strong></div><div style="font-size: 11px; color: var(--muted-foreground);">Share: <strong style="color: var(--foreground);">${pct}%</strong></div></div>`;
+      },
+    },
     legend: {
       orient: "vertical",
       right: 8,
       top: "middle",
-      textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+      textStyle: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
+      itemGap: 8,
     },
     series: [
       {
@@ -777,23 +856,40 @@ export default function EditorsAnalyticsPage() {
 
     return {
       backgroundColor: "transparent",
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+        formatter: (params: Array<any>) => {
+          if (!Array.isArray(params)) return "";
+          const date = params[0]?.axisValue || "";
+          const items = params
+            .filter((p) => p.value > 0)
+            .map(
+              (p) =>
+                `<div style="color: ${p.color}; padding: 2px 0;"><strong>${p.seriesName}</strong>: ${p.value.toLocaleString()}</div>`
+            )
+            .join("");
+          const total = params.reduce((sum, p) => sum + (p.value || 0), 0);
+          return `<div style="padding: 6px;"><div style="margin-bottom: 4px; font-weight: 600;">${date}</div>${items}<div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.2); color: var(--foreground); font-weight: 600;">Total: ${total.toLocaleString()}</div></div>`;
+        },
+      },
       legend: {
         top: 0,
         type: "scroll",
-        textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+        textStyle: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
       },
       grid: { top: 40, left: 28, right: 20, bottom: 46 },
       xAxis: {
         type: "category",
         data: dates,
-        axisLabel: { color: "var(--muted-foreground)", fontSize: 10, hideOverlap: true },
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 10, hideOverlap: true, fontWeight: 500 },
         axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+        splitLine: { show: true, lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
       },
       yAxis: {
         type: "value",
-        axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-        splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.2)", type: "dashed" } },
       },
       dataZoom: [
         { type: "inside", xAxisIndex: 0, start: 0, end: 100 },
@@ -853,27 +949,27 @@ export default function EditorsAnalyticsPage() {
           const idx = params?.[0]?.dataIndex ?? 0;
           const row = ordered[idx];
           if (!row) return "";
-          return [
-            `<strong>${row.actor}</strong>`,
-            `Actions: ${row.totalActions.toLocaleString()}`,
-            `PRs touched: ${row.prsTouched.toLocaleString()}`,
-            `Reviews: ${row.reviews.toLocaleString()}`,
-            `Comments: ${row.comments.toLocaleString()}`,
-          ].join("<br/>");
+          return `<div style="padding: 8px;">
+            <div style="font-weight: 600; margin-bottom: 6px; font-size: 13px;">${row.actor}</div>
+            <div style="padding: 2px 0; font-size: 11px;"><span style="color: var(--muted-foreground);">Actions:</span> <strong>${row.totalActions.toLocaleString()}</strong></div>
+            <div style="padding: 2px 0; font-size: 11px;"><span style="color: var(--muted-foreground);">PRs touched:</span> <strong>${row.prsTouched.toLocaleString()}</strong></div>
+            <div style="padding: 2px 0; font-size: 11px;"><span style="color: var(--muted-foreground);">Reviews:</span> <strong>${row.reviews.toLocaleString()}</strong></div>
+            <div style="padding: 2px 0; font-size: 11px;"><span style="color: var(--muted-foreground);">Comments:</span> <strong>${row.comments.toLocaleString()}</strong></div>
+          </div>`;
         },
       },
       grid: { top: 8, left: 120, right: 100, bottom: 8, containLabel: true },
       xAxis: {
         type: "value",
         max: Math.ceil(maxValue * 1.15),
-        axisLabel: { color: "rgba(203,213,225,0.8)", fontSize: 11 },
-        splitLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
-        axisLine: { lineStyle: { color: "rgba(148,163,184,0.35)" } },
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)" } },
+        axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
       },
       yAxis: {
         type: "category",
         data: ordered.map((row) => row.actor),
-        axisLabel: { color: "rgba(226,232,240,0.9)", fontSize: 11, width: 110, overflow: "truncate" },
+        axisLabel: { color: "var(--foreground)", fontSize: 11, width: 110, overflow: "truncate", fontWeight: 500 },
         axisTick: { show: false },
         axisLine: { show: false },
       },
@@ -891,8 +987,9 @@ export default function EditorsAnalyticsPage() {
           label: {
             show: true,
             position: "insideRight",
-            color: "rgba(10,15,28,0.95)",
+            color: "var(--foreground)",
             fontWeight: 700,
+            fontSize: 11,
             formatter: ({ value }: { value: number }) => Number(value).toLocaleString(),
           },
           markPoint: {
@@ -990,14 +1087,17 @@ export default function EditorsAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="space-y-6">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-border/70 bg-card/60 py-16 backdrop-blur-sm">
+          <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading analytics data...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {error && (
         <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1005,9 +1105,10 @@ export default function EditorsAnalyticsPage() {
         </div>
       )}
 
-      <section id="editor-leaderboard-hero" className="space-y-3 border-b border-border/70 pb-6">
+      <section id="editor-leaderboard-hero" className="space-y-4 border-b border-border/70 pb-8">
         <div>
           <div className="inline-flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Editors - {leaderboardLabel}</h2>
             <CopyLinkButton sectionId="editor-leaderboard-hero" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
@@ -1015,17 +1116,29 @@ export default function EditorsAnalyticsPage() {
         </div>
         <div className="rounded-xl border border-border bg-card/60 p-4 backdrop-blur-sm sm:p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 p-0.5 text-xs">
+          <div className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/60 p-1">
             <button
               onClick={() => setLeaderboardHeroView("list")}
-              className={`rounded px-2 py-1 ${leaderboardHeroView === "list" ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              title="List view"
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 transition-colors font-medium text-sm ${
+                leaderboardHeroView === "list"
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
             >
+              <List className="h-4 w-4" />
               List
             </button>
             <button
               onClick={() => setLeaderboardHeroView("chart")}
-              className={`rounded px-2 py-1 ${leaderboardHeroView === "chart" ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              title="Chart view"
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 transition-colors font-medium text-sm ${
+                leaderboardHeroView === "chart"
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
             >
+              <BarChart4 className="h-4 w-4" />
               Chart
             </button>
           </div>
@@ -1041,7 +1154,10 @@ export default function EditorsAnalyticsPage() {
 
         {leaderboardHeroView === "chart" ? (
           leaderboardHeroRows.length === 0 ? (
-            <p className="py-6 text-sm text-muted-foreground">No leaderboard data found for the current filters.</p>
+            <div className="flex flex-col items-center justify-center rounded-lg border border-border/70 border-dashed bg-muted/30 py-8">
+              <BarChart3 className="mb-2 h-8 w-8 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">No leaderboard data found for the current filters.</p>
+            </div>
           ) : (
             <div className="h-[460px] w-full rounded-lg border border-border/70 bg-background/35 p-2">
               <ReactECharts option={leaderboardHeroOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
@@ -1074,7 +1190,10 @@ export default function EditorsAnalyticsPage() {
               </div>
             ))}
             {leaderboardHeroRows.length === 0 && (
-              <p className="py-4 text-sm text-muted-foreground">No leaderboard data found for the current filters.</p>
+              <div className="flex flex-col items-center justify-center rounded-lg border border-border/70 border-dashed bg-muted/30 py-8">
+                <Users className="mb-2 h-8 w-8 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground">No leaderboard data found for the current filters.</p>
+              </div>
             )}
           </div>
         )}
@@ -1085,15 +1204,16 @@ export default function EditorsAnalyticsPage() {
         </div>
       </section>
 
-      <section id="editor-snapshot" className="space-y-3 border-b border-border/70 pb-6">
+      <section id="editor-snapshot" className="space-y-4 border-b border-border/70 pb-8">
         <div>
           <div className="inline-flex items-center gap-2">
+            <LineChart className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Editor Snapshot</h2>
             <CopyLinkButton sectionId="editor-snapshot" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">Coverage, participation, and response metrics in this scope.</p>
         </div>
-      <div className="rounded-xl border border-border/70 bg-card/60 p-4 backdrop-blur-sm sm:p-5">
+      <div className="rounded-xl border border-border/70 bg-card/60 p-4 backdrop-blur-sm shadow-sm sm:p-5">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <div className="rounded-lg border border-border/60 bg-background/35 p-4">
             <div className="flex items-center justify-between">
@@ -1150,9 +1270,10 @@ export default function EditorsAnalyticsPage() {
       </div>
       </section>
 
-      <section id="editor-trends" className="space-y-3 border-b border-border/70 pb-6">
+      <section id="editor-trends" className="space-y-4 border-b border-border/70 pb-8">
         <div>
           <div className="inline-flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Editorial Trends</h2>
             <CopyLinkButton sectionId="editor-trends" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
@@ -1164,25 +1285,37 @@ export default function EditorsAnalyticsPage() {
             <h3 className="text-lg font-semibold text-foreground">{trendMetricMeta(trendPrimaryMetric).title}</h3>
           </div>
           <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-md border border-border bg-muted/30 p-0.5">
+            <div className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/30 p-1">
               <button
                 type="button"
                 onClick={() => setTrendPrimaryMetric("actions")}
-                className={`rounded px-2 py-1 text-xs ${trendPrimaryMetric === "actions" ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                title="Show all actions"
+                className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                  trendPrimaryMetric === "actions"
+                    ? "bg-primary/20 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
               >
+                <Activity className="h-3.5 w-3.5" />
                 All Actions
               </button>
               <button
                 type="button"
                 onClick={() => setTrendPrimaryMetric("reviews")}
-                className={`rounded px-2 py-1 text-xs ${trendPrimaryMetric === "reviews" ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                title="Show reviewed PRs only"
+                className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                  trendPrimaryMetric === "reviews"
+                    ? "bg-primary/20 text-primary border border-primary/30"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
               >
+                <FileText className="h-3.5 w-3.5" />
                 Reviewed PRs
               </button>
             </div>
-            <button onClick={downloadTrendReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
-              <Download className="h-3.5 w-3.5" />
-              Download Reports
+            <button onClick={downloadTrendReport} title="Download trend report" className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/15">
+              <Download className="h-4 w-4" />
+              Export Data
             </button>
           </div>
         </div>
@@ -1199,9 +1332,10 @@ export default function EditorsAnalyticsPage() {
       </div>
       </section>
 
-      <section id="top-active-editors" className="space-y-3 border-b border-border/70 pb-6">
+      <section id="top-active-editors" className="space-y-4 border-b border-border/70 pb-8">
         <div>
           <div className="inline-flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Top Active Editors</h2>
             <CopyLinkButton sectionId="top-active-editors" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
@@ -1278,9 +1412,10 @@ export default function EditorsAnalyticsPage() {
       </div>
       </section>
 
-      <section id="editor-category-coverage" className="space-y-3 border-b border-border/70 pb-6">
+      <section id="editor-category-coverage" className="space-y-4 border-b border-border/70 pb-8">
         <div>
           <div className="inline-flex items-center gap-2">
+            <Grid3x3 className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Category Coverage</h2>
             <CopyLinkButton sectionId="editor-category-coverage" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
@@ -1335,9 +1470,10 @@ export default function EditorsAnalyticsPage() {
       </section>
 
       {/* Editor Directory */}
-      <section id="editor-activity-directory" className="space-y-3 border-b border-border/70 pb-6">
+      <section id="editor-activity-directory" className="space-y-4 border-b border-border/70 pb-8">
         <div>
           <div className="inline-flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Editor Activity Directory</h2>
             <CopyLinkButton sectionId="editor-activity-directory" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
@@ -1352,65 +1488,78 @@ export default function EditorsAnalyticsPage() {
             </h3>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={leaderboardMode}
-              onChange={(e) => setLeaderboardMode(e.target.value as "all" | "monthly" | "range")}
-              className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-              aria-label="Select leaderboard scope"
-            >
-              <option value="all">All-time</option>
-              <option value="monthly">Monthly</option>
-              <option value="range">Use dashboard range</option>
-            </select>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="leaderboard-scope" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Time Period</label>
+              <select
+                id="leaderboard-scope"
+                value={leaderboardMode}
+                onChange={(e) => setLeaderboardMode(e.target.value as "all" | "monthly" | "range")}
+                className="h-9 rounded-md border border-border/60 bg-background px-3 text-xs text-foreground transition-colors hover:border-border focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                aria-label="Select leaderboard scope"
+              >
+                <option value="all">All-time</option>
+                <option value="monthly">Monthly</option>
+                <option value="range">Use dashboard range</option>
+              </select>
+            </div>
             {leaderboardMode === "monthly" && (
               <>
-                <select
-                  value={leaderboardYear}
-                  onChange={(e) => setLeaderboardYear(Number(e.target.value))}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-                  aria-label="Select leaderboard year"
-                >
-                  {yearOptions.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={leaderboardMonth}
-                  onChange={(e) => setLeaderboardMonth(Number(e.target.value))}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
-                  aria-label="Select leaderboard month"
-                >
-                  {MONTH_NAMES.map((month, index) => (
-                    <option key={month} value={index + 1}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="leaderboard-year" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Year</label>
+                  <select
+                    id="leaderboard-year"
+                    value={leaderboardYear}
+                    onChange={(e) => setLeaderboardYear(Number(e.target.value))}
+                    className="h-9 rounded-md border border-border/60 bg-background px-3 text-xs text-foreground transition-colors hover:border-border focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    aria-label="Select leaderboard year"
+                  >
+                    {yearOptions.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="leaderboard-month" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Month</label>
+                  <select
+                    id="leaderboard-month"
+                    value={leaderboardMonth}
+                    onChange={(e) => setLeaderboardMonth(Number(e.target.value))}
+                    className="h-9 rounded-md border border-border/60 bg-background px-3 text-xs text-foreground transition-colors hover:border-border focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    aria-label="Select leaderboard month"
+                  >
+                    {MONTH_NAMES.map((month, index) => (
+                      <option key={month} value={index + 1}>
+                        {month}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </>
             )}
             <button
               onClick={downloadLeaderboardCSV}
               disabled={exporting || leaderboard.length === 0}
-              className="flex h-8 items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2.5 text-xs text-foreground/85 transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              title="Download leaderboard as CSV"
+              className="flex h-9 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary/10"
             >
-              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              Download Reports
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {exporting ? "Exporting..." : "Export CSV"}
             </button>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-border/70">
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Editor</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reviews</th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">PRs Touched</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Mix</th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Report</th>
+              <tr className="border-b border-border/70 bg-muted/30 backdrop-blur-sm">
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-foreground">Editor</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-foreground">Status</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-foreground">Actions</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-foreground">Reviews</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-foreground">PRs Touched</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-foreground">Mix</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-foreground">Report</th>
               </tr>
             </thead>
             <tbody>
@@ -1423,7 +1572,7 @@ export default function EditorsAnalyticsPage() {
                 return (
                 <tr
                   key={editor.actor}
-                  className="border-b border-border/60 hover:bg-muted/40 transition-colors"
+                  className="border-b border-border/60 hover:bg-primary/5 transition-colors duration-150"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -1464,9 +1613,9 @@ export default function EditorsAnalyticsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex h-2 w-28 overflow-hidden rounded-full border border-border/50 bg-muted/30">
-                      <div className="h-full bg-blue-400" style={{ width: `${reviewsPct}%` }} />
-                      <div className="h-full bg-purple-400" style={{ width: `${commentsPct}%` }} />
-                      <div className="h-full bg-slate-500" style={{ width: `${otherPct}%` }} />
+                      <div className="h-full" style={{ width: `${reviewsPct}%`, backgroundColor: "hsl(200, 90%, 55%)" }} />
+                      <div className="h-full" style={{ width: `${commentsPct}%`, backgroundColor: "hsl(280, 80%, 55%)" }} />
+                      <div className="h-full" style={{ width: `${otherPct}%`, backgroundColor: "hsl(0, 0%, 70%)" }} />
                     </div>
                     <p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
                       R {reviewsPct.toFixed(0)}% · C {commentsPct.toFixed(0)}%
@@ -1476,18 +1625,21 @@ export default function EditorsAnalyticsPage() {
                     <button
                       onClick={() => downloadEditorReport(editor.actor)}
                       disabled={downloadingEditor === editor.actor}
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground/85 hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
+                      title="Download editor report as CSV"
+                      className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-primary/10"
                     >
-                      {downloadingEditor === editor.actor ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                      Report
+                      {downloadingEditor === editor.actor ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                     </button>
                   </td>
                 </tr>
               )})}
               {leaderboard.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-sm text-muted-foreground">
-                    No editor data found for the current filters.
+                  <td colSpan={7} className="py-8">
+                    <div className="flex flex-col items-center justify-center">
+                      <Activity className="mb-2 h-8 w-8 text-muted-foreground/50" />
+                      <p className="text-sm text-muted-foreground">No editor data found for the current filters.</p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -1498,9 +1650,10 @@ export default function EditorsAnalyticsPage() {
       </section>
 
       {/* Daily + Repo */}
-      <section id="editor-operations" className="space-y-3 border-b border-border/70 pb-6">
+      <section id="editor-operations" className="space-y-4 border-b border-border/70 pb-8">
         <div>
           <div className="inline-flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Operational Breakdown</h2>
             <CopyLinkButton sectionId="editor-operations" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
@@ -1513,9 +1666,9 @@ export default function EditorsAnalyticsPage() {
               <h3 className="text-lg font-semibold text-foreground">Daily Editorial Activity</h3>
               <p className="mt-0.5 text-xs text-muted-foreground">Which editors drove activity day by day.</p>
             </div>
-            <button onClick={downloadDailyActivityReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
-              <Download className="h-3.5 w-3.5" />
-              Download Reports
+            <button onClick={downloadDailyActivityReport} title="Download daily activity report" className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15">
+              <Download className="h-4 w-4" />
+              Export Data
             </button>
           </div>
         <div className="rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
@@ -1540,9 +1693,9 @@ export default function EditorsAnalyticsPage() {
               <h3 className="text-lg font-semibold text-foreground">Repo Distribution</h3>
               <p className="mt-0.5 text-xs text-muted-foreground">Where editor work is concentrated.</p>
             </div>
-            <button onClick={downloadRepoDistributionReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
-              <Download className="h-3.5 w-3.5" />
-              Download Reports
+            <button onClick={downloadRepoDistributionReport} title="Download repository distribution report" className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15">
+              <Download className="h-4 w-4" />
+              Export Data
             </button>
           </div>
         <div className="rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
@@ -1560,65 +1713,97 @@ export default function EditorsAnalyticsPage() {
       </div>
       </section>
 
-      <section id="editor-recent-activity" className="space-y-3 border-b border-border/70 pb-6">
+      <section id="editor-recent-activity" className="space-y-4 border-b border-border/70 pb-8">
         <div>
           <div className="inline-flex items-center gap-2">
+            <Clock className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Recent Activities</h2>
             <CopyLinkButton sectionId="editor-recent-activity" className="h-8 w-8 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">Live feed with repository/editor/action filters.</p>
         </div>
       <div className="rounded-xl border border-border/70 bg-card/60 backdrop-blur-sm">
-        <div className="border-b border-border/70 px-5 py-3">
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-            <select
-              value={activityRepoFilter}
-              onChange={(e) => {
-                setActivityRepoFilter(e.target.value);
-                setVisibleActivityCount(20);
-              }}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
-              aria-label="Filter activity by repository"
-            >
-              <option value="all">All Repositories</option>
-              {activityRepoOptions.map((repo) => (
-                <option key={repo} value={repo}>
-                  {repo}
-                </option>
-              ))}
-            </select>
-            <select
-              value={activityEditorFilter}
-              onChange={(e) => {
-                setActivityEditorFilter(e.target.value);
-                setVisibleActivityCount(20);
-              }}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
-              aria-label="Filter activity by editor"
-            >
-              <option value="all">All Editors</option>
-              {activityEditorOptions.map((editor) => (
-                <option key={editor} value={editor}>
-                  {editor}
-                </option>
-              ))}
-            </select>
-            <select
-              value={activityActionFilter}
-              onChange={(e) => {
-                setActivityActionFilter(e.target.value);
-                setVisibleActivityCount(20);
-              }}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
-              aria-label="Filter activity by action"
-            >
-              <option value="all">All Actions</option>
-              {activityActionOptions.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-            </select>
+        <div className="border-b border-border/70 px-5 py-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filters</span>
+            {(activityRepoFilter !== "all" || activityEditorFilter !== "all" || activityActionFilter !== "all") && (
+              <button
+                onClick={() => {
+                  setActivityRepoFilter("all");
+                  setActivityEditorFilter("all");
+                  setActivityActionFilter("all");
+                  setVisibleActivityCount(20);
+                }}
+                className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                title="Clear all filters"
+              >
+                <X className="h-3.5 w-3.5" />
+                Reset
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="repo-filter" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repository</label>
+              <select
+                id="repo-filter"
+                value={activityRepoFilter}
+                onChange={(e) => {
+                  setActivityRepoFilter(e.target.value);
+                  setVisibleActivityCount(20);
+                }}
+                className="h-10 w-full rounded-md border border-border/60 bg-background px-3 text-sm text-foreground transition-colors hover:border-border focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                aria-label="Filter activity by repository"
+              >
+                <option value="all">All Repositories</option>
+                {activityRepoOptions.map((repo) => (
+                  <option key={repo} value={repo}>
+                    {repo}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="editor-filter" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Editor</label>
+              <select
+                id="editor-filter"
+                value={activityEditorFilter}
+                onChange={(e) => {
+                  setActivityEditorFilter(e.target.value);
+                  setVisibleActivityCount(20);
+                }}
+                className="h-10 w-full rounded-md border border-border/60 bg-background px-3 text-sm text-foreground transition-colors hover:border-border focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                aria-label="Filter activity by editor"
+              >
+                <option value="all">All Editors</option>
+                {activityEditorOptions.map((editor) => (
+                  <option key={editor} value={editor}>
+                    {editor}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="action-filter" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Action Type</label>
+              <select
+                id="action-filter"
+                value={activityActionFilter}
+                onChange={(e) => {
+                  setActivityActionFilter(e.target.value);
+                  setVisibleActivityCount(20);
+                }}
+                className="h-10 w-full rounded-md border border-border/60 bg-background px-3 text-sm text-foreground transition-colors hover:border-border focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                aria-label="Filter activity by action"
+              >
+                <option value="all">All Actions</option>
+                {activityActionOptions.map((action) => (
+                  <option key={action} value={action}>
+                    {action}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
         <div>
@@ -1679,18 +1864,21 @@ export default function EditorsAnalyticsPage() {
             );
           })}
           {visibleActivityFeed.length === 0 && (
-            <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-              No editor actions found for current filters.
+            <div className="flex flex-col items-center justify-center px-5 py-8">
+              <Zap className="mb-2 h-8 w-8 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">No editor actions found for current filters.</p>
             </div>
           )}
         </div>
         {hasMoreActivities && (
-          <div className="border-t border-border/60 px-5 py-3">
+          <div className="border-t border-border/60 px-5 py-4">
             <button
               onClick={() => setVisibleActivityCount((count) => count + 20)}
-              className="inline-flex h-9 items-center rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground/85 hover:bg-muted/60"
+              title="Show 20 more activities"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/15"
             >
-              Show more
+              <ChevronDown className="h-4 w-4" />
+              Show more ({filteredActivityFeed.length - visibleActivityCount} remaining)
             </button>
           </div>
         )}
