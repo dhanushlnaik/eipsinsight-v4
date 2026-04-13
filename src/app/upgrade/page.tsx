@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
-import { PageHeader } from '@/components/header';
+import { PageHeader, CopyLinkButton } from '@/components/header';
 import { ZoomableTimeline } from '@/app/upgrade/_components/zoomable-timeline';
 import { UpgradeStatsCards } from '@/app/upgrade/_components/upgrade-stats-cards';
 import { CollapsibleHeader } from '@/app/upgrade/_components/collapsible-header';
@@ -13,7 +13,7 @@ import { EipInclusionProcessGraph } from '@/app/upgrade/_components/eip-inclusio
 
 import { client } from '@/lib/orpc';
 import { cn } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Calendar, BarChart2, Users, Package } from 'lucide-react';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { eipTitles, rawData, upgradeMetaEIPs, pairedUpgradeNames } from '@/data/network-upgrades';
@@ -402,15 +402,16 @@ export default function UpgradePage() {
       </section>
 
       {/* Timeline Section */}
-      <section className="relative w-full bg-background">
-        <PageHeader
-          title="Ethereum Upgrade Timeline (by timeline)"
-          description="Visual timeline of all network upgrades from Frontier to present"
-          sectionId="timeline"
-          titleAs="h2"
-          className={cn('bg-background', sectionHeaderPaddingClass)}
-        />
-        <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6 pb-6">
+      <section className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
+        <div className="mb-4">
+          <div className="inline-flex items-center gap-2 mb-2">
+            <Calendar className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Ethereum Upgrade Timeline (by timeline)</h2>
+            <CopyLinkButton sectionId="timeline" tooltipLabel="Copy link" />
+          </div>
+          <p className="text-sm text-muted-foreground">Visual timeline of all network upgrades from Frontier to present</p>
+        </div>
+        <div className="mx-auto w-full pb-6">
           <ZoomableTimeline
             imagePath="/upgrade/ethupgradetimeline.png"
             alt="Ethereum Network Upgrade Timeline"
@@ -423,15 +424,16 @@ export default function UpgradePage() {
       </div>
 
       {/* Network Upgrades Chart Section */}
-      <section className="relative w-full bg-background">
-        <PageHeader
-          title="Network Upgrade Timeline (by distribution of EIPs)"
-          description="Interactive timeline showing all Ethereum network upgrades and their EIP implementations"
-          sectionId="network-upgrades-chart"
-          titleAs="h2"
-          className={cn('bg-background', sectionHeaderPaddingClass)}
-        />
-        <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6 pb-6">
+      <section className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
+        <div className="mb-4">
+          <div className="inline-flex items-center gap-2 mb-2">
+            <BarChart2 className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Network Upgrade Timeline (by distribution of EIPs)</h2>
+            <CopyLinkButton sectionId="network-upgrades-chart" tooltipLabel="Copy link" />
+          </div>
+          <p className="text-sm text-muted-foreground">Interactive timeline showing all Ethereum network upgrades and their EIP implementations</p>
+        </div>
+        <div className="mx-auto w-full pb-6">
           <NetworkUpgradesChart />
         </div>
       </section>
@@ -440,15 +442,15 @@ export default function UpgradePage() {
         <div className="h-px w-full bg-border/60" />
       </div>
 
-      <section ref={authorsSectionRef} className="relative w-full bg-background">
-        <PageHeader
-          title="Included EIP Authors"
-          description="Authors whose EIPs are included across Ethereum network upgrades."
-          sectionId="included-authors"
-          titleAs="h2"
-          className={cn('bg-background', sectionHeaderPaddingClass)}
-        />
-        <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6 pb-6">
+      <section ref={authorsSectionRef} className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6" id="included-authors">
+        <div className="mb-4">
+          <div className="inline-flex items-center gap-2 mb-2">
+            <Users className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Included EIP Authors</h2>
+            <CopyLinkButton sectionId="included-authors" tooltipLabel="Copy link" />
+          </div>
+          <p className="text-sm text-muted-foreground">Authors whose EIPs are included across Ethereum network upgrades.</p>
+        </div>
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -588,7 +590,6 @@ export default function UpgradePage() {
               </div>
             </div>
           </motion.div>
-        </div>
       </section>
 
       <div className="w-full px-3 sm:px-4 lg:px-5 xl:px-6">
@@ -596,15 +597,16 @@ export default function UpgradePage() {
       </div>
 
       {/* Upgrades List / Roadmap Section */}
-      <section className="relative w-full bg-background">
-        <PageHeader
-          title="Network Upgrade Roadmap"
-          description="High‑level view of recent and upcoming coordinated Ethereum network upgrades."
-          sectionId="upgrades"
-          titleAs="h2"
-          className={cn('bg-background', sectionHeaderPaddingClass)}
-        />
-        <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6 pb-6">
+      <section className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
+        <div className="mb-4">
+          <div className="inline-flex items-center gap-2 mb-2">
+            <Package className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Network Upgrade Roadmap</h2>
+            <CopyLinkButton sectionId="upgrades" tooltipLabel="Copy link" />
+          </div>
+          <p className="text-sm text-muted-foreground">High‑level view of recent and upcoming coordinated Ethereum network upgrades.</p>
+        </div>
+        <div className="mx-auto w-full pb-6">
           <div className="mb-6">
             <HorizontalUpgradeTimeline />
           </div>
@@ -627,56 +629,59 @@ export default function UpgradePage() {
         <div className="h-px w-full bg-border/60" />
       </div>
 
-      <section ref={detailsSectionRef} className="relative w-full bg-background">
-        <div className="mx-auto w-full px-3 py-6 sm:px-4 lg:px-5 xl:px-6">
+      <section ref={detailsSectionRef} className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6" id="upgrade-eip-details">
+        {activeTable && (
+          <div className="mb-4">
+            <div className="inline-flex items-center gap-2 mb-2">
+              <BarChart2 className="h-5 w-5 text-primary" />
+              <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                {activeTable === 'meta'
+                  ? 'Hard Fork Meta EIPs'
+                  : activeTable === 'execution'
+                    ? 'Execution Layer EIPs'
+                    : activeTable === 'consensus'
+                      ? 'Consensus Layer EIPs'
+                  : activeTable === 'core'
+                    ? 'EIPs Deployed'
+                    : 'Included EIP Authors'}
+              </h2>
+              <CopyLinkButton sectionId="upgrade-eip-details" tooltipLabel="Copy link" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {activeTable === 'meta'
+                ? 'Meta EIPs associated with upgrades in the distribution chart.'
+                : activeTable === 'execution'
+                  ? 'Core EIPs deployed through execution-layer upgrades.'
+                  : activeTable === 'consensus'
+                    ? 'Core EIPs deployed through consensus-layer upgrades.'
+                : activeTable === 'core'
+                  ? 'Core EIPs deployed in upgrades from the distribution chart.'
+                  : 'Authors whose EIPs are included across Ethereum network upgrades.'}
+            </p>
+            {activeTable === 'meta' && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Data source: Meta-EIP mappings are curated from Ethereum upgrade references and EIP metadata in the network upgrades dataset.
+              </p>
+            )}
+          </div>
+        )}
+        <div className="mx-auto w-full">
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
             className="overflow-hidden rounded-xl border border-border bg-card/60 backdrop-blur-sm"
           >
-            <div className="flex flex-col gap-2 border-b border-border/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                  {activeTable === 'meta'
-                    ? 'Hard Fork Meta EIPs'
-                    : activeTable === 'execution'
-                      ? 'Execution Layer EIPs'
-                      : activeTable === 'consensus'
-                        ? 'Consensus Layer EIPs'
-                    : activeTable === 'core'
-                      ? 'EIPs Deployed'
-                      : 'Upgrade EIP Details'}
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {activeTable === 'meta'
-                    ? 'Meta EIPs associated with upgrades in the distribution chart.'
-                    : activeTable === 'execution'
-                      ? 'Core EIPs deployed through execution-layer upgrades.'
-                      : activeTable === 'consensus'
-                        ? 'Core EIPs deployed through consensus-layer upgrades.'
-                    : activeTable === 'core'
-                      ? 'Core EIPs deployed in upgrades from the distribution chart.'
-                      : 'Select either stats card above to jump here and inspect the linked EIPs.'}
-                </p>
-                {activeTable === 'meta' && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Data source: Meta-EIP mappings are curated from Ethereum upgrade references and EIP metadata in the network upgrades dataset.
-                  </p>
-                )}
+            {!activeTable ? (
+              <div className="flex flex-col gap-4 px-6 py-8 text-center">
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">EIP Details</h3>
+                  <p className="text-sm text-muted-foreground">Select a stats card above to view detailed EIP information from the distribution chart.</p>
+                </div>
+                <CopyLinkButton sectionId="upgrade-eip-details" tooltipLabel="Copy link" />
               </div>
-              {activeTable && activeTable !== 'authors' && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTable(null)}
-                  className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:text-primary"
-                >
-                  Hide table
-                </button>
-              )}
-            </div>
-
-            <div className="overflow-x-auto">
+            ) : (
+              <div className="overflow-x-auto">
               {activeTable && activeTable !== 'authors' ? (
                   <table className="w-full min-w-full table-fixed text-sm">
                     <colgroup>
@@ -774,6 +779,7 @@ export default function UpgradePage() {
                 </div>
               )}
             </div>
+            )}
             {activeTable && activeTable !== 'authors' && (
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 <span>{isTableFiltered ? 'Filtered results' : 'Results'}: {resultCount.toLocaleString()}</span>

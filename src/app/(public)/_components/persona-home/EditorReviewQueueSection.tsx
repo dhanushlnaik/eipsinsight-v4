@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, Download, ExternalLink } from 'lucide-react';
+import { ArrowRight, Download, ExternalLink, GitPullRequest } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CopyLinkButton } from '@/components/header';
 import { client } from '@/lib/orpc';
@@ -134,6 +134,7 @@ export default function EditorReviewQueueSection({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="inline-flex items-center gap-2">
+            <GitPullRequest className="h-5 w-5 text-primary" />
             <h2 className={sectionTitleClass}>Editor Review Queue</h2>
             <CopyLinkButton sectionId="editor-review-queue" tooltipLabel="Copy link" className="h-8 w-8 rounded-md" />
           </div>

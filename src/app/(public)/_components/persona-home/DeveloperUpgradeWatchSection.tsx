@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import ReactECharts from 'echarts-for-react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Download, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CopyLinkButton } from '@/components/header';
 
@@ -29,6 +29,8 @@ type DeveloperUpgradeWatchSectionProps = {
   upgradeTimelineLoading: boolean;
   upgradeWatchChartOption: unknown;
   latestCounts: Counts;
+  onDownloadMetadata: () => void;
+  downloadMetadataLoading: boolean;
 };
 
 export default function DeveloperUpgradeWatchSection({
@@ -40,12 +42,18 @@ export default function DeveloperUpgradeWatchSection({
   upgradeTimelineLoading,
   upgradeWatchChartOption,
   latestCounts,
+  onDownloadMetadata,
+  downloadMetadataLoading,
 }: DeveloperUpgradeWatchSectionProps) {
   return (
     <section className="mb-6 border-t border-border/70 pt-6" id="developer-upgrade-watch">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h2 className={sectionTitleClass}>Upgrade Watch</h2>
+          <div className="inline-flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" />
+            <h2 className={sectionTitleClass}>Upgrade Watch</h2>
+            <CopyLinkButton sectionId="developer-upgrade-watch" className="h-8 w-8 rounded-md" />
+          </div>
           <p className={sectionSubtitleClass}>Compact EIP Composition Timeline by upgrade.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -67,7 +75,15 @@ export default function DeveloperUpgradeWatchSection({
             Explore Upgrades
             <ArrowRight className="h-3 w-3" />
           </Link>
-          <CopyLinkButton sectionId="developer-upgrade-watch" className="h-8 w-8 rounded-md" />
+          <button
+            type="button"
+            onClick={onDownloadMetadata}
+            disabled={downloadMetadataLoading || upgradeTimelineLoading || !upgradeWatchChartOption}
+            className="inline-flex h-8 items-center justify-center gap-1 whitespace-nowrap rounded-md border border-border bg-muted/40 px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Download className="h-3 w-3" />
+            {downloadMetadataLoading ? 'Downloading...' : 'Download CSV'}
+          </button>
         </div>
       </div>
 

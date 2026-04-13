@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import ReactECharts from 'echarts-for-react';
-import { ArrowRight, CircleHelp } from 'lucide-react';
+import { ArrowRight, CircleHelp, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CopyLinkButton } from '@/components/header';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -56,6 +56,7 @@ export default function EditorCategoryBreakdownSection({
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="inline-flex items-center gap-2">
+            <Layers className="h-5 w-5 text-primary" />
             <h2 className={sectionTitleClass}>Category Breakdown</h2>
             <CopyLinkButton sectionId="editor-category-breakdown" tooltipLabel="Copy link" className="h-8 w-8 rounded-md" />
           </div>

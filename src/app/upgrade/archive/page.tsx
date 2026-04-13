@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, CalendarDays, FileText, GitBranch, Sparkles } from 'lucide-react';
-import { PageHeader } from '@/components/header';
+import { ArrowRight, CalendarDays, FileText, GitBranch, Sparkles, Zap, List, Archive } from 'lucide-react';
+import { PageHeader, CopyLinkButton } from '@/components/header';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
@@ -237,7 +237,11 @@ export default function PreviousUpgradesPage() {
         <div className="h-px w-full bg-border/60" />
 
         <section className="pt-6 pb-4">
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">At A Glance</h2>
+          <div className="inline-flex items-center gap-2 mb-2">
+            <Zap className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">At A Glance</h2>
+            <CopyLinkButton sectionId="at-a-glance" tooltipLabel="Copy link" />
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">High-level snapshot and upgrade spacing across eras.</p>
 
           <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -305,7 +309,11 @@ export default function PreviousUpgradesPage() {
         <div className="h-px w-full bg-border/60" />
 
         <section className="pt-6 pb-4">
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Upgrade Index</h2>
+          <div className="inline-flex items-center gap-2 mb-2">
+            <List className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Upgrade Index</h2>
+            <CopyLinkButton sectionId="upgrade-index" tooltipLabel="Copy link" />
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">Sortable-style compact index for quick scanning and selection.</p>
 
           <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-card/60">
@@ -375,7 +383,11 @@ export default function PreviousUpgradesPage() {
         <div className="h-px w-full bg-border/60" />
 
         <section className="pt-6">
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Selected Upgrade</h2>
+          <div className="inline-flex items-center gap-2 mb-2">
+            <Archive className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Selected Upgrade</h2>
+            <CopyLinkButton sectionId="selected-upgrade" tooltipLabel="Copy link" />
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">Why it mattered, with direct links for deeper exploration.</p>
 
           <motion.div

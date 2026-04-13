@@ -158,6 +158,9 @@ export function UpgradeSubscriptionCard({ slug, name }: UpgradeSubscriptionCardP
       <div className="mt-3 flex flex-wrap gap-2">
         {FILTER_OPTIONS.map((option) => {
           const selected = selectedFilter === option.id;
+          const buttonClass = selected
+            ? "border-primary/40 bg-primary/10 text-primary"
+            : "border-border bg-muted/50 text-muted-foreground hover:border-primary/30 hover:text-foreground";
           return (
             <button
               key={option.id}
@@ -165,12 +168,9 @@ export function UpgradeSubscriptionCard({ slug, name }: UpgradeSubscriptionCardP
               onClick={() => void handleFilterChange(option.id)}
               disabled={isUpdating}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                "disabled:cursor-not-allowed disabled:opacity-70",
-                selected
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border bg-muted/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
-              )
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70",
+                buttonClass
+              )}
             >
               <span className="font-medium text-foreground">{option.label}</span>
               {selected && <CheckCircle2 className="h-4 w-4 text-primary" />}

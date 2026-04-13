@@ -8,10 +8,20 @@ import { Info, Loader2, Download, Filter, Eye, EyeOff } from 'lucide-react';
 import { client } from '@/lib/orpc';
 import { PageHeader, SectionSeparator } from '@/components/header';
 
-// Protocol telemetry color scheme - soft neon under glass
-const categoryColors: Record<string, string> = {
-  'Core': '#34D399',      // Emerald
-  'ERC': '#60A5FA',       // Blue
+// Dynamic theme-aware color scheme - optimized for both light and dark modes
+const categoryColorsLight: Record<string, string> = {
+  'Core': '#059669',       // Dark Emerald
+  'ERC': '#1D4ED8',        // Dark Blue
+  'Networking': '#7C3AED', // Dark Violet
+  'Interface': '#D97706',  // Dark Amber
+  'Meta': '#9333EA',       // Dark Purple
+  'Informational': '#64748B', // Slate
+  'RIP': '#EA580C',        // Dark Orange
+};
+
+const categoryColorsDark: Record<string, string> = {
+  'Core': '#34D399',       // Emerald
+  'ERC': '#60A5FA',        // Blue
   'Networking': '#A78BFA', // Violet
   'Interface': '#FBBF24',  // Amber
   'Meta': '#C084FC',       // Purple
@@ -19,13 +29,22 @@ const categoryColors: Record<string, string> = {
   'RIP': '#FB923C',        // Orange
 };
 
-const statusColors: Record<string, string> = {
-  'Draft': '#22D3EE',      // Cyan - Active, early-stage
-  'Review': '#60A5FA',     // Blue - Evaluation
-  'Last Call': '#FBBF24',  // Amber - Urgency
-  'Final': '#34D399',      // Emerald - Stability
-  'Withdrawn': '#94A3B8',  // Slate - Inactive
-  'Stagnant': '#64748B',   // Slate dim - Dormant
+const statusColorsLight: Record<string, string> = {
+  'Draft': '#0891B2',      // Dark Cyan
+  'Review': '#1D4ED8',     // Dark Blue
+  'Last Call': '#D97706',  // Dark Amber
+  'Final': '#059669',      // Dark Emerald
+  'Withdrawn': '#64748B',  // Slate
+  'Stagnant': '#475569',   // Dark Slate
+};
+
+const statusColorsDark: Record<string, string> = {
+  'Draft': '#22D3EE',      // Cyan
+  'Review': '#60A5FA',     // Blue
+  'Last Call': '#FBBF24',  // Amber
+  'Final': '#34D399',      // Emerald
+  'Withdrawn': '#94A3B8',  // Slate
+  'Stagnant': '#64748B',   // Slate dim
 };
 
 type TimelinePoint = {
@@ -61,7 +80,42 @@ export default function GovernanceOverTime() {
   const [detailedData, setDetailedData] = useState<DetailedData[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const chartRef = useRef<ReactECharts>(null);
+
+  // Detect theme on mount and watch for changes
+  useEffect(() => {
+    const detectTheme = () => {
+      if (typeof window === 'undefined') return;
+      const isDark = document.documentElement.classList.contains('dark') ||
+                     window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setIsDarkMode(isDark);
+    };
+
+    detectTheme();
+
+    // Watch for theme changes
+    const observer = new MutationObserver(() => {
+      detectTheme();
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setIsDarkMode(e.matches);
+    };
+    
+    mediaQuery.addEventListener('change', handleChange);
+
+    return () => {
+      observer.disconnect();
+      mediaQuery.removeEventListener('change', handleChange);
+    };
+  }, []);
 
   // Get available years
   const availableYears = useMemo(() => {
@@ -152,7 +206,13 @@ export default function GovernanceOverTime() {
     return allKeys.filter(key => !hiddenKeys.has(key));
   }, [allKeys, hiddenKeys]);
 
-  const colors = viewMode === 'category' ? categoryColors : statusColors;
+  const colors = useMemo(() => {
+    if (viewMode === 'category') {
+      return isDarkMode ? categoryColorsDark : categoryColorsLight;
+    } else {
+      return isDarkMode ? statusColorsDark : statusColorsLight;
+    }
+  }, [viewMode, isDarkMode]);
 
   // Compute compact insight
   const insight = useMemo(() => {
@@ -250,6 +310,17 @@ export default function GovernanceOverTime() {
   const chartOption = useMemo(() => {
     if (chartData.length === 0) return null;
 
+    // Light mode vs dark mode styles
+    const isLight = !isDarkMode;
+    const bgColor = isLight ? '#F8FAFC' : 'transparent';
+    const tooltipBg = isLight ? 'rgba(226, 232, 240, 0.9)' : 'rgba(15, 23, 42, 0.85)';
+    const tooltipBorder = isLight ? 'rgba(71, 85, 105, 0.3)' : 'rgba(148, 163, 184, 0.2)';
+    const tooltipText = isLight ? '#1E293B' : '#E2E8F0';
+    const tooltipSecondary = isLight ? '#64748B' : '#CBD5E1';
+    const axisLabelColor = isLight ? '#475569' : '#94A3B8';
+    const gridLineColor = isLight ? 'rgba(100, 116, 139, 0.12)' : 'rgba(148, 163, 184, 0.08)';
+    const gridGlow = isLight ? 'rgba(100, 116, 139, 0.08)' : 'rgba(148, 163, 184, 0.15)';
+
     const barSeries = visibleKeys.map(key => {
       const baseColor = colors[key] || '#64748B';
       return {
@@ -259,30 +330,29 @@ export default function GovernanceOverTime() {
         data: chartData.map(d => d[key] || 0),
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: `${baseColor}99` }, // 60% opacity top - more transparent
-            { offset: 1, color: `${baseColor}4D` }  // 30% opacity bottom - more transparent
+            { offset: 0, color: `${baseColor}${isLight ? 'CC' : '99'}` }, // More opaque in light mode
+            { offset: 1, color: `${baseColor}${isLight ? '80' : '4D'}` }  // More opaque in light mode
           ]),
-          borderRadius: [0, 0, 0, 0], // No corner radius
-          // Glow only on signal (bars), not gridlines
-          shadowBlur: 12,
-          shadowOffsetY: -1, // Subtle vertical spacing illusion for layered stacks
-          shadowColor: `${baseColor}50`, // Soft glow
-          borderWidth: 0, // No borders
+          borderRadius: [0, 0, 0, 0],
+          shadowBlur: isLight ? 8 : 12,
+          shadowOffsetY: -1,
+          shadowColor: `${baseColor}${isLight ? '30' : '50'}`,
+          borderWidth: 0,
         },
         emphasis: {
           itemStyle: {
-            shadowBlur: 20,
-            shadowColor: `${baseColor}80`, // Brighter glow on hover
+            shadowBlur: isLight ? 12 : 20,
+            shadowColor: `${baseColor}${isLight ? '50' : '80'}`,
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: `${baseColor}CC` }, // 80% opacity on hover
-              { offset: 1, color: `${baseColor}80` }  // 50% opacity on hover
+              { offset: 0, color: `${baseColor}FF` },
+              { offset: 1, color: `${baseColor}99` }
             ])
           }
         }
       };
     });
 
-    // Add total overlay line (subtle dots)
+    // Add total overlay line
     const totalLineData = chartData.map(d => 
       Object.keys(d).filter(k => k !== 'year').reduce((sum, k) => sum + (d[k] || 0), 0)
     );
@@ -295,9 +365,9 @@ export default function GovernanceOverTime() {
       symbolSize: 4,
       lineStyle: { opacity: 0 },
       itemStyle: {
-        color: 'rgba(203, 213, 225, 0.6)',
+        color: isLight ? 'rgba(71, 85, 105, 0.5)' : 'rgba(203, 213, 225, 0.6)',
         shadowBlur: 6,
-        shadowColor: 'rgba(203, 213, 225, 0.4)'
+        shadowColor: isLight ? 'rgba(71, 85, 105, 0.3)' : 'rgba(203, 213, 225, 0.4)'
       },
       z: 10
     };
@@ -305,52 +375,50 @@ export default function GovernanceOverTime() {
     const series = [...barSeries, lineSeries] as any;
 
     return {
-      backgroundColor: 'transparent',
-      // Soft glass-like tooltip
+      backgroundColor: bgColor,
       tooltip: {
         trigger: 'axis' as const,
         axisPointer: {
           type: 'shadow' as const,
           shadowStyle: {
-            color: 'rgba(96, 165, 250, 0.1)' // Soft shadow
+            color: isLight ? 'rgba(100, 116, 139, 0.08)' : 'rgba(96, 165, 250, 0.1)'
           }
         },
-        backgroundColor: 'rgba(15, 23, 42, 0.85)', // Translucent dark
-        borderColor: 'rgba(148, 163, 184, 0.2)', // Soft border
+        backgroundColor: tooltipBg,
+        borderColor: tooltipBorder,
         borderWidth: 1,
         padding: [12, 16],
         textStyle: {
-          color: '#E2E8F0',
+          color: tooltipText,
           fontSize: 12
         },
         extraCssText: 'min-width: 220px;',
         formatter: (params: any) => {
-          // Filter out the "Total" line series from tooltip
           const barParams = params.filter((p: any) => p.seriesName !== 'Total');
           const total = barParams.reduce((sum: number, p: any) => sum + (p.value || 0), 0);
-          let result = `<div style="font-weight: 500; margin-bottom: 10px; color: #F1F5F9;">Year ${params[0].axisValue}</div>`;
+          let result = `<div style="font-weight: 500; margin-bottom: 10px; color: ${isLight ? '#1E293B' : '#F1F5F9'};">Year ${params[0].axisValue}</div>`;
           barParams.forEach((param: any) => {
             if (param.value > 0) {
               result += `<div style="margin: 6px 0; display: flex; align-items: center;">
                 <span style="display: inline-block; width: 8px; height: 8px; background: ${param.color}; border-radius: 2px; margin-right: 10px; box-shadow: 0 0 6px ${param.color}40;"></span>
-                <span style="color: #CBD5E1;">${param.seriesName}</span>
-                <span style="margin-left: auto; font-weight: 600; color: #F1F5F9;">${param.value}</span>
+                <span style="color: ${tooltipSecondary};">${param.seriesName}</span>
+                <span style="margin-left: auto; font-weight: 600; color: ${isLight ? '#0F172A' : '#F1F5F9'};">${param.value}</span>
               </div>`;
             }
           });
-          result += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(148, 163, 184, 0.15); display: flex; justify-content: space-between;">
-            <span style="color: #94A3B8;">Total</span>
-            <span style="font-weight: 600; color: #E5E7EB;">${total}</span>
+          result += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid ${isLight ? 'rgba(100, 116, 139, 0.15)' : 'rgba(148, 163, 184, 0.15)'}; display: flex; justify-content: space-between;">
+            <span style="color: ${tooltipSecondary};">Total</span>
+            <span style="font-weight: 600; color: ${isLight ? '#0F172A' : '#E5E7EB'};">${total}</span>
           </div>`;
           return result;
         }
       },
       legend: {
-        show: false, // Hide native legend - using custom legend instead
+        show: false,
         data: visibleKeys,
         top: 0,
         textStyle: {
-          color: 'rgba(203, 213, 225, 0.45)', // Reduced opacity if shown
+          color: isLight ? 'rgba(71, 85, 105, 0.6)' : 'rgba(203, 213, 225, 0.45)',
           fontSize: 10
         },
         itemGap: 20,
@@ -371,45 +439,45 @@ export default function GovernanceOverTime() {
         type: 'category' as const,
         data: chartData.map(d => d.year),
         axisLabel: {
-          color: '#94A3B8',
+          color: axisLabelColor,
           fontSize: 11,
-          rotate: 0, // Horizontal, not tilted
+          rotate: 0,
           interval: 'auto'
         },
         axisLine: {
           show: true,
           lineStyle: {
-            color: 'rgba(148, 163, 184, 0.15)', // Very soft line
+            color: isLight ? 'rgba(100, 116, 139, 0.15)' : 'rgba(148, 163, 184, 0.15)',
             width: 1
           }
         },
         axisTick: {
-          show: false // No ticks
+          show: false
         },
         splitLine: {
-          show: false // No split lines on x-axis
+          show: false
         }
       },
       yAxis: {
         type: 'value' as const,
         axisLabel: {
-          color: '#94A3B8',
+          color: axisLabelColor,
           fontSize: 11
         },
         axisLine: {
-          show: false // No axis line
+          show: false
         },
         axisTick: {
-          show: false // No ticks
+          show: false
         },
         splitLine: {
           show: true,
           lineStyle: {
-            color: 'rgba(148, 163, 184, 0.08)', // Very subtle gridlines - no glow
+            color: gridLineColor,
             type: 'dashed',
             width: 1,
-            shadowBlur: 6, // Baseline glow - very subtle
-            shadowColor: 'rgba(148, 163, 184, 0.15)'
+            shadowBlur: 6,
+            shadowColor: gridGlow
           }
         }
       },
@@ -420,37 +488,37 @@ export default function GovernanceOverTime() {
           xAxisIndex: [0],
           start: 0,
           end: 100,
-          bottom: 0, // Closer to chart
-          height: 25, // Smaller height
+          bottom: 0,
+          height: 25,
           handleSize: 8,
           handleStyle: {
-            color: 'rgba(96, 165, 250, 0.6)', // Translucent handle
-            borderColor: 'rgba(96, 165, 250, 0.3)',
+            color: isLight ? 'rgba(45, 85, 184, 0.6)' : 'rgba(96, 165, 250, 0.6)',
+            borderColor: isLight ? 'rgba(45, 85, 184, 0.3)' : 'rgba(96, 165, 250, 0.3)',
             borderWidth: 1
           },
           dataBackground: {
             areaStyle: {
-              color: 'rgba(96, 165, 250, 0.05)' // Very subtle
+              color: isLight ? 'rgba(45, 85, 184, 0.05)' : 'rgba(96, 165, 250, 0.05)'
             },
             lineStyle: {
-              color: 'rgba(96, 165, 250, 0.2)', // Soft line
+              color: isLight ? 'rgba(45, 85, 184, 0.2)' : 'rgba(96, 165, 250, 0.2)',
               width: 1
             }
           },
           selectedDataBackground: {
             areaStyle: {
-              color: 'rgba(96, 165, 250, 0.1)' // Slightly more visible
+              color: isLight ? 'rgba(45, 85, 184, 0.1)' : 'rgba(96, 165, 250, 0.1)'
             },
             lineStyle: {
-              color: 'rgba(96, 165, 250, 0.4)',
+              color: isLight ? 'rgba(45, 85, 184, 0.4)' : 'rgba(96, 165, 250, 0.4)',
               width: 1
             }
           },
           textStyle: {
-            color: '#94A3B8',
+            color: axisLabelColor,
             fontSize: 10
           },
-          borderColor: 'rgba(148, 163, 184, 0.1)' // Soft border
+          borderColor: isLight ? 'rgba(100, 116, 139, 0.1)' : 'rgba(148, 163, 184, 0.1)'
         },
         {
           type: 'inside' as const,
@@ -461,7 +529,7 @@ export default function GovernanceOverTime() {
       ],
       series
     };
-  }, [chartData, visibleKeys, colors, hiddenKeys, allKeys]);
+  }, [chartData, visibleKeys, colors, hiddenKeys, allKeys, isDarkMode]);
 
   // Handle legend select change
   const onLegendSelectChanged = (params: any) => {
@@ -622,8 +690,8 @@ export default function GovernanceOverTime() {
                           onClick={() => toggleKey(key)}
                           className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md transition-all ${
                             isHidden
-                              ? 'bg-slate-200/70 dark:bg-slate-800/20 text-slate-500/80 dark:text-slate-500/60'
-                              : 'bg-slate-100 dark:bg-slate-800/30 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/40'
+                              ? isDarkMode ? 'bg-slate-200/70 dark:bg-slate-800/20 text-slate-500/80 dark:text-slate-500/60' : 'bg-slate-300/60 text-slate-600/70'
+                              : isDarkMode ? 'bg-slate-100 dark:bg-slate-800/30 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/40' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                           }`}
                         >
                           <div className="flex items-center gap-2">
@@ -631,8 +699,8 @@ export default function GovernanceOverTime() {
                               className="w-2 h-2 rounded-sm"
                               style={{
                                 backgroundColor: color,
-                                opacity: isHidden ? 0.2 : 0.8,
-                                boxShadow: isHidden ? 'none' : `0 0 4px ${color}50`
+                                opacity: isHidden ? 0.2 : isDarkMode ? 0.8 : 1,
+                                boxShadow: isHidden ? 'none' : isDarkMode ? `0 0 4px ${color}50` : `0 0 6px ${color}40`
                               }}
                             />
                             <span className="text-xs font-medium">{key}</span>
@@ -694,7 +762,7 @@ export default function GovernanceOverTime() {
                     {detailedData
                       .filter(item => item.eipNumber && item.eipNumber > 0) // Filter out invalid entries
                       .map((item) => {
-                        const statusColor = statusColors[item.status] || '#64748B';
+                        const statusColor = isDarkMode ? statusColorsDark[item.status] : statusColorsLight[item.status] || '#64748B';
                         const meta = `${item.category || item.type || 'Unknown'}${item.author && item.author !== 'Unknown' ? ` · ${item.author}` : ''}`;
                         return (
                           <tr key={item.eipNumber} className="hover:bg-slate-200/60 dark:hover:bg-slate-800/20 transition-colors relative group">
@@ -704,12 +772,12 @@ export default function GovernanceOverTime() {
                             <td className="px-3 py-2 text-xs text-slate-700 dark:text-slate-300/90">{item.title || 'Untitled'}</td>
                           <td className="px-3 py-2">
                             <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium backdrop-blur-sm border ${
-                              item.status === 'Final' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20' :
-                              item.status === 'Draft' ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/20' :
-                              item.status === 'Review' ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20' :
-                              item.status === 'Last Call' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20' :
-                              item.status === 'Withdrawn' ? 'bg-slate-500/15 text-slate-400 border-slate-500/20' :
-                              'bg-slate-500/15 text-slate-500 border-slate-500/20'
+                              item.status === 'Final' ? isDarkMode ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20' : 'bg-emerald-500/20 text-emerald-700 border-emerald-600/40' :
+                              item.status === 'Draft' ? isDarkMode ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/20' : 'bg-cyan-500/20 text-cyan-700 border-cyan-600/40' :
+                              item.status === 'Review' ? isDarkMode ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20' : 'bg-blue-500/20 text-blue-700 border-blue-600/40' :
+                              item.status === 'Last Call' ? isDarkMode ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20' : 'bg-amber-500/20 text-amber-700 border-amber-600/40' :
+                              item.status === 'Withdrawn' ? isDarkMode ? 'bg-slate-500/15 text-slate-400 border-slate-500/20' : 'bg-slate-500/20 text-slate-600 border-slate-600/40' :
+                              isDarkMode ? 'bg-slate-500/15 text-slate-500 border-slate-500/20' : 'bg-slate-500/20 text-slate-600 border-slate-600/40'
                             }`}>
                               {item.status}
                             </span>

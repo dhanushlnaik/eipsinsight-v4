@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Copy, Check, Activity, Sparkles, TrendingUp, BarChart3 } from 'lucide-react';
 import { useState } from 'react';
 import { motion } from 'motion/react';
+import type { LucideIcon } from 'lucide-react';
 
 export function CopyLinkButton({
   sectionId,
@@ -52,6 +53,7 @@ interface PageHeaderProps {
   eyebrow?: string;
   indicator?: {
     icon?: 'activity' | 'sparkles' | 'trending' | 'chart';
+    customIcon?: LucideIcon;
     label?: string;
     pulse?: boolean;
   };
@@ -81,7 +83,7 @@ export function PageHeader({
   titleAs = 'h1',
 }: PageHeaderProps) {
   const [copied, setCopied] = useState(false);
-  const IconComponent = indicator?.icon ? iconMap[indicator.icon] : null;
+  const IconComponent = indicator?.customIcon || (indicator?.icon ? iconMap[indicator.icon] : null);
 
   const handleCopyLink = async () => {
     if (!sectionId) return;
