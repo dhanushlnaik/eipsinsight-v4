@@ -111,6 +111,19 @@ interface GovernanceWaitState {
   oldestWaitDays: number | null;
 }
 
+interface OpenIssueRow {
+  issueNumber: number;
+  repo: string;
+  title: string | null;
+  author: string | null;
+  createdAt: string;
+  state: string;
+  updatedAt: string | null;
+  linkedEIPs: string | null;
+  labels: string[];
+  numComments: number;
+}
+
 type TimeRange = "7d" | "30d" | "90d" | "1y" | "this_month" | "all" | "custom";
 type CrossTabMode = "process_x_state" | "state_x_process";
 type OpenPRDistributionMode = "process" | "participants";
@@ -220,6 +233,15 @@ export default function PRsAnalyticsPage() {
   const [timeToOutcome, setTimeToOutcome] = useState<TimeToOutcomeMetric[]>([]);
   const [staleness, setStaleness] = useState<StalenessBucket[]>([]);
   const [openPRs, setOpenPRs] = useState<OpenPRRow[]>([]);
+  const [mergedPRs, setMergedPRs] = useState<OpenPRRow[]>([]);
+  const [closedPRs, setClosedPRs] = useState<OpenPRRow[]>([]);
+  const [openIssues, setOpenIssues] = useState<OpenIssueRow[]>([]);
+  const [backlogTab, setBacklogTab] = useState<"prs" | "issues">("prs");
+  const [prCurrentPage, setPrCurrentPage] = useState(1);
+  const [issuesCurrentPage, setIssuesCurrentPage] = useState(1);
+  const [prSearchFilter, setPrSearchFilter] = useState<string>("");
+  const [issuesSearchFilter, setIssuesSearchFilter] = useState<string>("");
+  const [prStateFilter, setPrStateFilter] = useState<"all" | "open" | "created" | "merged" | "closed">("all");
   const [processCategories, setProcessCategories] = useState<ProcessCategory[]>([]);
   const [govWaitStates, setGovWaitStates] = useState<GovernanceWaitState[]>([]);
   const [crossTabRaw, setCrossTabRaw] = useState<Array<{ processType: string; govState: string; count: number }>>([]);
@@ -234,6 +256,78 @@ export default function PRsAnalyticsPage() {
   const [openPRDistributionMode, setOpenPRDistributionMode] = useState<OpenPRDistributionMode>("process");
   const awaitedHelpText =
     "Awaited means the PR is in Draft state.";
+
+  // Filtering and search logic
+  const filteredPRs = useMemo(() => {
+    let result: OpenPRRow[] = [];
+
+    // Start with correct dataset based on state filter
+    if (prStateFilter === "open") {
+      result = openPRs;
+    } else if (prStateFilter === "created") {
+      result = openPRs;
+      // Filter by context month
+      const contextMonthStr = selectedMonth || heroMonth?.month;
+      if (contextMonthStr) {
+        result = result.filter((pr) => pr.createdAt.includes(contextMonthStr));
+      }
+    } else if (prStateFilter === "merged") {
+      result = mergedPRs;
+    } else if (prStateFilter === "closed") {
+      result = closedPRs;
+    } else {
+      result = openPRs;
+    }
+
+    // Apply search filter
+    if (prSearchFilter.trim()) {
+      const query = prSearchFilter.toLowerCase();
+      result = result.filter(
+        (pr) =>
+          pr.prNumber.toString().includes(query) ||
+          (pr.title && pr.title.toLowerCase().includes(query)) ||
+          pr.repo.toLowerCase().includes(query) ||
+          (pr.author && pr.author.toLowerCase().includes(query))
+      );
+    }
+
+    return result;
+  }, [openPRs, mergedPRs, closedPRs, prStateFilter, prSearchFilter, selectedMonth, heroMonth?.month]);
+
+  const filteredIssues = useMemo(() => {
+    let result = openIssues;
+
+    // Apply search filter
+    if (issuesSearchFilter.trim()) {
+      const query = issuesSearchFilter.toLowerCase();
+      result = result.filter(
+        (issue) =>
+          issue.issueNumber.toString().includes(query) ||
+          (issue.title && issue.title.toLowerCase().includes(query)) ||
+          issue.repo.toLowerCase().includes(query) ||
+          (issue.author && issue.author.toLowerCase().includes(query))
+      );
+    }
+
+    return result;
+  }, [openIssues, issuesSearchFilter]);
+
+  // Pagination
+  const PAGE_SIZE = 20;
+  const prTotalPages = Math.ceil(filteredPRs.length / PAGE_SIZE);
+  const prPageIssuesTotal = Math.ceil(openIssues.length / PAGE_SIZE);
+  
+  const paginatedPRs = filteredPRs.slice(
+    (prCurrentPage - 1) * PAGE_SIZE,
+    prCurrentPage * PAGE_SIZE
+  );
+  
+  const paginatedIssues = filteredIssues.slice(
+    (issuesCurrentPage - 1) * PAGE_SIZE,
+    issuesCurrentPage * PAGE_SIZE
+  );
+
+  const issuesTotalPages = Math.ceil(filteredIssues.length / PAGE_SIZE);
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
 
@@ -294,8 +388,16 @@ export default function PRsAnalyticsPage() {
         setGovWaitStatesByMonth(participantTimeline);
         setCrossTabRaw(crossTab);
 
-        const openExport = await client.analytics.getPROpenExport({ repo: repoParam, month: contextMonth });
+        const [openExport, mergedExport, closedExport, issueExport] = await Promise.all([
+          client.analytics.getPROpenExport({ repo: repoParam, month: contextMonth }),
+          client.analytics.getPRMergedExport({ repo: repoParam, month: contextMonth }),
+          client.analytics.getPRClosedExport({ repo: repoParam, month: contextMonth }),
+          client.analytics.getIssueOpenExport({ repo: repoParam, month: contextMonth }),
+        ]);
         setOpenPRs(openExport);
+        setMergedPRs(mergedExport);
+        setClosedPRs(closedExport);
+        setOpenIssues(issueExport);
         setDataUpdatedAt(new Date());
       } catch (err) {
         console.error("Failed to fetch PR analytics:", err);
@@ -324,6 +426,12 @@ export default function PRsAnalyticsPage() {
     setTrendFromMonth((prev) => prev ?? first);
     setTrendToMonth((prev) => prev ?? last);
   }, [monthlySeries]);
+
+  // Reset pagination when data is fetched
+  useEffect(() => {
+    setPrCurrentPage(1);
+    setIssuesCurrentPage(1);
+  }, [openPRs, mergedPRs, closedPRs, openIssues]);
 
   const rangeMonths = useMemo(() => {
     if (!monthlySeries.length) return [];
@@ -630,6 +738,29 @@ export default function PRsAnalyticsPage() {
     );
   }, [downloadObjectRowsCsv, monthContext, openPRs, repoFilter, timeRange]);
 
+  const downloadOpenIssuesDetailedCSV = useCallback(() => {
+    const generatedAt = new Date().toISOString();
+    const rows: Array<Record<string, string | number | null>> = openIssues.map((issue) => ({
+      issue_number: issue.issueNumber,
+      repo: issue.repo,
+      title: issue.title,
+      author: issue.author,
+      state: issue.state,
+      labels: issue.labels.join("; "),
+      linked_eips: issue.linkedEIPs,
+      created_at: issue.createdAt,
+      updated_at: issue.updatedAt,
+      num_comments: issue.numComments,
+      month_context: monthContext,
+      repo_filter: repoFilter,
+      generated_at: generatedAt,
+    }));
+    downloadObjectRowsCsv(
+      rows,
+      `eip-open-issues-detailed-${repoFilter}-${monthContext}-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+  }, [downloadObjectRowsCsv, monthContext, openIssues, repoFilter, timeRange]);
+
   const downloadCategoryBreakdownDetailedCSV = useCallback(() => {
     const generatedAt = new Date().toISOString();
     const summaryProcessRows: Array<Record<string, string | number | null>> = processCategories.map((row) => ({
@@ -734,21 +865,36 @@ export default function PRsAnalyticsPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "Open PRs", value: totalOpen, sub: `Median age: ${openSummary?.medianAge != null ? `${openSummary.medianAge}d` : "–"}`, icon: <GitPullRequest className="h-5 w-5" /> },
-          { label: `Created (${heroMonth?.month ?? ""})`, value: heroMonth?.newPRs ?? 0, sub: `Net: ${(heroMonth?.netDelta ?? 0) >= 0 ? "+" : ""}${heroMonth?.netDelta ?? 0}`, icon: <Activity className="h-5 w-5" /> },
-          { label: "Merged", value: heroMonth?.mergedPRs ?? 0, sub: "Current month", icon: <GitPullRequest className="h-5 w-5" /> },
-          { label: "Closed (unmerged)", value: heroMonth?.closedUnmerged ?? 0, sub: "Current month", icon: <AlertCircle className="h-5 w-5" /> },
+          { label: "Open PRs", value: totalOpen, sub: `Median age: ${openSummary?.medianAge != null ? `${openSummary.medianAge}d` : "–"}`, icon: <GitPullRequest className="h-5 w-5" />, filter: "open" as const },
+          { label: `Created (${heroMonth?.month ?? ""})`, value: heroMonth?.newPRs ?? 0, sub: `Net: ${(heroMonth?.netDelta ?? 0) >= 0 ? "+" : ""}${heroMonth?.netDelta ?? 0}`, icon: <Activity className="h-5 w-5" />, filter: "created" as const },
+          { label: "Merged", value: heroMonth?.mergedPRs ?? 0, sub: "Current month", icon: <GitPullRequest className="h-5 w-5" />, filter: "merged" as const },
+          { label: "Closed (unmerged)", value: heroMonth?.closedUnmerged ?? 0, sub: "Current month", icon: <AlertCircle className="h-5 w-5" />, filter: "closed" as const },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-xl border border-border bg-card/60 p-4">
+          <button
+            key={kpi.label}
+            onClick={() => {
+              setPrStateFilter(kpi.filter);
+              setPrCurrentPage(1);
+              setPrSearchFilter("");
+              // Scroll to table
+              setTimeout(() => {
+                document.getElementById("open-prs-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }, 100);
+            }}
+            className={cn(
+              "rounded-xl border bg-card/60 p-4 text-left transition-all hover:border-primary/50 hover:bg-card/80",
+              prStateFilter === kpi.filter ? "border-primary bg-primary/5" : "border-border"
+            )}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">{kpi.label}</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{kpi.value.toLocaleString()}</p>
                 <p className="mt-1 text-[10px] text-muted-foreground">{kpi.sub}</p>
               </div>
-              <div className="rounded-lg bg-primary/10 p-2.5 text-primary">{kpi.icon}</div>
+              <div className={cn("rounded-lg p-2.5", prStateFilter === kpi.filter ? "bg-primary/20 text-primary" : "bg-primary/10 text-primary")}>{kpi.icon}</div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -854,66 +1000,6 @@ export default function PRsAnalyticsPage() {
         <GraphFooter nextUpdateAt={nextUpdateAt} />
       </Section>
 
-      <Section id="pr-label-distribution" title="Label distribution" icon={<BarChart3 className="h-4 w-4" />}>
-        {labelStats.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No label data available.</p>
-        ) : (
-          <div className="h-[320px] w-full">
-            <ReactECharts option={labelDistributionOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
-          </div>
-        )}
-        <GraphFooter nextUpdateAt={nextUpdateAt} />
-      </Section>
-
-      <Section id="pr-eip-open" title="EIP Open PRs" icon={<Layers className="h-4 w-4" />}>
-        <p className="mb-3 text-xs text-muted-foreground">
-          Open PRs by Process type (Typo, NEW EIP, PR DRAFT) or by Participants status (Waiting on Editor, Awaited). Sum of bars = total open PRs for that month.
-        </p>
-        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span>Need help with</span>
-          <span className="font-medium text-foreground/90">Awaited</span>
-          <TooltipProvider delayDuration={120}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="What Awaited means"
-                  className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
-                >
-                  <CircleHelp className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                {awaitedHelpText}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-        <div className="mb-3 inline-flex rounded-md border border-border bg-muted/60 p-0.5 text-xs">
-          <button
-            onClick={() => setOpenPRDistributionMode("process")}
-            className={cn("rounded px-2 py-1", openPRDistributionMode === "process" ? "bg-card text-foreground" : "text-muted-foreground")}
-          >
-            By Process
-          </button>
-          <button
-            onClick={() => setOpenPRDistributionMode("participants")}
-            className={cn("rounded px-2 py-1", openPRDistributionMode === "participants" ? "bg-card text-foreground" : "text-muted-foreground")}
-          >
-            By Participants
-          </button>
-        </div>
-          {!backlogOption ? (
-            <p className="text-sm text-muted-foreground">No backlog state data available.</p>
-          ) : (
-            <div className="h-[320px] w-full">
-              <ReactECharts option={backlogOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
-            </div>
-          )}
-        <p className="mt-2 text-[10px] text-muted-foreground">Each column is one month; stacked segments sum to the total open PR backlog in that month.</p>
-        <GraphFooter nextUpdateAt={nextUpdateAt} />
-      </Section>
-
       <Section
         id="pr-category-breakdown"
         title="Category breakdown"
@@ -976,6 +1062,66 @@ export default function PRsAnalyticsPage() {
             </div>
           )}
         <p className="mt-2 text-[10px] text-muted-foreground">Estimated breakdown based on current totals (backend cross-tab endpoint pending).</p>
+        <GraphFooter nextUpdateAt={nextUpdateAt} />
+      </Section>
+
+      <Section id="pr-eip-open" title="EIP Open PRs" icon={<Layers className="h-4 w-4" />}>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Open PRs by Process type (Typo, NEW EIP, PR DRAFT) or by Participants status (Waiting on Editor, Awaited). Sum of bars = total open PRs for that month.
+        </p>
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span>Need help with</span>
+          <span className="font-medium text-foreground/90">Awaited</span>
+          <TooltipProvider delayDuration={120}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="What Awaited means"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  <CircleHelp className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                {awaitedHelpText}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <div className="mb-3 inline-flex rounded-md border border-border bg-muted/60 p-0.5 text-xs">
+          <button
+            onClick={() => setOpenPRDistributionMode("process")}
+            className={cn("rounded px-2 py-1", openPRDistributionMode === "process" ? "bg-card text-foreground" : "text-muted-foreground")}
+          >
+            By Process
+          </button>
+          <button
+            onClick={() => setOpenPRDistributionMode("participants")}
+            className={cn("rounded px-2 py-1", openPRDistributionMode === "participants" ? "bg-card text-foreground" : "text-muted-foreground")}
+          >
+            By Participants
+          </button>
+        </div>
+          {!backlogOption ? (
+            <p className="text-sm text-muted-foreground">No backlog state data available.</p>
+          ) : (
+            <div className="h-[320px] w-full">
+              <ReactECharts option={backlogOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+            </div>
+          )}
+        <p className="mt-2 text-[10px] text-muted-foreground">Each column is one month; stacked segments sum to the total open PR backlog in that month.</p>
+        <GraphFooter nextUpdateAt={nextUpdateAt} />
+      </Section>
+
+      <Section id="pr-label-distribution" title="Label distribution" icon={<BarChart3 className="h-4 w-4" />}>
+        {labelStats.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No label data available.</p>
+        ) : (
+          <div className="h-[320px] w-full">
+            <ReactECharts option={labelDistributionOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} />
+          </div>
+        )}
         <GraphFooter nextUpdateAt={nextUpdateAt} />
       </Section>
 
@@ -1043,11 +1189,11 @@ export default function PRsAnalyticsPage() {
 
       <Section
         id="open-prs-section"
-        title="Open PRs"
+        title={backlogTab === "prs" ? "Open PRs" : "Open Issues"}
         icon={<GitPullRequest className="h-4 w-4" />}
         action={
           <button
-            onClick={downloadOpenPRsDetailedCSV}
+            onClick={backlogTab === "prs" ? downloadOpenPRsDetailedCSV : downloadOpenIssuesDetailedCSV}
             className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
           >
             <Download className="h-3.5 w-3.5" />
@@ -1055,66 +1201,292 @@ export default function PRsAnalyticsPage() {
           </button>
         }
       >
-        <p className="mb-3 text-xs text-muted-foreground">Snapshot of currently open pull requests in selected repository scope.</p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">PR</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Title</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Repo</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Author</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Governance</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {openPRs.map((pr) => {
-                const [org, repoName] = pr.repo.split("/");
-                const url = `https://github.com/${org}/${repoName}/pull/${pr.prNumber}`;
-                const repoShort = repoName.toLowerCase();
-                return (
-                  <tr
-                    key={`${pr.repo}-${pr.prNumber}`}
-                    className={cn(
-                      "border-b border-border/50 transition-colors hover:bg-muted/40",
-                      Number.isFinite(highlightedPr) && pr.prNumber === highlightedPr && "bg-primary/10",
-                    )}
-                  >
-                    <td className="py-2 pr-4">
-                      <div className="inline-flex items-center gap-2">
-                        <Link href={`/pr/${repoShort}/${pr.prNumber}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
-                          #{pr.prNumber}
-                        </Link>
-                        <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground" title="Open on GitHub">
-                          <ArrowUpRight className="h-3 w-3" />
-                        </a>
-                      </div>
-                    </td>
-                    <td className="max-w-xs truncate py-2 pr-4 text-foreground/90">{pr.title || <span className="text-muted-foreground">No title</span>}</td>
-                    <td className="py-2 pr-4 text-muted-foreground">{repoName}</td>
-                    <td className="py-2 pr-4 text-foreground/80">{pr.author || <span className="text-muted-foreground">Unknown</span>}</td>
-                    <td className="py-2 pr-4">
-                      <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-foreground/80">
-                        {pr.governanceState || "NO_STATE"}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4 tabular-nums text-muted-foreground">{pr.createdAt}</td>
-                  </tr>
-                );
-              })}
-              {openPRs.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
-                    No open PRs found for current filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        {/* Tab Switcher */}
+        <div className="mb-4 flex gap-2 border-b border-border">
+          <button
+            onClick={() => {
+              setBacklogTab("prs");
+              setPrStateFilter("all");
+              setPrSearchFilter("");
+              setPrCurrentPage(1);
+            }}
+            className={cn(
+              "px-3 py-2 text-xs font-medium transition-colors border-b-2",
+              backlogTab === "prs"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Pull Requests ({openPRs.length})
+          </button>
+          <button
+            onClick={() => setBacklogTab("issues")}
+            className={cn(
+              "px-3 py-2 text-xs font-medium transition-colors border-b-2",
+              backlogTab === "issues"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Issues ({openIssues.length})
+          </button>
         </div>
 
-        {openSummary?.oldestPR && (
+        <p className="mb-3 text-xs text-muted-foreground">
+          {backlogTab === "prs" 
+            ? "Snapshot of currently open pull requests in selected repository scope."
+            : "Snapshot of currently open issues in selected repository scope."}
+        </p>
+
+        {/* Open PRs Table */}
+        {backlogTab === "prs" && (
+          <div>
+            {/* State Filter Tabs */}
+            <div className="mb-4 border-b border-border">
+              <div className="flex gap-1">
+                {[
+                  { label: "Open", filter: "open" as const, count: totalOpen },
+                  { label: `Created (${heroMonth?.month ?? ""})`, filter: "created" as const, count: heroMonth?.newPRs ?? 0 },
+                  { label: "Merged", filter: "merged" as const, count: heroMonth?.mergedPRs ?? 0 },
+                  { label: "Closed", filter: "closed" as const, count: heroMonth?.closedUnmerged ?? 0 },
+                ].map((tab) => (
+                  <button
+                    key={tab.filter}
+                    onClick={() => {
+                      setPrStateFilter(tab.filter);
+                      setPrCurrentPage(1);
+                      setPrSearchFilter("");
+                    }}
+                    className={cn(
+                      "px-3 py-2 text-xs font-medium transition-colors border-b-2 whitespace-nowrap",
+                      prStateFilter === tab.filter
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {tab.label} ({tab.count})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search and Filter */}
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search by PR #, title, repo, or author..."
+                value={prSearchFilter}
+                onChange={(e) => {
+                  setPrSearchFilter(e.target.value);
+                  setPrCurrentPage(1);
+                }}
+                className="h-8 flex-1 rounded-md border border-border bg-muted/40 px-3 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              />
+              {(prStateFilter !== "all" || prSearchFilter) && (
+                <button
+                  onClick={() => {
+                    setPrStateFilter("all");
+                    setPrSearchFilter("");
+                    setPrCurrentPage(1);
+                  }}
+                  className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted/60"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">PR</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Title</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Repo</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Author</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Governance</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedPRs.map((pr) => {
+                    const [org, repoName] = pr.repo.split("/");
+                    const url = `https://github.com/${org}/${repoName}/pull/${pr.prNumber}`;
+                    const repoShort = repoName.toLowerCase();
+                    return (
+                      <tr
+                        key={`${pr.repo}-${pr.prNumber}`}
+                        className={cn(
+                          "border-b border-border/50 transition-colors hover:bg-muted/40",
+                          Number.isFinite(highlightedPr) && pr.prNumber === highlightedPr && "bg-primary/10",
+                        )}
+                      >
+                        <td className="py-2 pr-4">
+                          <div className="inline-flex items-center gap-2">
+                            <Link href={`/pr/${repoShort}/${pr.prNumber}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                              #{pr.prNumber}
+                            </Link>
+                            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground" title="Open on GitHub">
+                              <ArrowUpRight className="h-3 w-3" />
+                            </a>
+                          </div>
+                        </td>
+                        <td className="max-w-xs truncate py-2 pr-4 text-foreground/90">{pr.title || <span className="text-muted-foreground">No title</span>}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{repoName}</td>
+                        <td className="py-2 pr-4 text-foreground/80">{pr.author || <span className="text-muted-foreground">Unknown</span>}</td>
+                        <td className="py-2 pr-4">
+                          <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-foreground/80">
+                            {pr.governanceState || "NO_STATE"}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4 tabular-nums text-muted-foreground">{pr.createdAt}</td>
+                      </tr>
+                    );
+                  })}
+                  {filteredPRs.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                        No open PRs found for current filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination Controls */}
+            {filteredPRs.length > PAGE_SIZE && (
+              <div className="mt-4 flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  Showing {filteredPRs.length === 0 ? 0 : (prCurrentPage - 1) * PAGE_SIZE + 1}–{Math.min(prCurrentPage * PAGE_SIZE, filteredPRs.length)} of {filteredPRs.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPrCurrentPage(Math.max(1, prCurrentPage - 1))}
+                    disabled={prCurrentPage === 1}
+                    className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted/60"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    {prCurrentPage} / {prTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setPrCurrentPage(Math.min(prTotalPages, prCurrentPage + 1))}
+                    disabled={prCurrentPage === prTotalPages}
+                    className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted/60"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Open Issues Table */}
+        {backlogTab === "issues" && (
+          <div>
+            {/* Search */}
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search by issue #, title, repo, or author..."
+                value={issuesSearchFilter}
+                onChange={(e) => {
+                  setIssuesSearchFilter(e.target.value);
+                  setIssuesCurrentPage(1);
+                }}
+                className="h-8 flex-1 rounded-md border border-border bg-muted/40 px-3 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              />
+              {issuesSearchFilter && (
+                <button
+                  onClick={() => {
+                    setIssuesSearchFilter("");
+                    setIssuesCurrentPage(1);
+                  }}
+                  className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted/60"
+                >
+                  Clear search
+                </button>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Issue</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Title</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Repo</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Author</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Comments</th>
+                    <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedIssues.map((issue) => {
+                    const [org, repoName] = issue.repo.split("/");
+                    const url = `https://github.com/${org}/${repoName}/issues/${issue.issueNumber}`;
+                    const repoShort = repoName.toLowerCase();
+                    return (
+                      <tr key={`${issue.repo}-${issue.issueNumber}`} className="border-b border-border/50 transition-colors hover:bg-muted/40">
+                        <td className="py-2 pr-4">
+                          <div className="inline-flex items-center gap-2">
+                            <Link href={`/issue/${repoShort}/${issue.issueNumber}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                              #{issue.issueNumber}
+                            </Link>
+                            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground" title="Open on GitHub">
+                              <ArrowUpRight className="h-3 w-3" />
+                            </a>
+                          </div>
+                        </td>
+                        <td className="max-w-xs truncate py-2 pr-4 text-foreground/90">{issue.title || <span className="text-muted-foreground">No title</span>}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{repoName}</td>
+                        <td className="py-2 pr-4 text-foreground/80">{issue.author || <span className="text-muted-foreground">Unknown</span>}</td>
+                        <td className="py-2 pr-4 tabular-nums text-muted-foreground">{issue.numComments}</td>
+                        <td className="py-2 pr-4 tabular-nums text-muted-foreground">{issue.createdAt}</td>
+                      </tr>
+                    );
+                  })}
+                  {filteredIssues.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                        No open issues found for current filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {/* Pagination Controls */}
+            {filteredIssues.length > PAGE_SIZE && (
+              <div className="mt-4 flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  Showing {filteredIssues.length === 0 ? 0 : (issuesCurrentPage - 1) * PAGE_SIZE + 1}–{Math.min(issuesCurrentPage * PAGE_SIZE, filteredIssues.length)} of {filteredIssues.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIssuesCurrentPage(Math.max(1, issuesCurrentPage - 1))}
+                    disabled={issuesCurrentPage === 1}
+                    className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted/60"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    {issuesCurrentPage} / {issuesTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setIssuesCurrentPage(Math.min(issuesTotalPages, issuesCurrentPage + 1))}
+                    disabled={issuesCurrentPage === issuesTotalPages}
+                    className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground disabled:opacity-50 disabled:cursor-not-allowed hover:bg-muted/60"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {backlogTab === "prs" && openSummary?.oldestPR && (
           <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-100">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>

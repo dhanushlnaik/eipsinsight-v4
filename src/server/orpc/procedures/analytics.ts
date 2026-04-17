@@ -9,11 +9,164 @@ import {
   OFFICIAL_EDITORS_BY_CATEGORY,
 } from '@/data/eip-contributor-roles'
 import * as z from 'zod'
-import { unstable_cache } from 'next/cache'
+import { revalidateTag, unstable_cache } from 'next/cache'
 
 const repoFilterSchema = z.object({
   repo: z.enum(['eips', 'ercs', 'rips']).optional(),
 });
+
+const GITHUB_REPO_BY_FILTER: Record<'eips' | 'ercs' | 'rips', string> = {
+  eips: 'ethereum/EIPs',
+  ercs: 'ethereum/ERCs',
+  rips: 'ethereum/RIPs',
+};
+
+const OPEN_PR_RECONCILE_TTL_MS = 6 * 60 * 60 * 1000;
+const OPEN_PR_RECONCILE_LOCK_MS = 2 * 60 * 1000;
+const PR_ANALYTICS_REVALIDATE_TAGS = [
+  'analytics-prs-monthly',
+  'analytics-prs-open-state',
+  'analytics-prs-month-hero',
+  'analytics-prs-governance',
+] as const;
+
+async function fetchGitHubOpenPRNumbers(repoFilter: 'eips' | 'ercs' | 'rips'): Promise<Set<number>> {
+  const token = process.env.GITHUB_TOKEN?.trim() ?? '';
+  const headers: HeadersInit = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'EIPsInsight-Reconciler',
+    ...(token ? { Authorization: `token ${token}` } : {}),
+  };
+  const repo = GITHUB_REPO_BY_FILTER[repoFilter];
+  const prNumbers = new Set<number>();
+
+  for (let page = 1; page <= 20; page++) {
+    const url = `https://api.github.com/repos/${repo}/pulls?state=open&per_page=100&page=${page}`;
+    const res = await fetch(url, { headers, cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`GitHub pulls fetch failed for ${repo}: ${res.status}`);
+    }
+
+    const rows = (await res.json()) as Array<{ number: number }>;
+    if (!Array.isArray(rows) || rows.length === 0) break;
+
+    for (const row of rows) {
+      if (typeof row?.number === 'number') prNumbers.add(row.number);
+    }
+
+    if (rows.length < 100) break;
+  }
+
+  return prNumbers;
+}
+
+async function reconcileOpenPRStateForRepo(repoFilter: 'eips' | 'ercs' | 'rips'): Promise<number> {
+  const repoName = GITHUB_REPO_BY_FILTER[repoFilter];
+  const repository = await prisma.repositories.findUnique({
+    where: { name: repoName },
+    select: { id: true },
+  });
+  if (!repository) return 0;
+
+  const githubOpen = await fetchGitHubOpenPRNumbers(repoFilter);
+  const dbOpenRows = await prisma.$queryRawUnsafe<Array<{ pr_number: number }>>(
+    `
+      SELECT pr.pr_number
+      FROM pull_requests pr
+      WHERE pr.repository_id = $1
+        AND pr.created_at <= NOW()
+        AND pr.merged_at IS NULL
+        AND pr.closed_at IS NULL
+    `,
+    repository.id
+  );
+
+  const orphanPrs = dbOpenRows
+    .map((row) => row.pr_number)
+    .filter((prNumber) => !githubOpen.has(prNumber));
+
+  if (orphanPrs.length === 0) return 0;
+
+  const now = new Date();
+  await prisma.pull_requests.updateMany({
+    where: {
+      repository_id: repository.id,
+      pr_number: { in: orphanPrs },
+      merged_at: null,
+      closed_at: null,
+    },
+    data: {
+      state: 'closed',
+      closed_at: now,
+      updated_at: now,
+    },
+  });
+
+  await prisma.$executeRawUnsafe(
+    `
+      INSERT INTO pr_governance_state (pr_number, repository_id, current_state, waiting_since, last_actor, last_event_type, updated_at)
+      SELECT pr_number, $1::int, 'CLOSED', NULL, 'system', 'reconciled_orphan_pr', NOW()
+      FROM UNNEST($2::int[]) AS pr_number
+      ON CONFLICT (repository_id, pr_number)
+      DO UPDATE SET
+        current_state = 'CLOSED',
+        waiting_since = NULL,
+        last_actor = 'system',
+        last_event_type = 'reconciled_orphan_pr',
+        updated_at = NOW()
+    `,
+    repository.id,
+    orphanPrs
+  );
+
+  return orphanPrs.length;
+}
+
+async function maybeReconcileOpenPRs(repo: string | null): Promise<void> {
+  if (!repo || !(repo in GITHUB_REPO_BY_FILTER)) return;
+  const repoFilter = repo as 'eips' | 'ercs' | 'rips';
+  const key = `pr_open_reconcile_${repoFilter}`;
+  const now = new Date();
+
+  const existing = await prisma.scheduler_state.findUnique({
+    where: { key },
+    select: { value: true, updated_at: true },
+  });
+
+  if (existing?.updated_at) {
+    const ageMs = now.getTime() - new Date(existing.updated_at).getTime();
+    if (ageMs < OPEN_PR_RECONCILE_TTL_MS) return;
+    if (existing.value === 'running' && ageMs < OPEN_PR_RECONCILE_LOCK_MS) return;
+  }
+
+  await prisma.scheduler_state.upsert({
+    where: { key },
+    update: { value: 'running', updated_at: now },
+    create: { key, value: 'running', updated_at: now },
+  });
+
+  try {
+    const closedCount = await reconcileOpenPRStateForRepo(repoFilter);
+    await prisma.scheduler_state.upsert({
+      where: { key },
+      update: { value: `ok:${closedCount}`, updated_at: new Date() },
+      create: { key, value: `ok:${closedCount}`, updated_at: new Date() },
+    });
+
+    if (closedCount > 0) {
+      for (const tag of PR_ANALYTICS_REVALIDATE_TAGS) {
+        revalidateTag(tag, 'max');
+      }
+    }
+  } catch (error) {
+    console.warn(`PR open-state reconciliation failed for ${repoFilter}`, error);
+    await prisma.scheduler_state.upsert({
+      where: { key },
+      update: { value: 'error', updated_at: new Date() },
+      create: { key, value: 'error', updated_at: new Date() },
+    });
+  }
+}
 
 // Cached helpers for heavy analytics queries
 
@@ -153,7 +306,9 @@ const getPRMonthlyActivityCached = unstable_cache(
           TO_CHAR(CURRENT_DATE, 'YYYY-MM') as month,
           COUNT(*)::bigint as open_now
         FROM pr_base
-        WHERE state = 'open'
+        WHERE created_at <= NOW()
+          AND merged_at IS NULL
+          AND closed_at IS NULL
       )
       SELECT 
         ms.month,
@@ -209,7 +364,9 @@ const getPROpenStateCached = unstable_cache(
           r.name AS repo_name
         FROM pull_requests pr
         JOIN repositories r ON pr.repository_id = r.id
-        WHERE pr.state = 'open'
+        WHERE pr.created_at <= NOW()
+          AND pr.merged_at IS NULL
+          AND pr.closed_at IS NULL
           AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
       ),
       stats AS (
@@ -1672,6 +1829,7 @@ export const analyticsProcedures = {
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
 
       return getPRMonthlyActivityCached(
         input.repo ?? null,
@@ -1686,6 +1844,7 @@ export const analyticsProcedures = {
     }))
     .handler(async ({ input }) => {
       try {
+        await maybeReconcileOpenPRs(input.repo ?? null);
         return await getPROpenStateCached(input.repo ?? null);
       } catch (error) {
         if (isConnectionSaturationError(error)) {
@@ -1705,6 +1864,7 @@ export const analyticsProcedures = {
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
       return getPRGovernanceStatesCached(input.repo ?? null);
     }),
 
@@ -1713,6 +1873,7 @@ export const analyticsProcedures = {
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
 
       const results = await prisma.$queryRawUnsafe<Array<{
         label: string;
@@ -1724,12 +1885,14 @@ export const analyticsProcedures = {
             pr.repository_id,
             CASE 
               WHEN pr.merged_at IS NOT NULL THEN 'merged'
-              WHEN pr.state = 'open' THEN 'open'
+              WHEN pr.created_at <= NOW() AND pr.merged_at IS NULL AND pr.closed_at IS NULL THEN 'open'
               ELSE 'closed'
             END as state
           FROM pull_requests pr
           JOIN repositories r ON pr.repository_id = r.id
-          WHERE pr.state = 'open'
+          WHERE pr.created_at <= NOW()
+            AND pr.merged_at IS NULL
+            AND pr.closed_at IS NULL
             AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
         ),
         current_labels AS (
@@ -1854,7 +2017,9 @@ export const analyticsProcedures = {
             ) as last_activity
           FROM pull_requests pr
           JOIN repositories r ON pr.repository_id = r.id
-          WHERE pr.state = 'open'
+          WHERE pr.created_at <= NOW()
+            AND pr.merged_at IS NULL
+            AND pr.closed_at IS NULL
             AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
             AND EXISTS (
               SELECT 1 FROM pr_governance_state gs
@@ -1896,6 +2061,7 @@ export const analyticsProcedures = {
     .handler(async ({ input }) => {
       const monthStr = `${input.year}-${String(input.month).padStart(2, '0')}`;
       try {
+        await maybeReconcileOpenPRs(input.repo ?? null);
         return await getPRMonthHeroKPIsCached(input.repo ?? null, monthStr);
       } catch (error) {
         if (isConnectionSaturationError(error)) {
@@ -1920,6 +2086,7 @@ export const analyticsProcedures = {
       month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
 
       const results = await prisma.$queryRawUnsafe<Array<{
         category: string;
@@ -1989,6 +2156,7 @@ export const analyticsProcedures = {
       month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
       const results = await prisma.$queryRawUnsafe<Array<{
         process_type: string;
         gov_state: string;
@@ -2059,6 +2227,7 @@ export const analyticsProcedures = {
       to: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
       const results = await prisma.$queryRawUnsafe<Array<{
         month: string;
         category: string;
@@ -2120,6 +2289,7 @@ export const analyticsProcedures = {
       to: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
       const results = await prisma.$queryRawUnsafe<Array<{
         month: string;
         state: string;
@@ -2177,6 +2347,7 @@ export const analyticsProcedures = {
       month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
 
       const results = await prisma.$queryRawUnsafe<Array<{
         state: string;
@@ -2272,6 +2443,7 @@ export const analyticsProcedures = {
       month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }))
     .handler(async ({ input }) => {
+      await maybeReconcileOpenPRs(input.repo ?? null);
 
       const rows = await prisma.$queryRawUnsafe<Array<{
         pr_number: number;
@@ -2349,6 +2521,394 @@ export const analyticsProcedures = {
         labels: Array.isArray(r.labels) ? r.labels : [],
         processType: r.process_type,
       }));
+    }),
+
+  getPRMergedExport: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        pr_number: number;
+        repo: string;
+        title: string | null;
+        author: string | null;
+        created_at: string;
+        state: string;
+        waiting_since: string | null;
+        last_event_type: string | null;
+        linked_eips: string | null;
+        labels: string[];
+        process_type: string;
+      }>>(`
+        WITH month_ctx AS (
+          SELECT
+            $2::text AS month_key,
+            ($2::text || '-01')::date AS month_start,
+            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+        ),
+        snapshot_ctx AS (
+          SELECT
+            CASE
+              WHEN $2::text IS NULL THEN NOW()::timestamp
+              WHEN (SELECT month_key FROM month_ctx) = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN NOW()::timestamp
+              ELSE (SELECT month_end FROM month_ctx)
+            END AS snapshot_ts
+        )
+        SELECT pr.pr_number, r.name AS repo, pr.title, pr.author,
+               TO_CHAR(pr.created_at, 'YYYY-MM-DD') AS created_at,
+               COALESCE(
+                 CASE WHEN gs.subcategory IN ('Waiting on Editor', 'Waiting on Author', 'AWAITED') THEN gs.subcategory END,
+                 CASE
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_EDITOR', 'WAITING_EDITOR') THEN 'Waiting on Editor'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_AUTHOR', 'WAITING_AUTHOR') THEN 'Waiting on Author'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') = 'DRAFT' THEN 'AWAITED'
+                   ELSE 'Uncategorized'
+                 END
+               ) AS state,
+               TO_CHAR(gs.waiting_since, 'YYYY-MM-DD') AS waiting_since,
+               COALESCE(gs.reason, gs.last_event_type) AS last_event_type,
+               (SELECT STRING_AGG(pre.eip_number::text, ',') FROM pull_request_eips pre WHERE pre.pr_number = pr.pr_number AND pre.repository_id = pr.repository_id) AS linked_eips,
+               COALESCE(pr.labels, ARRAY[]::text[]) AS labels,
+               CASE
+                 WHEN LOWER(COALESCE(pr.title, '')) ~ 'typo|spelling|grammar|editorial' THEN 'Typo'
+                 WHEN pr.labels @> ARRAY['c-new']::text[] THEN 'New EIP'
+                 WHEN LOWER(COALESCE(pr.title, '')) ~ 'website|jekyll|_config' THEN 'Website'
+                 WHEN pr.labels && ARRAY['dependencies']::text[] OR LOWER(COALESCE(pr.title, '')) ~ '^bump ' THEN 'Tooling'
+                 WHEN pr.labels @> ARRAY['c-status']::text[] THEN 'Status Change'
+                 WHEN pr.labels @> ARRAY['c-update']::text[] THEN 'Content Edit'
+                 ELSE 'Other'
+               END AS process_type
+        FROM pull_requests pr
+        JOIN repositories r ON pr.repository_id = r.id
+        LEFT JOIN pr_governance_state gs ON pr.pr_number = gs.pr_number AND pr.repository_id = gs.repository_id
+        CROSS JOIN snapshot_ctx sc
+        WHERE pr.created_at <= sc.snapshot_ts
+          AND pr.merged_at IS NOT NULL
+          AND (CASE WHEN $2::text IS NOT NULL THEN pr.merged_at >= (SELECT month_start FROM month_ctx) ELSE TRUE END)
+          AND pr.merged_at <= sc.snapshot_ts
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ORDER BY pr.merged_at DESC
+        LIMIT 5000
+      `, input.repo || null, input.month ?? null);
+
+      return rows.map(r => ({
+        prNumber: r.pr_number,
+        repo: r.repo,
+        title: r.title,
+        author: r.author,
+        createdAt: r.created_at,
+        governanceState: r.state,
+        waitingSince: r.waiting_since,
+        lastEventType: r.last_event_type,
+        linkedEIPs: r.linked_eips ?? null,
+        labels: Array.isArray(r.labels) ? r.labels : [],
+        processType: r.process_type,
+      }));
+    }),
+
+  getPRClosedExport: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        pr_number: number;
+        repo: string;
+        title: string | null;
+        author: string | null;
+        created_at: string;
+        state: string;
+        waiting_since: string | null;
+        last_event_type: string | null;
+        linked_eips: string | null;
+        labels: string[];
+        process_type: string;
+      }>>(`
+        WITH month_ctx AS (
+          SELECT
+            $2::text AS month_key,
+            ($2::text || '-01')::date AS month_start,
+            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+        ),
+        snapshot_ctx AS (
+          SELECT
+            CASE
+              WHEN $2::text IS NULL THEN NOW()::timestamp
+              WHEN (SELECT month_key FROM month_ctx) = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN NOW()::timestamp
+              ELSE (SELECT month_end FROM month_ctx)
+            END AS snapshot_ts
+        )
+        SELECT pr.pr_number, r.name AS repo, pr.title, pr.author,
+               TO_CHAR(pr.created_at, 'YYYY-MM-DD') AS created_at,
+               COALESCE(
+                 CASE WHEN gs.subcategory IN ('Waiting on Editor', 'Waiting on Author', 'AWAITED') THEN gs.subcategory END,
+                 CASE
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_EDITOR', 'WAITING_EDITOR') THEN 'Waiting on Editor'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_AUTHOR', 'WAITING_AUTHOR') THEN 'Waiting on Author'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') = 'DRAFT' THEN 'AWAITED'
+                   ELSE 'Uncategorized'
+                 END
+               ) AS state,
+               TO_CHAR(gs.waiting_since, 'YYYY-MM-DD') AS waiting_since,
+               COALESCE(gs.reason, gs.last_event_type) AS last_event_type,
+               (SELECT STRING_AGG(pre.eip_number::text, ',') FROM pull_request_eips pre WHERE pre.pr_number = pr.pr_number AND pre.repository_id = pr.repository_id) AS linked_eips,
+               COALESCE(pr.labels, ARRAY[]::text[]) AS labels,
+               CASE
+                 WHEN LOWER(COALESCE(pr.title, '')) ~ 'typo|spelling|grammar|editorial' THEN 'Typo'
+                 WHEN pr.labels @> ARRAY['c-new']::text[] THEN 'New EIP'
+                 WHEN LOWER(COALESCE(pr.title, '')) ~ 'website|jekyll|_config' THEN 'Website'
+                 WHEN pr.labels && ARRAY['dependencies']::text[] OR LOWER(COALESCE(pr.title, '')) ~ '^bump ' THEN 'Tooling'
+                 WHEN pr.labels @> ARRAY['c-status']::text[] THEN 'Status Change'
+                 WHEN pr.labels @> ARRAY['c-update']::text[] THEN 'Content Edit'
+                 ELSE 'Other'
+               END AS process_type
+        FROM pull_requests pr
+        JOIN repositories r ON pr.repository_id = r.id
+        LEFT JOIN pr_governance_state gs ON pr.pr_number = gs.pr_number AND pr.repository_id = gs.repository_id
+        CROSS JOIN snapshot_ctx sc
+        WHERE pr.created_at <= sc.snapshot_ts
+          AND pr.closed_at IS NOT NULL
+          AND pr.merged_at IS NULL
+          AND (CASE WHEN $2::text IS NOT NULL THEN pr.closed_at >= (SELECT month_start FROM month_ctx) ELSE TRUE END)
+          AND pr.closed_at <= sc.snapshot_ts
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ORDER BY pr.closed_at DESC
+        LIMIT 5000
+      `, input.repo || null, input.month ?? null);
+
+      return rows.map(r => ({
+        prNumber: r.pr_number,
+        repo: r.repo,
+        title: r.title,
+        author: r.author,
+        createdAt: r.created_at,
+        governanceState: r.state,
+        waitingSince: r.waiting_since,
+        lastEventType: r.last_event_type,
+        linkedEIPs: r.linked_eips ?? null,
+        labels: Array.isArray(r.labels) ? r.labels : [],
+        processType: r.process_type,
+      }));
+    }),
+
+  getIssueOpenExport: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        issue_number: number;
+        repo: string;
+        title: string | null;
+        author: string | null;
+        created_at: string;
+        state: string;
+        updated_at: string | null;
+        linked_eips: string | null;
+        labels: string[];
+        num_comments: number;
+      }>>(`
+        SELECT i.issue_number, r.name AS repo, i.title, i.author,
+               TO_CHAR(i.created_at, 'YYYY-MM-DD') AS created_at,
+               COALESCE(i.state, 'open') AS state,
+               TO_CHAR(i.updated_at, 'YYYY-MM-DD') AS updated_at,
+               (SELECT STRING_AGG(ie.eip_number::text, ',') FROM issue_eips ie WHERE ie.issue_number = i.issue_number AND ie.repository_id = i.repository_id) AS linked_eips,
+               COALESCE(i.labels, ARRAY[]::text[]) AS labels,
+               COALESCE(i.num_comments, 0) AS num_comments
+        FROM issues i
+        JOIN repositories r ON i.repository_id = r.id
+        WHERE i.state = 'open'
+          AND i.created_at < NOW()
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ORDER BY i.created_at DESC
+        LIMIT 5000
+      `, input.repo || null);
+
+      return rows.map(r => ({
+        issueNumber: r.issue_number,
+        repo: r.repo,
+        title: r.title,
+        author: r.author,
+        createdAt: r.created_at,
+        state: r.state,
+        updatedAt: r.updated_at,
+        linkedEIPs: r.linked_eips ?? null,
+        labels: Array.isArray(r.labels) ? r.labels : [],
+        numComments: r.num_comments,
+      }));
+    }),
+
+  // Issue Analytics
+  getIssueMonthlyActivity: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      from: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+      to: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        month: string;
+        created: number;
+        closed: number;
+        open_eom: number;
+      }>>(`
+        WITH repo_ids AS (
+          SELECT id FROM repositories
+          WHERE $1::text IS NULL OR LOWER(SPLIT_PART(name, '/', 2)) = LOWER($1)
+        ),
+        month_series AS (
+          SELECT DATE_TRUNC('month', d)::date AS month
+          FROM GENERATE_SERIES(
+            COALESCE((SELECT DATE_TRUNC('month', MIN(created_at))::date FROM issues WHERE repository_id IN (SELECT id FROM repo_ids)), '2015-01-01'::date),
+            CURRENT_DATE,
+            INTERVAL '1 month'
+          ) AS d
+        )
+        SELECT 
+          TO_CHAR(ms.month, 'YYYY-MM') AS month,
+          COUNT(*) FILTER (WHERE DATE_TRUNC('month', i.created_at)::date = ms.month) AS created,
+          COUNT(*) FILTER (WHERE DATE_TRUNC('month', i.closed_at)::date = ms.month) AS closed,
+          COUNT(*) FILTER (WHERE i.created_at <= (ms.month + INTERVAL '1 month' - INTERVAL '1 day')::timestamp
+                             AND (i.closed_at IS NULL OR i.closed_at > (ms.month + INTERVAL '1 month' - INTERVAL '1 day')::timestamp)) AS open_eom
+        FROM month_series ms
+        LEFT JOIN issues i ON i.repository_id IN (SELECT id FROM repo_ids)
+          AND i.created_at >= '2015-01-01'
+        WHERE TO_CHAR(ms.month, 'YYYY-MM') >= COALESCE($2, '2015-01')
+          AND TO_CHAR(ms.month, 'YYYY-MM') <= COALESCE($3, TO_CHAR(CURRENT_DATE, 'YYYY-MM'))
+        GROUP BY ms.month
+        ORDER BY ms.month
+      `, input.repo || null, input.from || null, input.to || null);
+
+      return rows.map(r => ({
+        month: r.month,
+        created: Number(r.created),
+        closed: Number(r.closed),
+        openAtMonthEnd: Number(r.open_eom),
+      }));
+    }),
+
+  getIssueLabels: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        label: string;
+        count: number;
+      }>>(`
+        SELECT label, COUNT(*) AS count
+        FROM (
+          SELECT UNNEST(i.labels) AS label
+          FROM issues i
+          JOIN repositories r ON i.repository_id = r.id
+          WHERE i.state = 'open'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ) t
+        GROUP BY label
+        ORDER BY count DESC
+        LIMIT 30
+      `, input.repo || null);
+
+      return rows.map(r => ({
+        label: r.label,
+        count: Number(r.count),
+      }));
+    }),
+
+  getIssueOpenState: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const result = await prisma.$queryRawUnsafe<Array<{
+        total_open: number;
+        median_age: number;
+        oldest_issue_number: number;
+        oldest_title: string | null;
+        oldest_author: string | null;
+        oldest_age_days: number;
+      }>>(`
+        WITH open_issues AS (
+          SELECT 
+            i.issue_number,
+            i.title,
+            i.author,
+            CEIL(EXTRACT(EPOCH FROM (NOW() - i.created_at)) / 86400)::int AS age_days
+          FROM issues i
+          JOIN repositories r ON i.repository_id = r.id
+          WHERE i.state = 'open'
+            AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        )
+        SELECT
+          COUNT(*)::int AS total_open,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY age_days)::int AS median_age,
+          (ARRAY_AGG(issue_number ORDER BY age_days DESC))[1]::int AS oldest_issue_number,
+          (ARRAY_AGG(title ORDER BY age_days DESC))[1] AS oldest_title,
+          (ARRAY_AGG(author ORDER BY age_days DESC))[1] AS oldest_author,
+          (ARRAY_AGG(age_days ORDER BY age_days DESC))[1]::int AS oldest_age_days
+        FROM open_issues
+      `, input.repo || null);
+
+      const row = result[0];
+      if (!row) {
+        return {
+          totalOpen: 0,
+          medianAge: 0,
+          oldestIssue: null,
+        };
+      }
+
+      return {
+        totalOpen: row.total_open,
+        medianAge: row.median_age,
+        oldestIssue: row.oldest_issue_number
+          ? {
+              issueNumber: row.oldest_issue_number,
+              title: row.oldest_title,
+              author: row.oldest_author,
+              ageDays: row.oldest_age_days,
+            }
+          : null,
+      };
+    }),
+
+  getIssueMonthlySummary: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      year: z.number().int(),
+      month: z.number().int().min(1).max(12),
+    }))
+    .handler(async ({ input }) => {
+      const monthStr = `${input.year}-${String(input.month).padStart(2, '0')}`;
+      const monthStart = `${monthStr}-01`;
+      const monthEnd = new Date(input.year, input.month, 0);
+      const monthEndStr = `${input.year}-${String(input.month).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`;
+
+      const result = await prisma.$queryRawUnsafe<Array<{
+        open_issues: number;
+        new_issues: number;
+        closed_issues: number;
+      }>>(`
+        SELECT
+          COUNT(*) FILTER (WHERE i.state = 'open' AND i.created_at <= ($2 || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day') AS open_issues,
+          COUNT(*) FILTER (WHERE DATE_TRUNC('month', i.created_at)::date = ($1 || '-01')::date) AS new_issues,
+          COUNT(*) FILTER (WHERE DATE_TRUNC('month', i.closed_at)::date = ($1 || '-01')::date) AS closed_issues
+        FROM issues i
+        JOIN repositories r ON i.repository_id = r.id
+        WHERE $3::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($3)
+      `, monthStr, monthStr, input.repo || null);
+
+      const row = result[0];
+      return {
+        month: monthStr,
+        openIssues: Number(row?.open_issues ?? 0),
+        newIssues: Number(row?.new_issues ?? 0),
+        closedIssues: Number(row?.closed_issues ?? 0),
+      };
     }),
 
   exportPRAnalyticsDetailedCSV: optionalAuthProcedure

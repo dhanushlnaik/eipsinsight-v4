@@ -259,6 +259,7 @@ function AnalyticsLayoutInner({
     const titles: Record<string, string> = {
       eips: "EIP Analytics",
       prs: "PR Analytics",
+      issues: "Issues Analytics",
       editors: "Editors",
       reviewers: "Reviewers",
       authors: "Authors",
@@ -271,6 +272,7 @@ function AnalyticsLayoutInner({
     if (pageTitle === "EIP Analytics")
       return "A high-level overview of Ethereum Standards by type, status, and lifecycle progress.";
     if (pageTitle === "PR Analytics") return "Pull request activity and merge trends.";
+    if (pageTitle === "Issues Analytics") return "Open issues tracking and activity analytics.";
     return "Data-driven insights into Ethereum standards";
   }, [pageTitle]);
 

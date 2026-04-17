@@ -159,6 +159,7 @@ const sidebarSections: SidebarSection[] = [
         items: [
           { title: "EIPs", href: "/analytics/eips" },
           { title: "PRs", href: "/analytics/prs" },
+          { title: "Issues", href: "/analytics/issues" },
           { title: "Board", href: "/tools/board" },
           { title: "Editors", href: "/analytics/editors" },
           { title: "Reviewers", href: "/analytics/reviewers" },
