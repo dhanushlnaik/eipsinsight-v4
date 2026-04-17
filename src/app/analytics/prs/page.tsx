@@ -233,6 +233,8 @@ export default function PRsAnalyticsPage() {
   const [timeToOutcome, setTimeToOutcome] = useState<TimeToOutcomeMetric[]>([]);
   const [staleness, setStaleness] = useState<StalenessBucket[]>([]);
   const [openPRs, setOpenPRs] = useState<OpenPRRow[]>([]);
+  const [mergedPRs, setMergedPRs] = useState<OpenPRRow[]>([]);
+  const [closedPRs, setClosedPRs] = useState<OpenPRRow[]>([]);
   const [openIssues, setOpenIssues] = useState<OpenIssueRow[]>([]);
   const [backlogTab, setBacklogTab] = useState<"prs" | "issues">("prs");
   const [prCurrentPage, setPrCurrentPage] = useState(1);
@@ -257,24 +259,24 @@ export default function PRsAnalyticsPage() {
 
   // Filtering and search logic
   const filteredPRs = useMemo(() => {
-    let result = openPRs;
+    let result: OpenPRRow[] = [];
 
-    // Apply state filter
+    // Start with correct dataset based on state filter
     if (prStateFilter === "open") {
-      // All PRs in the openPRs array are open by definition, show all
-      result = result;
+      result = openPRs;
     } else if (prStateFilter === "created") {
-      // Created in context month - filter based on createdAt containing the month
+      result = openPRs;
+      // Filter by context month
       const contextMonthStr = selectedMonth || heroMonth?.month;
       if (contextMonthStr) {
         result = result.filter((pr) => pr.createdAt.includes(contextMonthStr));
       }
     } else if (prStateFilter === "merged") {
-      // This would need additional data - for now show all
-      result = result;
+      result = mergedPRs;
     } else if (prStateFilter === "closed") {
-      // This would need additional data - for now show all
-      result = result;
+      result = closedPRs;
+    } else {
+      result = openPRs;
     }
 
     // Apply search filter
@@ -290,7 +292,7 @@ export default function PRsAnalyticsPage() {
     }
 
     return result;
-  }, [openPRs, prStateFilter, prSearchFilter, selectedMonth, heroMonth?.month]);
+  }, [openPRs, mergedPRs, closedPRs, prStateFilter, prSearchFilter, selectedMonth, heroMonth?.month]);
 
   const filteredIssues = useMemo(() => {
     let result = openIssues;
@@ -386,9 +388,15 @@ export default function PRsAnalyticsPage() {
         setGovWaitStatesByMonth(participantTimeline);
         setCrossTabRaw(crossTab);
 
-        const openExport = await client.analytics.getPROpenExport({ repo: repoParam, month: contextMonth });
-        const issueExport = await client.analytics.getIssueOpenExport({ repo: repoParam, month: contextMonth });
+        const [openExport, mergedExport, closedExport, issueExport] = await Promise.all([
+          client.analytics.getPROpenExport({ repo: repoParam, month: contextMonth }),
+          client.analytics.getPRMergedExport({ repo: repoParam, month: contextMonth }),
+          client.analytics.getPRClosedExport({ repo: repoParam, month: contextMonth }),
+          client.analytics.getIssueOpenExport({ repo: repoParam, month: contextMonth }),
+        ]);
         setOpenPRs(openExport);
+        setMergedPRs(mergedExport);
+        setClosedPRs(closedExport);
         setOpenIssues(issueExport);
         setDataUpdatedAt(new Date());
       } catch (err) {
@@ -423,7 +431,7 @@ export default function PRsAnalyticsPage() {
   useEffect(() => {
     setPrCurrentPage(1);
     setIssuesCurrentPage(1);
-  }, [openPRs, openIssues]);
+  }, [openPRs, mergedPRs, closedPRs, openIssues]);
 
   const rangeMonths = useMemo(() => {
     if (!monthlySeries.length) return [];
@@ -1233,6 +1241,35 @@ export default function PRsAnalyticsPage() {
         {/* Open PRs Table */}
         {backlogTab === "prs" && (
           <div>
+            {/* State Filter Tabs */}
+            <div className="mb-4 border-b border-border">
+              <div className="flex gap-1">
+                {[
+                  { label: "Open", filter: "open" as const, count: totalOpen },
+                  { label: `Created (${heroMonth?.month ?? ""})`, filter: "created" as const, count: heroMonth?.newPRs ?? 0 },
+                  { label: "Merged", filter: "merged" as const, count: heroMonth?.mergedPRs ?? 0 },
+                  { label: "Closed", filter: "closed" as const, count: heroMonth?.closedUnmerged ?? 0 },
+                ].map((tab) => (
+                  <button
+                    key={tab.filter}
+                    onClick={() => {
+                      setPrStateFilter(tab.filter);
+                      setPrCurrentPage(1);
+                      setPrSearchFilter("");
+                    }}
+                    className={cn(
+                      "px-3 py-2 text-xs font-medium transition-colors border-b-2 whitespace-nowrap",
+                      prStateFilter === tab.filter
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {tab.label} ({tab.count})
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Search and Filter */}
             <div className="mb-3 flex items-center gap-2">
               <input

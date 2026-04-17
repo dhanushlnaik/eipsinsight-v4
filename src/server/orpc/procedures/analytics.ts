@@ -2523,6 +2523,177 @@ export const analyticsProcedures = {
       }));
     }),
 
+  getPRMergedExport: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        pr_number: number;
+        repo: string;
+        title: string | null;
+        author: string | null;
+        created_at: string;
+        state: string;
+        waiting_since: string | null;
+        last_event_type: string | null;
+        linked_eips: string | null;
+        labels: string[];
+        process_type: string;
+      }>>(`
+        WITH month_ctx AS (
+          SELECT
+            $2::text AS month_key,
+            ($2::text || '-01')::date AS month_start,
+            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+        ),
+        snapshot_ctx AS (
+          SELECT
+            CASE
+              WHEN $2::text IS NULL THEN NOW()::timestamp
+              WHEN (SELECT month_key FROM month_ctx) = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN NOW()::timestamp
+              ELSE (SELECT month_end FROM month_ctx)
+            END AS snapshot_ts
+        )
+        SELECT pr.pr_number, r.name AS repo, pr.title, pr.author,
+               TO_CHAR(pr.created_at, 'YYYY-MM-DD') AS created_at,
+               COALESCE(
+                 CASE WHEN gs.subcategory IN ('Waiting on Editor', 'Waiting on Author', 'AWAITED') THEN gs.subcategory END,
+                 CASE
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_EDITOR', 'WAITING_EDITOR') THEN 'Waiting on Editor'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_AUTHOR', 'WAITING_AUTHOR') THEN 'Waiting on Author'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') = 'DRAFT' THEN 'AWAITED'
+                   ELSE 'Uncategorized'
+                 END
+               ) AS state,
+               TO_CHAR(gs.waiting_since, 'YYYY-MM-DD') AS waiting_since,
+               COALESCE(gs.reason, gs.last_event_type) AS last_event_type,
+               (SELECT STRING_AGG(pre.eip_number::text, ',') FROM pull_request_eips pre WHERE pre.pr_number = pr.pr_number AND pre.repository_id = pr.repository_id) AS linked_eips,
+               COALESCE(pr.labels, ARRAY[]::text[]) AS labels,
+               CASE
+                 WHEN LOWER(COALESCE(pr.title, '')) ~ 'typo|spelling|grammar|editorial' THEN 'Typo'
+                 WHEN pr.labels @> ARRAY['c-new']::text[] THEN 'New EIP'
+                 WHEN LOWER(COALESCE(pr.title, '')) ~ 'website|jekyll|_config' THEN 'Website'
+                 WHEN pr.labels && ARRAY['dependencies']::text[] OR LOWER(COALESCE(pr.title, '')) ~ '^bump ' THEN 'Tooling'
+                 WHEN pr.labels @> ARRAY['c-status']::text[] THEN 'Status Change'
+                 WHEN pr.labels @> ARRAY['c-update']::text[] THEN 'Content Edit'
+                 ELSE 'Other'
+               END AS process_type
+        FROM pull_requests pr
+        JOIN repositories r ON pr.repository_id = r.id
+        LEFT JOIN pr_governance_state gs ON pr.pr_number = gs.pr_number AND pr.repository_id = gs.repository_id
+        CROSS JOIN snapshot_ctx sc
+        WHERE pr.created_at <= sc.snapshot_ts
+          AND pr.merged_at IS NOT NULL
+          AND (CASE WHEN $2::text IS NOT NULL THEN pr.merged_at >= (SELECT month_start FROM month_ctx) ELSE TRUE END)
+          AND pr.merged_at <= sc.snapshot_ts
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ORDER BY pr.merged_at DESC
+        LIMIT 5000
+      `, input.repo || null, input.month ?? null);
+
+      return rows.map(r => ({
+        prNumber: r.pr_number,
+        repo: r.repo,
+        title: r.title,
+        author: r.author,
+        createdAt: r.created_at,
+        governanceState: r.state,
+        waitingSince: r.waiting_since,
+        lastEventType: r.last_event_type,
+        linkedEIPs: r.linked_eips ?? null,
+        labels: Array.isArray(r.labels) ? r.labels : [],
+        processType: r.process_type,
+      }));
+    }),
+
+  getPRClosedExport: optionalAuthProcedure
+    .input(z.object({
+      repo: z.enum(['eips', 'ercs', 'rips']).optional(),
+      month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }))
+    .handler(async ({ input }) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        pr_number: number;
+        repo: string;
+        title: string | null;
+        author: string | null;
+        created_at: string;
+        state: string;
+        waiting_since: string | null;
+        last_event_type: string | null;
+        linked_eips: string | null;
+        labels: string[];
+        process_type: string;
+      }>>(`
+        WITH month_ctx AS (
+          SELECT
+            $2::text AS month_key,
+            ($2::text || '-01')::date AS month_start,
+            (($2::text || '-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::timestamp AS month_end
+        ),
+        snapshot_ctx AS (
+          SELECT
+            CASE
+              WHEN $2::text IS NULL THEN NOW()::timestamp
+              WHEN (SELECT month_key FROM month_ctx) = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN NOW()::timestamp
+              ELSE (SELECT month_end FROM month_ctx)
+            END AS snapshot_ts
+        )
+        SELECT pr.pr_number, r.name AS repo, pr.title, pr.author,
+               TO_CHAR(pr.created_at, 'YYYY-MM-DD') AS created_at,
+               COALESCE(
+                 CASE WHEN gs.subcategory IN ('Waiting on Editor', 'Waiting on Author', 'AWAITED') THEN gs.subcategory END,
+                 CASE
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_EDITOR', 'WAITING_EDITOR') THEN 'Waiting on Editor'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') IN ('WAITING_ON_AUTHOR', 'WAITING_AUTHOR') THEN 'Waiting on Author'
+                   WHEN COALESCE(gs.current_state, 'NO_STATE') = 'DRAFT' THEN 'AWAITED'
+                   ELSE 'Uncategorized'
+                 END
+               ) AS state,
+               TO_CHAR(gs.waiting_since, 'YYYY-MM-DD') AS waiting_since,
+               COALESCE(gs.reason, gs.last_event_type) AS last_event_type,
+               (SELECT STRING_AGG(pre.eip_number::text, ',') FROM pull_request_eips pre WHERE pre.pr_number = pr.pr_number AND pre.repository_id = pr.repository_id) AS linked_eips,
+               COALESCE(pr.labels, ARRAY[]::text[]) AS labels,
+               CASE
+                 WHEN LOWER(COALESCE(pr.title, '')) ~ 'typo|spelling|grammar|editorial' THEN 'Typo'
+                 WHEN pr.labels @> ARRAY['c-new']::text[] THEN 'New EIP'
+                 WHEN LOWER(COALESCE(pr.title, '')) ~ 'website|jekyll|_config' THEN 'Website'
+                 WHEN pr.labels && ARRAY['dependencies']::text[] OR LOWER(COALESCE(pr.title, '')) ~ '^bump ' THEN 'Tooling'
+                 WHEN pr.labels @> ARRAY['c-status']::text[] THEN 'Status Change'
+                 WHEN pr.labels @> ARRAY['c-update']::text[] THEN 'Content Edit'
+                 ELSE 'Other'
+               END AS process_type
+        FROM pull_requests pr
+        JOIN repositories r ON pr.repository_id = r.id
+        LEFT JOIN pr_governance_state gs ON pr.pr_number = gs.pr_number AND pr.repository_id = gs.repository_id
+        CROSS JOIN snapshot_ctx sc
+        WHERE pr.created_at <= sc.snapshot_ts
+          AND pr.closed_at IS NOT NULL
+          AND pr.merged_at IS NULL
+          AND (CASE WHEN $2::text IS NOT NULL THEN pr.closed_at >= (SELECT month_start FROM month_ctx) ELSE TRUE END)
+          AND pr.closed_at <= sc.snapshot_ts
+          AND ($1::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($1))
+        ORDER BY pr.closed_at DESC
+        LIMIT 5000
+      `, input.repo || null, input.month ?? null);
+
+      return rows.map(r => ({
+        prNumber: r.pr_number,
+        repo: r.repo,
+        title: r.title,
+        author: r.author,
+        createdAt: r.created_at,
+        governanceState: r.state,
+        waitingSince: r.waiting_since,
+        lastEventType: r.last_event_type,
+        linkedEIPs: r.linked_eips ?? null,
+        labels: Array.isArray(r.labels) ? r.labels : [],
+        processType: r.process_type,
+      }));
+    }),
+
   getIssueOpenExport: optionalAuthProcedure
     .input(z.object({
       repo: z.enum(['eips', 'ercs', 'rips']).optional(),
