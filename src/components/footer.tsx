@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bug, Heart, Linkedin, MessageSquare, Twitter, Youtube } from "lucide-react";
+import { Bug, Heart, Linkedin, Youtube } from "lucide-react";
 import { ThemedLogoGif } from "@/components/themed-logo-gif";
 
 const productLinks = [
@@ -20,10 +20,8 @@ const supportLinks = [
 ];
 
 const socialLinks = [
-  { name: "Twitter", href: "https://x.com/eipsinsight", icon: Twitter },
-  { name: "YouTube", href: "https://www.youtube.com/@avarch" , icon: Youtube },
+  { name: "YouTube", href: "https://www.youtube.com/@avarch", icon: Youtube },
   { name: "LinkedIn", href: "https://www.linkedin.com/company/avarch", icon: Linkedin },
-  { name: "EtherWorld", href: "https://etherworld.co/" , icon: MessageSquare },
 ];
 
 export default function Footer() {

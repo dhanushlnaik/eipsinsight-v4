@@ -1,7 +1,6 @@
 import { os, ORPCError, type Ctx } from './types'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { uploadImageToCloudinary } from '@/lib/cloudinary'
 import { sendEmail } from '@/lib/email'
 import { env } from '@/env'
 import * as z from 'zod'
@@ -213,17 +212,6 @@ export const blogProcedures = {
       }
       await prisma.blog.delete({ where: { id: input.id } })
       return { ok: true }
-    }),
-
-  uploadCoverImage: os
-    .$context<Ctx>()
-    .input(z.object({ fileName: z.string(), base64Data: z.string() }))
-    .handler(async ({ input, context }) => {
-      await requireEditor(context)
-      const buffer = Buffer.from(input.base64Data, 'base64')
-      const blob = new Blob([buffer], { type: 'image/jpeg' })
-      const { url } = await uploadImageToCloudinary(blob, input.fileName)
-      return { url }
     }),
 
   // ─── Editor management (admin only) ───

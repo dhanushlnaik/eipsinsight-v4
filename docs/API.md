@@ -347,3 +347,5 @@ const proposal = await client.proposals.getProposal({ repo: 'eip', number: 1 })
 - `FORBIDDEN`: Authenticated but insufficient permissions (e.g. admin required)
 - `NOT_FOUND`: Resource not found
 - `BAD_REQUEST`: Invalid input
+
+
