@@ -9,7 +9,6 @@ import {
   FileText,
   Clock,
   Activity,
-  LayoutDashboard,
 } from 'lucide-react';
 import { client } from '@/lib/orpc';
 import { cn } from '@/lib/utils';
@@ -58,81 +57,8 @@ export default function UpgradePage() {
   const [error, setError] = useState<string | null>(null);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [blogPosts, setBlogPosts] = useState<UpgradeArticle[]>([]);
-  const [expandedDashboardBuckets, setExpandedDashboardBuckets] = useState({
-    review: false,
-    blocked: false,
-    ready: false,
-  });
   const isPectra = slug === 'pectra';
   const isDashboardUpgrade = slug === 'glamsterdam' || slug === 'hegota';
-  const dashboardBreakdown = useMemo(() => {
-    if (!isDashboardUpgrade) {
-      return {
-        inReview: [] as CompositionItem[],
-        blocked: [] as CompositionItem[],
-        readyForLastCall: [] as CompositionItem[],
-      };
-    }
-    const blocked = composition.filter((item) => (item.bucket ?? '').toLowerCase() === 'declined');
-    const activePool = composition.filter((item) => (item.bucket ?? '').toLowerCase() !== 'declined');
-    const readyForLastCall = activePool.filter((item) => (item.status ?? '').toLowerCase() === 'last call');
-    const inReview = activePool.filter((item) => (item.status ?? '').toLowerCase() !== 'last call');
-
-    return {
-      inReview,
-      blocked,
-      readyForLastCall,
-    };
-  }, [isDashboardUpgrade, composition]);
-  const upgradeBreakdown = useMemo(() => {
-    if (!isDashboardUpgrade) return null;
-    if (timelineData.length > 0) {
-      const latest = [...timelineData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[timelineData.length - 1];
-      if (latest) {
-        return {
-          totalEips: latest.included.length + latest.scheduled.length + latest.declined.length + latest.considered.length + latest.proposed.length,
-          inReview: latest.considered.length,
-          blocked: latest.declined.length,
-          readyForLastCall: latest.scheduled.length,
-        };
-      }
-    }
-    return {
-      totalEips: composition.length,
-      inReview: dashboardBreakdown.inReview.length,
-      blocked: dashboardBreakdown.blocked.length,
-      readyForLastCall: dashboardBreakdown.readyForLastCall.length,
-    };
-  }, [isDashboardUpgrade, timelineData, composition.length, dashboardBreakdown]);
-  const dashboardSections = [
-    {
-      key: 'ready' as const,
-      label: 'Ready for Last Call',
-      items: dashboardBreakdown.readyForLastCall,
-      accent: 'text-cyan-700 dark:text-cyan-300',
-      line: 'border-cyan-400/30',
-      card: 'border-cyan-400/30',
-      helper: 'Ready for Last Call',
-    },
-    {
-      key: 'review' as const,
-      label: 'In Review',
-      items: dashboardBreakdown.inReview,
-      accent: 'text-amber-700 dark:text-amber-300',
-      line: 'border-amber-400/30',
-      card: 'border-amber-400/30',
-      helper: 'In Review',
-    },
-    {
-      key: 'blocked' as const,
-      label: 'Blocked',
-      items: dashboardBreakdown.blocked,
-      accent: 'text-red-700 dark:text-red-300',
-      line: 'border-red-400/30',
-      card: 'border-red-400/30',
-      helper: 'Blocked',
-    },
-  ];
 
   const statusChipClass = (status: string | null) => {
     const normalized = (status ?? '').toLowerCase();
@@ -583,100 +509,14 @@ export default function UpgradePage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35, delay: 0.08 }}
-              className="overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-r from-primary/10 via-cyan-500/8 to-emerald-500/8 p-4 sm:p-5"
+              className="overflow-hidden rounded-xl border border-primary/30 bg-linear-to-r from-primary/10 via-cyan-500/8 to-emerald-500/8 p-4 sm:p-5"
             >
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="space-y-2">
-                  <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
-                    <LayoutDashboard className="h-3.5 w-3.5" />
-                    Upgrade Dashboard
-                  </p>
-                  <h3 className="dec-title text-2xl font-semibold tracking-tight text-foreground">{upgrade.name}</h3>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-muted-foreground sm:grid-cols-4">
-                    <p><span className="font-semibold text-foreground">{upgradeBreakdown?.totalEips ?? 0}</span> EIPs</p>
-                    <p><span className="font-semibold text-foreground">{upgradeBreakdown?.inReview ?? 0}</span> in Review</p>
-                    <p><span className="font-semibold text-foreground">{upgradeBreakdown?.blocked ?? 0}</span> blocked</p>
-                    <p><span className="font-semibold text-foreground">{upgradeBreakdown?.readyForLastCall ?? 0}</span> ready for Last Call</p>
-                  </div>
-                </div>
-                <p className="text-sm font-medium text-foreground">
-                  Protocol readiness snapshot for core teams and operators
-                </p>
-              </div>
-
-              <div className="space-y-5">
-                {dashboardSections.map((section) => {
-                  const expanded =
-                    section.key === 'review'
-                      ? expandedDashboardBuckets.review
-                      : section.key === 'blocked'
-                        ? expandedDashboardBuckets.blocked
-                        : expandedDashboardBuckets.ready;
-                  const visibleItems = expanded ? section.items : section.items.slice(0, 6);
-
-                  return (
-                    <div key={section.key} className="space-y-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <h4 className={cn('text-sm font-semibold', section.accent)}>{section.label}</h4>
-                        <span className="rounded-full bg-background/70 px-2 py-0.5 text-xs font-semibold text-foreground">
-                          {section.items.length}
-                        </span>
-                        <div className={cn('h-px flex-1 border-t', section.line)} />
-                      </div>
-
-                      {section.items.length === 0 ? (
-                        <p className="rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
-                          No EIPs in this bucket right now.
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                            {visibleItems.map((item) => (
-                              <Link key={`${section.key}-${item.eip_number}`} href={`/eip/${item.eip_number}`}>
-                                <motion.div
-                                  whileHover={{ y: -2 }}
-                                  transition={{ duration: 0.18 }}
-                                  className={cn('rounded-lg border bg-background/70 p-3 transition-colors hover:border-primary/40', section.card)}
-                                >
-                                  <div className="mb-2 flex items-center gap-1.5">
-                                    <span className={cn('rounded-md px-1.5 py-0.5 text-xs font-bold', section.accent, 'bg-muted/60')}>
-                                      EIP-{item.eip_number}
-                                    </span>
-                                    {item.status && (
-                                      <span className={cn('rounded px-1.5 py-0.5 text-xs font-medium', statusChipClass(item.status))}>
-                                        {item.status}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="line-clamp-2 text-sm font-semibold text-foreground">{item.title}</p>
-                                  <p className={cn('mt-1 text-xs', section.accent)}>{section.helper}</p>
-                                </motion.div>
-                              </Link>
-                            ))}
-                          </div>
-                          {section.items.length > 6 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (section.key === 'review') {
-                                  setExpandedDashboardBuckets((prev) => ({ ...prev, review: !prev.review }));
-                                } else if (section.key === 'blocked') {
-                                  setExpandedDashboardBuckets((prev) => ({ ...prev, blocked: !prev.blocked }));
-                                } else {
-                                  setExpandedDashboardBuckets((prev) => ({ ...prev, ready: !prev.ready }));
-                                }
-                              }}
-                              className="rounded-md border border-border bg-background/60 px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
-                            >
-                              {expanded ? 'Show less' : `Show more (${section.items.length - 6})`}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <UpgradeEIPsShowcase
+                upgradeName={upgrade.name}
+                composition={composition}
+                upgradeColor="#06B6D4"
+                heading="Glamsterdam EIPs"
+              />
             </motion.div>
           )}
 
@@ -694,20 +534,22 @@ export default function UpgradePage() {
           )}
 
           {/* EIPs Showcase Section */}
-          <motion.div
-            id="eips"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.15 }}
-            className="rounded-xl border border-border bg-card/60 p-4 sm:p-5"
-          >
-            <UpgradeEIPsShowcase
-              upgradeName={upgrade.name}
-              composition={composition}
-              upgradeColor="#06B6D4"
-              heading={isPectra ? 'Prague/Electra (Pectra) EIPs' : undefined}
-            />
-          </motion.div>
+          {!isDashboardUpgrade && (
+            <motion.div
+              id="eips"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+              className="rounded-xl border border-border bg-card/60 p-4 sm:p-5"
+            >
+              <UpgradeEIPsShowcase
+                upgradeName={upgrade.name}
+                composition={composition}
+                upgradeColor="#06B6D4"
+                heading={isPectra ? 'Prague/Electra (Pectra) EIPs' : undefined}
+              />
+            </motion.div>
+          )}
 
           {/* Blog Carousel Section */}
           {blogPosts.length > 0 && (
