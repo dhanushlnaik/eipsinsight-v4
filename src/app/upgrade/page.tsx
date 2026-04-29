@@ -335,20 +335,8 @@ export default function UpgradePage() {
     return (
       <div className="min-h-screen bg-background">
         <div className="mx-auto w-full px-3 py-16 sm:px-4 lg:px-5 xl:px-6">
-          <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center justify-center min-h-100">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto w-full px-3 py-16 sm:px-4 lg:px-5 xl:px-6">
-          <div className="text-center">
-            <p className="text-destructive">{error}</p>
           </div>
         </div>
       </div>
@@ -359,20 +347,20 @@ export default function UpgradePage() {
     <div className="bg-background relative w-full overflow-hidden">
       {/* Background gradient */}
       <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(52,211,153,0.18),_transparent_60%)]" />
-        <div className="absolute top-0 left-1/2 -z-10 h-[900px] w-[900px] -translate-x-1/2 rounded-full bg-cyan-300/10 blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(52,211,153,0.18),transparent_60%)]" />
+        <div className="absolute top-0 left-1/2 -z-10 h-225 w-225 -translate-x-1/2 rounded-full bg-cyan-300/10 blur-3xl" />
       </div>
 
       {/* Collapsible Header */}
       <CollapsibleHeader />
 
       {/* Stats & Flowchart Section */}
-      <section className="relative w-full bg-background">
+      <section id="stats" className="relative w-full bg-background">
         <div className="mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6 pt-6 pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Left: Stats Cards */}
             <div className="flex h-full">
-              <div className="w-full h-full min-h-[260px] sm:min-h-[280px] lg:min-h-[300px] flex items-stretch">
+              <div className="w-full h-full min-h-65 sm:min-h-70 lg:min-h-75 flex items-stretch">
                 <UpgradeStatsCards
                   totalUpgrades={totalUpgradeCount}
                   independentIncludedAuthors={independentIncludedAuthors}
@@ -392,7 +380,7 @@ export default function UpgradePage() {
                 "bg-card/60 backdrop-blur-sm overflow-hidden",
                 "hover:border-primary/40 hover:shadow-lg hover:shadow-primary/15",
                 "transition-all duration-200",
-                "h-full min-h-[260px] sm:min-h-[280px] lg:min-h-[300px]"
+                "h-full min-h-65 sm:min-h-70 lg:min-h-75"
               )}
             >
               <EipInclusionProcessGraph />
@@ -401,8 +389,41 @@ export default function UpgradePage() {
         </div>
       </section>
 
+      {/* Upgrades List / Roadmap Section */}
+      <section id="upgrades" className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
+        <div className="mb-4">
+          <div className="inline-flex items-center gap-2 mb-2">
+            <Package className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Network Upgrade Roadmap</h2>
+            <CopyLinkButton sectionId="upgrades" tooltipLabel="Copy link" />
+          </div>
+          <p className="text-sm text-muted-foreground">High‑level view of recent and upcoming coordinated Ethereum network upgrades.</p>
+        </div>
+        <div className="mx-auto w-full pb-6">
+          <div className="mb-6">
+            <HorizontalUpgradeTimeline />
+          </div>
+
+          {/* Glamsterdam Timeline Chart */}
+          {glamsterdamTimeline.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="mt-6"
+            >
+              <UpgradeTimelineChart data={glamsterdamTimeline} upgradeName="Glamsterdam" />
+            </motion.div>
+          )}
+        </div>
+      </section>
+
+      <div className="w-full px-3 sm:px-4 lg:px-5 xl:px-6">
+        <div className="h-px w-full bg-border/60" />
+      </div>
+
       {/* Timeline Section */}
-      <section className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
+      <section id="timeline" className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
         <div className="mb-4">
           <div className="inline-flex items-center gap-2 mb-2">
             <Calendar className="h-5 w-5 text-primary" />
@@ -424,7 +445,7 @@ export default function UpgradePage() {
       </div>
 
       {/* Network Upgrades Chart Section */}
-      <section className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
+      <section id="network-upgrades-chart" className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
         <div className="mb-4">
           <div className="inline-flex items-center gap-2 mb-2">
             <BarChart2 className="h-5 w-5 text-primary" />
@@ -458,7 +479,7 @@ export default function UpgradePage() {
             className="overflow-hidden rounded-xl border border-border bg-card/60 backdrop-blur-sm"
           >
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] table-fixed text-sm">
+              <table className="w-full min-w-245 table-fixed text-sm">
                 <colgroup>
                   <col className="w-[24%]" />
                   <col className="w-[12%]" />
@@ -590,39 +611,6 @@ export default function UpgradePage() {
               </div>
             </div>
           </motion.div>
-      </section>
-
-      <div className="w-full px-3 sm:px-4 lg:px-5 xl:px-6">
-        <div className="h-px w-full bg-border/60" />
-      </div>
-
-      {/* Upgrades List / Roadmap Section */}
-      <section className="relative w-full bg-background px-3 sm:px-4 lg:px-5 xl:px-6 py-6">
-        <div className="mb-4">
-          <div className="inline-flex items-center gap-2 mb-2">
-            <Package className="h-5 w-5 text-primary" />
-            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Network Upgrade Roadmap</h2>
-            <CopyLinkButton sectionId="upgrades" tooltipLabel="Copy link" />
-          </div>
-          <p className="text-sm text-muted-foreground">High‑level view of recent and upcoming coordinated Ethereum network upgrades.</p>
-        </div>
-        <div className="mx-auto w-full pb-6">
-          <div className="mb-6">
-            <HorizontalUpgradeTimeline />
-          </div>
-
-          {/* Glamsterdam Timeline Chart */}
-          {glamsterdamTimeline.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="mt-6"
-            >
-              <UpgradeTimelineChart data={glamsterdamTimeline} upgradeName="Glamsterdam" />
-            </motion.div>
-          )}
-        </div>
       </section>
 
       <div className="w-full px-3 sm:px-4 lg:px-5 xl:px-6">

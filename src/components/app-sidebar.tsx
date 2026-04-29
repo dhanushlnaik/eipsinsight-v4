@@ -395,6 +395,12 @@ const SECTION_LABEL_OVERRIDES: Record<string, string> = {
   "explore-detail-timeline": "Over Time",
   "explore-detail-editor-reviews-24h": "Reviews (24h)",
   "explore-detail-proposals-table": "Table",
+  "stats": "Total Network Upgrades",
+  "timeline": "Ethereum Upgrade Timeline",
+  "upgrades": "Network Upgrade Roadmap",
+  "included-authors": "Included EIP Authors",
+  "network-upgrades-chart": "Distribution Timeline",
+  "upgrade-eip-details": "EIP Details",
 };
 
 function getOrderedSections(persona: Persona | null): SidebarSection[] {
@@ -471,10 +477,7 @@ function AppSidebarContent() {
   );
 
   // Accordion behavior: only one parent open at a time
-  const [openItem, setOpenItem] = React.useState<string | null>(() => {
-    const active = getActiveItemTitle(pathname);
-    return active ?? null;
-  });
+  const [openItem, setOpenItem] = React.useState<string | null>(null);
   const [openSubTrees, setOpenSubTrees] = React.useState<Record<string, boolean>>({});
   const rememberedOpen = React.useRef<string | null>(openItem);
 
@@ -672,11 +675,11 @@ function AppSidebarContent() {
     return () => window.removeEventListener("toggle-sidebar", handler);
   }, [handleToggle]);
 
-  // Auto-expand the correct collapsible on route change
+  // Auto-expand the correct collapsible on route change.
   React.useEffect(() => {
     const activeItem = getActiveItemTitle(pathname);
     setOpenItem(activeItem ?? null);
-  }, [pathname, currentSearchStr, hash]);
+  }, [pathname]);
 
   // ========================================================================
   // Scroll spy — active page only (hash sections for any route)
@@ -807,7 +810,7 @@ function AppSidebarContent() {
                 className={cn(
                   "rounded-md py-1.5 motion-safe:transition-all motion-safe:duration-300",
                   "border border-transparent hover:border-border hover:bg-muted/60",
-                  "data-[active=true]:!bg-primary/15 data-[active=true]:!text-foreground",
+                  "data-[active=true]:bg-primary/15! data-[active=true]:text-foreground!",
                   isActive && "bg-primary/10 text-foreground font-medium border-primary/30"
                 )}
               >
@@ -836,7 +839,7 @@ function AppSidebarContent() {
             "rounded-md py-1.5 motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
             "hover:bg-muted/60 hover:text-foreground motion-safe:hover:translate-x-0.5",
             "border border-transparent hover:border-border",
-            "data-[active=true]:!bg-primary/15 data-[active=true]:!text-foreground",
+            "data-[active=true]:bg-primary/15! data-[active=true]:text-foreground!",
             isActive &&
               "bg-primary/10 text-foreground font-medium border-primary/30 shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.16)]"
           )}
@@ -895,7 +898,7 @@ function AppSidebarContent() {
                   "group relative overflow-hidden rounded-lg motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
                   "hover:bg-muted/60 motion-safe:hover:translate-x-0.5",
                   "border border-transparent",
-                  "data-[active=true]:!bg-primary/15 data-[active=true]:!text-foreground",
+                  "data-[active=true]:bg-primary/15! data-[active=true]:text-foreground!",
                   (isItemOpen || isHighlighted) &&
                     "bg-primary/10 border-primary/30 shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.16)]",
                   state === "collapsed" &&
@@ -980,7 +983,7 @@ function AppSidebarContent() {
             "group relative overflow-hidden rounded-lg motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
             "hover:bg-muted/60 motion-safe:hover:translate-x-0.5",
             "border border-transparent",
-            "data-[active=true]:!bg-primary/15 data-[active=true]:!text-foreground",
+            "data-[active=true]:bg-primary/15! data-[active=true]:text-foreground!",
             isActive &&
               "bg-primary/10 border-primary/40 shadow-[0_0_0_1px_rgb(var(--persona-accent-rgb)/0.16)]",
             state === "collapsed" &&
