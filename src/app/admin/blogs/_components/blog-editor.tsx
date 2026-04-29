@@ -148,6 +148,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
   const [featured, setFeatured] = useState(initialData.featured ?? false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [generatingMeta, setGeneratingMeta] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Array<{ id: string; slug: string; name: string }>>([]);
   const [authorProfile, setAuthorProfile] = useState<AuthorProfile | null>(null);
@@ -155,6 +156,34 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
   const toolbar = useMarkdownToolbar(contentRef, content, setContent);
+  const fieldClass =
+    "w-full rounded-lg border border-border bg-muted/60 px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/30";
+  const labelClass = "mb-2 block text-sm font-medium text-foreground";
+
+  const optimizeImageForUpload = async (file: File): Promise<File> => {
+    const imageBitmap = await createImageBitmap(file);
+    const maxWidth = 1920;
+    const maxHeight = 1080;
+    const ratio = Math.min(maxWidth / imageBitmap.width, maxHeight / imageBitmap.height, 1);
+    const targetWidth = Math.max(1, Math.floor(imageBitmap.width * ratio));
+    const targetHeight = Math.max(1, Math.floor(imageBitmap.height * ratio));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+
+    ctx.drawImage(imageBitmap, 0, 0, targetWidth, targetHeight);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.82)
+    );
+
+    if (!blob) return file;
+
+    const safeName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], safeName, { type: "image/jpeg" });
+  };
 
   useEffect(() => {
     client.blog.listCategories().then(setCategories).catch(() => setCategories([]));
@@ -179,24 +208,28 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
   };
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const originalFile = e.target.files?.[0];
+    let file = originalFile;
     if (!file || !file.type.startsWith("image/")) return;
     setUploading(true);
     setError(null);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64 = (reader.result as string).split(",")[1];
-        if (!base64) return;
-        const { url } = await client.blog.uploadCoverImage({ fileName: file.name, base64Data: base64 });
-        setCoverImage(url);
-      } catch {
-        setError("Upload failed");
-      } finally {
-        setUploading(false);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      file = await optimizeImageForUpload(file);
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      const response = await fetch("/api/blog/upload-cover", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      const data = (await response.json()) as { url?: string };
+      if (!data.url) throw new Error("Missing URL");
+      setCoverImage(data.url);
+      setUploading(false);
+    } catch {
+      setUploading(false);
+      setError("Upload failed. Try a smaller image (recommended under 2MB).");
+    }
   };
 
   const addTag = () => {
@@ -206,6 +239,30 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
   };
 
   const removeTag = (t: string) => setTags(tags.filter((x) => x !== t));
+
+  const handleGenerateMeta = async () => {
+    setGeneratingMeta(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/blog/generate-meta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content }),
+      });
+      if (!response.ok) throw new Error("Failed");
+      const data = (await response.json()) as { excerpt?: string; readingTimeMinutes?: number };
+      if (typeof data.excerpt === "string" && data.excerpt.trim()) {
+        setExcerpt(data.excerpt.trim());
+      }
+      if (typeof data.readingTimeMinutes === "number") {
+        setReadingTimeMinutes(data.readingTimeMinutes);
+      }
+    } catch {
+      setError("Could not auto-generate excerpt/reading time.");
+    } finally {
+      setGeneratingMeta(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -259,89 +316,99 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <section className="border-b border-slate-200 dark:border-slate-800/50 bg-white dark:bg-slate-900/50">
-        <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-background">
+      <section className="border-b border-border bg-card/40">
+        <div className="page-shell py-8">
           <Link
             href="/admin?tab=blogs"
-            className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors mb-4"
+            className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Manage Blogs
           </Link>
-          <h1 className="dec-title text-2xl font-bold text-slate-800 dark:text-white">
+          <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
             {mode === "create" ? "New Blog Post" : "Edit Blog Post"}
           </h1>
         </div>
       </section>
 
-      <div className="container mx-auto px-4 py-8 max-w-3xl">
+      <div className="page-shell max-w-4xl py-8">
         {error && (
-          <div className="mb-6 p-4 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 text-sm">
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
             {error}
           </div>
         )}
 
         <div className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Title</label>
+            <label className={labelClass}>Title</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Blog post title"
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
+              className={fieldClass}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Slug</label>
+            <label className={labelClass}>Slug</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 placeholder="url-friendly-slug"
-                className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 font-mono text-sm focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
+                className={cn(fieldClass, "flex-1 font-mono text-sm")}
               />
               <button
                 type="button"
                 onClick={handleSlugFromTitle}
-                className="px-3 py-2.5 text-xs text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-cyan-500/30"
+                className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
               >
                 From title
               </button>
             </div>
-            <p className="mt-1 text-xs text-slate-500">/resources/blogs/{slug || "..."}</p>
+            <p className="mt-1 text-xs text-muted-foreground">/resources/blogs/{slug || "..."}</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Excerpt</label>
+            <label className={labelClass}>Excerpt</label>
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={handleGenerateMeta}
+                disabled={generatingMeta || (!title.trim() && !content.trim())}
+                className="rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:border-primary/40 hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {generatingMeta ? "Generating..." : "Auto-generate excerpt + reading time"}
+              </button>
+            </div>
             <textarea
               value={excerpt}
               onChange={(e) => setExcerpt(e.target.value)}
               placeholder="Short summary for listing cards"
               rows={2}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 placeholder-slate-400 resize-y focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
+              className={cn(fieldClass, "resize-y")}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Cover Image</label>
+            <label className={labelClass}>Cover Image</label>
             <div className="flex items-start gap-4">
               {coverImage && (
-                <div className="relative h-24 w-32 shrink-0 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-800">
+                <div className="relative h-24 w-32 shrink-0 overflow-hidden rounded-lg bg-muted">
                   <Image src={coverImage} alt="Cover" fill className="object-cover" />
                   <button
                     type="button"
                     onClick={() => setCoverImage(null)}
-                    className="absolute top-1 right-1 p-1 rounded bg-red-500/80 text-white text-xs hover:bg-red-500"
+                    className="absolute right-1 top-1 rounded bg-red-500/80 p-1 text-xs text-white hover:bg-red-500"
                   >
                     Remove
                   </button>
                 </div>
               )}
-              <label className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:border-cyan-500/40 cursor-pointer text-sm">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
                 <Upload className="h-4 w-4" />
                 {uploading ? "Uploading..." : "Upload image"}
                 <input type="file" accept="image/*" onChange={handleCoverUpload} disabled={uploading} className="sr-only" />
@@ -352,11 +419,11 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
           {/* Category, tags, reading time, featured */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Category</label>
+              <label className={labelClass}>Category</label>
               <select
                 value={categoryId ?? ""}
                 onChange={(e) => setCategoryId(e.target.value || null)}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
+                className={fieldClass}
               >
                 <option value="">None</option>
                 {categories.map((c) => (
@@ -367,7 +434,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
               </select>
             </div>
             <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              <label className={cn(labelClass, "flex items-center gap-1.5")}>
                 <Clock className="h-4 w-4" />
                 Reading time (min)
               </label>
@@ -377,13 +444,13 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                 value={readingTimeMinutes ?? ""}
                 onChange={(e) => setReadingTimeMinutes(e.target.value ? parseInt(e.target.value, 10) : null)}
                 placeholder="e.g. 5"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-800 dark:text-slate-100 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30"
+                className={fieldClass}
               />
             </div>
           </div>
 
           <div>
-            <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label className={cn(labelClass, "flex items-center gap-1.5")}>
               <Tag className="h-4 w-4" />
               Tags
             </label>
@@ -391,7 +458,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
               {tags.map((t) => (
                 <span
                   key={t}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 text-xs font-medium"
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
                 >
                   {t}
                   <button type="button" onClick={() => removeTag(t)} className="hover:text-red-500">
@@ -406,9 +473,9 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
                   placeholder="Add tag"
-                  className="w-24 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
+                  className="w-24 rounded border border-border bg-muted/60 px-2 py-1 text-sm text-foreground"
                 />
-                <button type="button" onClick={addTag} className="px-2 py-1 text-xs text-cyan-600 dark:text-cyan-400 hover:underline">
+                <button type="button" onClick={addTag} className="px-2 py-1 text-xs text-primary hover:underline">
                   Add
                 </button>
               </div>
@@ -423,7 +490,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                 onChange={(e) => setPublished(e.target.checked)}
                 className="rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-cyan-500 focus:ring-cyan-500/30"
               />
-              <span className="text-sm text-slate-700 dark:text-slate-300">Publish immediately</span>
+              <span className="text-sm text-foreground">Publish immediately</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -433,74 +500,74 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                 className="rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-cyan-500 focus:ring-cyan-500/30"
               />
               <Star className="h-4 w-4 text-amber-500" />
-              <span className="text-sm text-slate-700 dark:text-slate-300">Featured</span>
+              <span className="text-sm text-foreground">Featured</span>
             </label>
           </div>
 
           {/* Author profile - only show when fields are missing */}
           {missingProfileFields.length > 0 && (
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/30 p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">
-                <User className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+            <div className="rounded-xl border border-border bg-card/60 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
+                <User className="h-4 w-4 text-primary" />
                 Complete your author profile ({missingProfileFields.length} missing)
               </div>
               <div className="space-y-3">
                 {missingProfileFields.includes("linkedin") && (
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">LinkedIn URL</label>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">LinkedIn URL</label>
                     <input
                       type="url"
                       value={profileForm?.linkedin ?? ""}
                       onChange={(e) => setProfileForm((p) => ({ ...p, linkedin: e.target.value || null }))}
                       placeholder="https://linkedin.com/in/username"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
+                      className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm text-foreground"
                     />
                   </div>
                 )}
                 {missingProfileFields.includes("x") && (
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">X (Twitter) URL</label>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">X (Twitter) URL</label>
                     <input
                       type="url"
                       value={profileForm?.x ?? ""}
                       onChange={(e) => setProfileForm((p) => ({ ...p, x: e.target.value || null }))}
                       placeholder="https://x.com/username"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
+                      className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm text-foreground"
                     />
                   </div>
                 )}
                 {missingProfileFields.includes("facebook") && (
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Facebook URL</label>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Facebook URL</label>
                     <input
                       type="url"
                       value={profileForm?.facebook ?? ""}
                       onChange={(e) => setProfileForm((p) => ({ ...p, facebook: e.target.value || null }))}
                       placeholder="https://facebook.com/username"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
+                      className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm text-foreground"
                     />
                   </div>
                 )}
                 {missingProfileFields.includes("telegram") && (
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Telegram</label>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Telegram</label>
                     <input
                       type="text"
                       value={profileForm?.telegram ?? ""}
                       onChange={(e) => setProfileForm((p) => ({ ...p, telegram: e.target.value || null }))}
                       placeholder="@username or username"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm"
+                      className="w-full rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm text-foreground"
                     />
                   </div>
                 )}
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Bio (optional)</label>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Bio (optional)</label>
                   <textarea
                     value={profileForm?.bio ?? ""}
                     onChange={(e) => setProfileForm((p) => ({ ...p, bio: e.target.value || null }))}
                     placeholder="Short author bio"
                     rows={2}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-sm resize-y"
+                    className="w-full resize-y rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm text-foreground"
                   />
                 </div>
               </div>
@@ -509,49 +576,49 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
 
           {/* Content with toolbar */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Content (Markdown)</label>
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800/50">
-              <div className="flex flex-wrap gap-1 p-2 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80">
-                <button type="button" onClick={toolbar.bold} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Bold">
+            <label className={labelClass}>Content (Markdown)</label>
+            <div className="overflow-hidden rounded-xl border border-border bg-card/60">
+              <div className="flex flex-wrap gap-1 border-b border-border bg-muted/40 p-2">
+                <button type="button" onClick={toolbar.bold} className="rounded p-2 hover:bg-muted" title="Bold">
                   <Bold className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.italic} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Italic">
+                <button type="button" onClick={toolbar.italic} className="rounded p-2 hover:bg-muted" title="Italic">
                   <Italic className="h-4 w-4" />
                 </button>
-                <span className="w-px h-6 bg-slate-300 dark:bg-slate-600 my-1" />
-                <button type="button" onClick={toolbar.h1} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Heading 1">
+                <span className="my-1 h-6 w-px bg-border" />
+                <button type="button" onClick={toolbar.h1} className="rounded p-2 hover:bg-muted" title="Heading 1">
                   <Heading1 className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.h2} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Heading 2">
+                <button type="button" onClick={toolbar.h2} className="rounded p-2 hover:bg-muted" title="Heading 2">
                   <Heading2 className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.h3} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Heading 3">
+                <button type="button" onClick={toolbar.h3} className="rounded p-2 hover:bg-muted" title="Heading 3">
                   <Heading3 className="h-4 w-4" />
                 </button>
-                <span className="w-px h-6 bg-slate-300 dark:bg-slate-600 my-1" />
-                <button type="button" onClick={toolbar.ul} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Bullet list">
+                <span className="my-1 h-6 w-px bg-border" />
+                <button type="button" onClick={toolbar.ul} className="rounded p-2 hover:bg-muted" title="Bullet list">
                   <List className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.ol} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Numbered list">
+                <button type="button" onClick={toolbar.ol} className="rounded p-2 hover:bg-muted" title="Numbered list">
                   <ListOrdered className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.quote} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Quote">
+                <button type="button" onClick={toolbar.quote} className="rounded p-2 hover:bg-muted" title="Quote">
                   <Quote className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.code} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Inline code">
+                <button type="button" onClick={toolbar.code} className="rounded p-2 hover:bg-muted" title="Inline code">
                   <Code className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.codeBlock} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Code block">
+                <button type="button" onClick={toolbar.codeBlock} className="rounded p-2 hover:bg-muted" title="Code block">
                   <Code className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.hr} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Horizontal rule">
+                <button type="button" onClick={toolbar.hr} className="rounded p-2 hover:bg-muted" title="Horizontal rule">
                   <Minus className="h-4 w-4" />
                 </button>
-                <span className="w-px h-6 bg-slate-300 dark:bg-slate-600 my-1" />
-                <button type="button" onClick={toolbar.link} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Link">
+                <span className="my-1 h-6 w-px bg-border" />
+                <button type="button" onClick={toolbar.link} className="rounded p-2 hover:bg-muted" title="Link">
                   <LinkIcon className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={toolbar.image} className="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title="Image">
+                <button type="button" onClick={toolbar.image} className="rounded p-2 hover:bg-muted" title="Image">
                   <ImageIcon className="h-4 w-4" />
                 </button>
               </div>
@@ -561,7 +628,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Write your blog post in Markdown..."
                 rows={18}
-                className="w-full px-4 py-3 font-mono text-sm resize-y bg-transparent text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-0"
+                className="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
               />
             </div>
           </div>
@@ -582,7 +649,7 @@ export function BlogEditor({ mode, postId, initialData }: BlogEditorProps) {
             </button>
             <Link
               href="/admin?tab=blogs"
-              className="px-6 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors"
+              className="rounded-lg border border-border px-6 py-2.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
             >
               Cancel
             </Link>
