@@ -20,8 +20,8 @@ const supportLinks = [
 ];
 
 const socialLinks = [
-  { name: "YouTube", href: "https://www.youtube.com/@avarch", icon: Youtube },
-  { name: "LinkedIn", href: "https://www.linkedin.com/company/avarch", icon: Linkedin },
+  { name: "YouTube", href: "https://www.youtube.com/@etherworldco", icon: Youtube },
+  { name: "LinkedIn", href: "https://www.linkedin.com/company/eipsinsight/", icon: Linkedin },
   { name: "X", href: "https://x.com/EIPsInsight", icon: Twitter },
   { name: "EtherWorld", href: "https://etherworld.co/", icon: Globe },
 ];
