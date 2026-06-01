@@ -6837,14 +6837,16 @@ export const analyticsProcedures = {
           COUNT(*)::bigint AS total_events
         FROM pr_events pe
         JOIN repositories r ON pe.repository_id = r.id
-        WHERE pe.created_at >= $1::date
+        WHERE LOWER(pe.actor) = ANY($3::text[])
+          AND pe.created_at >= $1::date
           AND pe.created_at < $1::date + INTERVAL '1 day'
           AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
         GROUP BY DATE_TRUNC('hour', pe.created_at)
         ORDER BY hour ASC
         `,
         targetDate,
-        input.repo ?? null
+        input.repo ?? null,
+        CANONICAL_EIP_EDITOR_LOWER
       );
       return results.map((r) => ({
         hour: r.hour.toISOString(),
@@ -6860,8 +6862,6 @@ export const analyticsProcedures = {
     }))
     .handler(async ({ input }) => {
       const targetDate = input.date ?? new Date().toISOString().slice(0, 10);
-      // Exclude bots and associate editors that would skew sprint metrics
-      const EXCLUDED = ['abcoathup', 'eip-review-bot'];
       const results = await prisma.$queryRawUnsafe<Array<{
         editor: string;
         prs_reviewed: bigint;
@@ -6880,17 +6880,16 @@ export const analyticsProcedures = {
           COUNT(*) FILTER (WHERE pe.event_type = 'merged')::bigint AS merges
         FROM pr_events pe
         JOIN repositories r ON pe.repository_id = r.id
-        WHERE pe.actor_role = 'EDITOR'
+        WHERE LOWER(pe.actor) = ANY($3::text[])
           AND pe.created_at >= $1::date
           AND pe.created_at < $1::date + INTERVAL '1 day'
-          AND pe.actor != ALL($3::text[])
           AND ($2::text IS NULL OR LOWER(SPLIT_PART(r.name, '/', 2)) = LOWER($2))
         GROUP BY pe.actor
         ORDER BY prs_reviewed DESC, total_events DESC
         `,
         targetDate,
         input.repo ?? null,
-        EXCLUDED
+        CANONICAL_EIP_EDITOR_LOWER
       );
       return results.map((r) => ({
         editor: r.editor,
@@ -6991,12 +6990,14 @@ export const analyticsProcedures = {
           COUNT(DISTINCT pe.pr_number)::bigint AS prs_checked
         FROM pr_events pe
         JOIN repositories r ON pe.repository_id = r.id
-        WHERE pe.created_at >= $1::date
+        WHERE LOWER(pe.actor) = ANY($2::text[])
+          AND pe.created_at >= $1::date
           AND pe.created_at < $1::date + INTERVAL '1 day'
         GROUP BY DATE_TRUNC('hour', pe.created_at), LOWER(SPLIT_PART(r.name, '/', 2))
         ORDER BY hour ASC
         `,
-        targetDate
+        targetDate,
+        CANONICAL_EIP_EDITOR_LOWER
       );
       return results.map((r) => ({
         hour: r.hour.toISOString(),
@@ -7032,20 +7033,84 @@ export const analyticsProcedures = {
         JOIN pull_request_eips pei ON pei.pr_number = pe.pr_number AND pei.repository_id = pe.repository_id
         JOIN eips e ON e.eip_number = pei.eip_number
         LEFT JOIN eip_snapshots s ON s.eip_id = e.id
-        WHERE pe.created_at >= $1::date + ($2 || ' hours')::interval
+        WHERE LOWER(pe.actor) = ANY($4::text[])
+          AND pe.created_at >= $1::date + ($2 || ' hours')::interval
           AND pe.created_at <  $1::date + ($3 || ' hours')::interval
         GROUP BY s.category, proposal_type, s.status
         ORDER BY prs_checked DESC
         `,
         targetDate,
         input.startHour,
-        input.endHour
+        input.endHour,
+        CANONICAL_EIP_EDITOR_LOWER
       );
       return results.map(r => ({
         category: r.category ?? 'Unknown',
         proposalType: r.proposal_type,
         status: r.status ?? 'Unknown',
         prsChecked: Number(r.prs_checked),
+      }));
+    }),
+
+  getEventDayPRList: optionalAuthProcedure
+    .input(z.object({
+      date: z.string().optional(),
+    }))
+    .handler(async ({ input }) => {
+      const targetDate = input.date ?? new Date().toISOString().slice(0, 10);
+      const results = await prisma.$queryRawUnsafe<Array<{
+        pr_number: number;
+        repo_name: string;
+        repo_type: string;
+        title: string | null;
+        state: string | null;
+        merged_at: Date | null;
+        editors: string[];
+        reviews: bigint;
+        comments: bigint;
+        merges: bigint;
+        eip_numbers: number[];
+      }>>(
+        `
+        SELECT
+          pe.pr_number,
+          r.name AS repo_name,
+          LOWER(SPLIT_PART(r.name, '/', 2)) AS repo_type,
+          pr.title,
+          pr.state,
+          pr.merged_at,
+          ARRAY_AGG(DISTINCT pe.actor ORDER BY pe.actor) AS editors,
+          COUNT(*) FILTER (WHERE pe.event_type IN ('reviewed', 'approved', 'changes_requested'))::bigint AS reviews,
+          COUNT(*) FILTER (WHERE pe.event_type IN ('commented', 'issue_comment', 'review_comment'))::bigint AS comments,
+          COUNT(*) FILTER (WHERE pe.event_type = 'merged')::bigint AS merges,
+          COALESCE(ARRAY_AGG(DISTINCT pei.eip_number) FILTER (WHERE pei.eip_number IS NOT NULL), '{}') AS eip_numbers
+        FROM pr_events pe
+        JOIN repositories r ON pe.repository_id = r.id
+        LEFT JOIN pull_requests pr ON pr.pr_number = pe.pr_number AND pr.repository_id = pe.repository_id
+        LEFT JOIN pull_request_eips pei ON pei.pr_number = pe.pr_number AND pei.repository_id = pe.repository_id
+        WHERE LOWER(pe.actor) = ANY($2::text[])
+          AND pe.created_at >= $1::date
+          AND pe.created_at < $1::date + INTERVAL '1 day'
+        GROUP BY pe.pr_number, r.name, repo_type, pr.title, pr.state, pr.merged_at
+        ORDER BY MAX(pe.created_at) DESC
+        LIMIT 200
+        `,
+        targetDate,
+        CANONICAL_EIP_EDITOR_LOWER
+      );
+      return results.map(r => ({
+        prNumber: r.pr_number,
+        repoName: r.repo_name,
+        repoType: r.repo_type,
+        title: r.title ?? `PR #${r.pr_number}`,
+        state: r.state ?? 'open',
+        mergedAt: r.merged_at?.toISOString() ?? null,
+        editors: r.editors,
+        reviews: Number(r.reviews),
+        comments: Number(r.comments),
+        merges: Number(r.merges),
+        eipNumbers: r.eip_numbers.map(Number),
+        githubUrl: `https://github.com/${r.repo_name}/pull/${r.pr_number}`,
       }));
     }),
 }
