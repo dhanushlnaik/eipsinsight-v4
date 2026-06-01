@@ -31,6 +31,7 @@ import {
   PartyPopper,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { client } from "@/lib/orpc";
 
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
@@ -88,6 +89,21 @@ type ProposalBreakdown = {
   proposalType: string;
   status: string;
   prsChecked: number;
+};
+
+type PRListItem = {
+  prNumber: number;
+  repoName: string;
+  repoType: string;
+  title: string;
+  state: string;
+  mergedAt: string | null;
+  editors: string[];
+  reviews: number;
+  comments: number;
+  merges: number;
+  eipNumbers: number[];
+  githubUrl: string;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -601,6 +617,10 @@ export default function EIPOH100Page() {
   const [showBlitzAnim, setShowBlitzAnim] = useState(false);
   const [showBlitzComplete, setShowBlitzComplete] = useState(false);
   const [proposalBreakdown, setProposalBreakdown] = useState<ProposalBreakdown[]>([]);
+  const [showPRDialog, setShowPRDialog] = useState(false);
+  const [prList, setPRList] = useState<PRListItem[]>([]);
+  const [prListLoading, setPRListLoading] = useState(false);
+  const [prFilter, setPRFilter] = useState<"all" | "eips" | "ercs" | "rips">("all");
   const prevSprintStatus = React.useRef(sprint.status);
 
   const chartColors = useChartColors();
@@ -628,6 +648,20 @@ export default function EIPOH100Page() {
       setLoading(false);
     }
   }, [displayDate]);
+
+  const openPRDialog = useCallback(async () => {
+    setShowPRDialog(true);
+    if (prList.length > 0) return;
+    setPRListLoading(true);
+    try {
+      const data = await client.analytics.getEventDayPRList({ date: displayDate });
+      setPRList(data as PRListItem[]);
+    } catch (err) {
+      console.error("PR list fetch error:", err);
+    } finally {
+      setPRListLoading(false);
+    }
+  }, [displayDate, prList.length]);
 
   useEffect(() => {
     fetchData();
@@ -919,11 +953,10 @@ export default function EIPOH100Page() {
               </span>
               <button
                 type="button"
-                onClick={() => setShowBlitzComplete(true)}
-                className="inline-flex h-8 items-center gap-1 rounded-md border border-dashed border-emerald-500/50 bg-emerald-500/10 px-2.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-400"
-                title="Dev only — simulate blitz complete animation"
+                onClick={openPRDialog}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
               >
-                🎉 Simulate End
+                <GitPullRequest className="h-3.5 w-3.5" />View PRs
               </button>
               <button
                 type="button"
@@ -1305,6 +1338,118 @@ export default function EIPOH100Page() {
 
       </div>
     </div>
+
+    {/* ── PR List Dialog ── */}
+    <Dialog open={showPRDialog} onOpenChange={(open) => { setShowPRDialog(open); if (!open) { setPRList([]); setPRFilter("all"); } }}>
+      <DialogContent className="max-h-[85vh] w-full max-w-3xl flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-3 border-b border-border">
+          <div className="flex items-center justify-between pr-6">
+            <DialogTitle className="flex items-center gap-2">
+              <GitPullRequest className="h-4 w-4 text-primary" />
+              PRs Reviewed
+              {!prListLoading && (
+                <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  {prList.filter(p => prFilter === "all" || p.repoType === prFilter).length}
+                </span>
+              )}
+            </DialogTitle>
+            <div className="flex items-center gap-1">
+              {(["all", "eips", "ercs", "rips"] as const).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setPRFilter(f)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    prFilter === f
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {f === "all" ? "All" : f.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-3 space-y-2">
+          {prListLoading ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              Loading PRs…
+            </div>
+          ) : prList.filter(p => prFilter === "all" || p.repoType === prFilter).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-sm text-muted-foreground">
+              <GitPullRequest className="mb-2 h-8 w-8 opacity-30" />
+              No PRs found
+            </div>
+          ) : (
+            prList
+              .filter(p => prFilter === "all" || p.repoType === prFilter)
+              .map(pr => (
+                <div key={`${pr.repoName}-${pr.prNumber}`}
+                  className="rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:border-primary/30 hover:bg-primary/5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <a
+                          href={pr.githubUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-mono font-semibold text-primary hover:underline shrink-0"
+                        >
+                          #{pr.prNumber}
+                        </a>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                          pr.repoType === "ercs" ? "bg-violet-500/15 text-violet-700 dark:text-violet-400" :
+                          pr.repoType === "rips" ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400" :
+                          "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400"
+                        }`}>
+                          {pr.repoType === "ercs" ? "ERC" : pr.repoType === "rips" ? "RIP" : "EIP"}
+                        </span>
+                        {pr.mergedAt ? (
+                          <span className="shrink-0 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Merged</span>
+                        ) : pr.state === "closed" ? (
+                          <span className="shrink-0 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-400">Closed</span>
+                        ) : (
+                          <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">Open</span>
+                        )}
+                        {pr.eipNumbers.length > 0 && pr.eipNumbers.slice(0, 3).map(n => (
+                          <span key={n} className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            EIP-{n}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-1 text-sm font-medium text-foreground line-clamp-1">{pr.title}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{pr.repoName}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        {pr.reviews > 0 && <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{pr.reviews}</span>}
+                        {pr.comments > 0 && <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{pr.comments}</span>}
+                        {pr.merges > 0 && <span className="flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"><GitMerge className="h-3 w-3" />{pr.merges}</span>}
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {pr.editors.map(e => (
+                          <span key={e} className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            @{e}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+          )}
+        </div>
+
+        <div className="border-t border-border px-6 py-3 text-[11px] text-muted-foreground">
+          Showing today&apos;s blitz window · Editor PRs only
+        </div>
+      </DialogContent>
+    </Dialog>
+
     </TooltipProvider>
   );
 }
