@@ -6958,7 +6958,7 @@ export const analyticsProcedures = {
         LEFT JOIN repositories r ON se.repository_id = r.id
         WHERE se.changed_at >= $1::date
           AND se.changed_at < $1::date + INTERVAL '1 day'
-          AND (se.pr_number IS NULL OR se.pr_number != 1689)
+          AND se.eip_id != 8136
         GROUP BY se.from_status, se.to_status, proposal_type
         ORDER BY count DESC
         `,
@@ -7033,7 +7033,7 @@ export const analyticsProcedures = {
         LEFT JOIN repositories r ON se.repository_id = r.id
         WHERE se.changed_at >= $1::date
           AND se.changed_at < $1::date + INTERVAL '18 hours'
-          AND (se.pr_number IS NULL OR se.pr_number != 1689)
+          AND se.eip_id != 8136
         GROUP BY proposal_type, s.category, se.to_status
         ORDER BY prs_checked DESC
         `,
