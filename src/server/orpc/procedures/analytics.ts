@@ -6943,22 +6943,18 @@ export const analyticsProcedures = {
       const results = await prisma.$queryRawUnsafe<Array<{
         from_status: string | null;
         to_status: string;
-        proposal_type: string;
         count: bigint;
       }>>(
         `
         SELECT
           se.from_status,
           se.to_status,
-          CASE WHEN s.category = 'ERC' THEN 'ERC' WHEN r.name LIKE '%RIPs%' THEN 'RIP' ELSE 'EIP' END AS proposal_type,
-          COUNT(*)::bigint AS count
+          COUNT(DISTINCT se.eip_id)::bigint AS count
         FROM eip_status_events se
-        JOIN eips e ON se.eip_id = e.id
-        LEFT JOIN eip_snapshots s ON s.eip_id = e.id
-        LEFT JOIN repositories r ON se.repository_id = r.id
         WHERE se.changed_at >= $1::date
           AND se.changed_at < $1::date + INTERVAL '1 day'
-        GROUP BY se.from_status, se.to_status, proposal_type
+          AND se.eip_id != 8136
+        GROUP BY se.from_status, se.to_status
         ORDER BY count DESC
         `,
         targetDate
@@ -6966,7 +6962,7 @@ export const analyticsProcedures = {
       return results.map((r) => ({
         fromStatus: r.from_status ?? '—',
         toStatus: r.to_status,
-        proposalType: r.proposal_type,
+        proposalType: '',
         count: Number(r.count),
         label: `${r.from_status ?? 'New'} → ${r.to_status}`,
       }));
@@ -7009,45 +7005,38 @@ export const analyticsProcedures = {
   getEventDayProposalBreakdown: optionalAuthProcedure
     .input(z.object({
       date: z.string().optional(),
-      startHour: z.number().min(0).max(23).optional().default(0),
-      endHour: z.number().min(1).max(24).optional().default(24),
     }))
     .handler(async ({ input }) => {
       const targetDate = input.date ?? new Date().toISOString().slice(0, 10);
       const results = await prisma.$queryRawUnsafe<Array<{
-        category: string | null;
         proposal_type: string;
-        status: string | null;
+        category: string | null;
+        status: string;
         prs_checked: bigint;
       }>>(
         `
         SELECT
-          COALESCE(s.category, 'Unknown') AS category,
-          CASE WHEN s.category = 'ERC' THEN 'ERC'
-               WHEN r.name LIKE '%RIPs%' THEN 'RIP'
+          CASE WHEN r.name ILIKE '%ERCs%' THEN 'ERC'
+               WHEN r.name ILIKE '%RIPs%' THEN 'RIP'
                ELSE 'EIP' END AS proposal_type,
-          COALESCE(s.status, 'Unknown') AS status,
-          COUNT(DISTINCT e.eip_number)::bigint AS prs_checked
-        FROM pr_events pe
-        JOIN repositories r ON pe.repository_id = r.id
-        JOIN pull_request_eips pei ON pei.pr_number = pe.pr_number AND pei.repository_id = pe.repository_id
-        JOIN eips e ON e.eip_number = pei.eip_number
-        LEFT JOIN eip_snapshots s ON s.eip_id = e.id AND s.repository_id = pe.repository_id
-        WHERE LOWER(pe.actor) = ANY($4::text[])
-          AND pe.created_at >= $1::date + ($2 || ' hours')::interval
-          AND pe.created_at <  $1::date + ($3 || ' hours')::interval
-          AND s.eip_id IS NOT NULL
-        GROUP BY s.category, proposal_type, s.status
+          COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Unknown') AS category,
+          se.to_status AS status,
+          COUNT(DISTINCT se.eip_id)::bigint AS prs_checked
+        FROM eip_status_events se
+        JOIN eips e ON se.eip_id = e.id
+        LEFT JOIN eip_snapshots s ON s.eip_id = e.id
+        LEFT JOIN repositories r ON se.repository_id = r.id
+        WHERE se.changed_at >= $1::date
+          AND se.changed_at < $1::date + INTERVAL '18 hours'
+          AND se.eip_id != 8136
+        GROUP BY proposal_type, COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Unknown'), se.to_status
         ORDER BY prs_checked DESC
         `,
-        targetDate,
-        input.startHour,
-        input.endHour,
-        CANONICAL_EIP_EDITOR_LOWER
+        targetDate
       );
       return results.map(r => ({
         category: r.category ?? 'Unknown',
-        proposalType: r.proposal_type,
+        proposalType: r.proposal_type ?? 'Unknown',
         status: r.status ?? 'Unknown',
         prsChecked: Number(r.prs_checked),
       }));
