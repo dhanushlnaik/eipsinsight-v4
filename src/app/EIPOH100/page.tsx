@@ -959,14 +959,11 @@ export default function EIPOH100Page() {
               <button
                 type="button"
                 onClick={() => { fetchData(); setCountdown(60); }}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-[11px] font-medium text-emerald-700 transition-colors hover:border-emerald-500/60 hover:bg-emerald-500/20 dark:text-emerald-400"
               >
-                <RefreshCw className="h-3.5 w-3.5" />Refresh
-              </button>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                 <CountdownRing seconds={countdown} />
-                <span className="tabular-nums">Live · {countdown}s</span>
-              </span>
+                <span className="tabular-nums">Refresh · {countdown}s</span>
+              </button>
             </div>
           </div>
 
