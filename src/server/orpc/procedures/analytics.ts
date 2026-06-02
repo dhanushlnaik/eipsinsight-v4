@@ -7019,7 +7019,7 @@ export const analyticsProcedures = {
           CASE WHEN r.name ILIKE '%ERCs%' THEN 'ERC'
                WHEN r.name ILIKE '%RIPs%' THEN 'RIP'
                ELSE 'EIP' END AS proposal_type,
-          COALESCE(s.category, s.type, 'Unknown') AS category,
+          COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Unknown') AS category,
           se.to_status AS status,
           COUNT(DISTINCT se.eip_id)::bigint AS prs_checked
         FROM eip_status_events se
@@ -7029,7 +7029,7 @@ export const analyticsProcedures = {
         WHERE se.changed_at >= $1::date
           AND se.changed_at < $1::date + INTERVAL '18 hours'
           AND se.eip_id != 8136
-        GROUP BY proposal_type, s.category, s.type, se.to_status
+        GROUP BY proposal_type, COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Unknown'), se.to_status
         ORDER BY prs_checked DESC
         `,
         targetDate
