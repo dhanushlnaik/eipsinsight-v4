@@ -248,62 +248,70 @@ export function SearchBar() {
   return (
     <div className="relative mx-auto w-full max-w-3xl">
       <div className="relative">
-        {/* Search Icon */}
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        
-        {/* Search Input */}
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Search EIPs, ERCs, RIPs, authors, status…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return;
-
-            const trimmed = query.trim();
-            if (!trimmed) return;
-
-            // If dropdown is open and has selected results, keyboard effect handles Enter.
-            // Otherwise, fall back to full search page.
-            if (!showDropdown || allResults.length === 0 || loading) {
-              e.preventDefault();
-              setShowDropdown(false);
-              openSearchPage(trimmed);
-            }
-          }}
-          onFocus={() => {
-            if (query.trim() || hasResults) {
-              setShowDropdown(true);
-            }
-          }}
-          onBlur={() => {
-            // Delay to allow click events
-            setTimeout(() => setShowDropdown(false), 200);
-          }}
+        <div
           className={cn(
-            "h-10 w-full rounded-lg border border-border bg-muted/60 pl-10 pr-10 text-sm text-foreground",
-            "placeholder:text-muted-foreground backdrop-blur-sm transition-all duration-200",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:border-primary/40"
+            "flex h-10 items-center gap-2.5 rounded-lg border border-border bg-muted/60 px-3 backdrop-blur-sm transition-all duration-200",
+            "focus-within:outline-none focus-within:ring-2 focus-within:ring-ring/40 focus-within:border-primary/40"
           )}
-        />
-        
-        {/* Loading / Clear Button */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : query ? (
-            <button
-              onClick={() => {
-                setQuery('');
+        >
+          <Search
+            aria-hidden
+            className="pb-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+          />
+
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Search EIPs, ERCs, RIPs, authors, status…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+
+              const trimmed = query.trim();
+              if (!trimmed) return;
+
+              // If dropdown is open and has selected results, keyboard effect handles Enter.
+              // Otherwise, fall back to full search page.
+              if (!showDropdown || allResults.length === 0 || loading) {
+                e.preventDefault();
                 setShowDropdown(false);
-                inputRef.current?.focus();
-              }}
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
+                openSearchPage(trimmed);
+              }
+            }}
+            onFocus={() => {
+              if (query.trim() || hasResults) {
+                setShowDropdown(true);
+              }
+            }}
+            onBlur={() => {
+              // Delay to allow click events
+              setTimeout(() => setShowDropdown(false), 200);
+            }}
+            className={cn(
+              "min-w-0 flex-1 bg-transparent text-sm text-foreground",
+              "placeholder:text-muted-foreground focus:outline-none"
+            )}
+          />
+
+          <div className="flex shrink-0 items-center">
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : query ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setShowDropdown(false);
+                  inputRef.current?.focus();
+                }}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
