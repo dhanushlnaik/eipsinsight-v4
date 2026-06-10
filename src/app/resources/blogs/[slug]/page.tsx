@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -15,11 +15,17 @@ import {
   Heart,
   Copy,
   Check,
+  Share2,
+  Calendar,
+  MessageCircle,
+  Bookmark,
 } from "lucide-react";
 import { client } from "@/lib/orpc";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { PageComments } from "@/components/page-comments";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { motion, useScroll, useSpring } from "framer-motion";
 
 type Author = {
   id: string;
@@ -54,25 +60,28 @@ type BlogPost = {
 
 type Heading = { id: string; text: string; level: number };
 
+function ReadingProgressBar() {
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001
+  });
+
+  return (
+    <motion.div
+      className="fixed top-0 left-0 right-0 z-50 h-1 origin-left bg-primary"
+      style={{ scaleX }}
+    />
+  );
+}
+
 function formatPublishedDate(date: Date | string) {
   return new Date(date).toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
-}
-
-function getScrollParent(element: HTMLElement | null): HTMLElement | Window {
-  if (!element) return window;
-  let current: HTMLElement | null = element.parentElement;
-  while (current) {
-    const style = window.getComputedStyle(current);
-    const overflowY = style.overflowY;
-    const isScrollable = (overflowY === "auto" || overflowY === "scroll") && current.scrollHeight > current.clientHeight;
-    if (isScrollable) return current;
-    current = current.parentElement;
-  }
-  return window;
 }
 
 export default function BlogPostPage() {
@@ -87,237 +96,101 @@ export default function BlogPostPage() {
   const [liked, setLiked] = useState(false);
   const [copied, setCopied] = useState(false);
   const [likeKey, setLikeKey] = useState<string | null>(null);
-  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
   const [headings, setHeadings] = useState<Heading[]>([]);
-  const profile = post?.author?.blog_editor_profile;
-  const hasSocial = profile && (profile.linkedin || profile.x || profile.facebook || profile.telegram);
+  const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("blog-like-key");
     if (stored) {
       setLikeKey(stored);
-      return;
+    } else {
+      const key = `anon:${Math.random().toString(36).slice(2)}${Date.now()}`;
+      localStorage.setItem("blog-like-key", key);
+      setLikeKey(key);
     }
-
-    const key = `anon:${Math.random().toString(36).slice(2)}${Date.now()}`;
-    localStorage.setItem("blog-like-key", key);
-    setLikeKey(key);
   }, []);
 
   useEffect(() => {
     if (!slug) return;
-
     let cancelled = false;
     setLoading(true);
-    setError(null);
 
-    client.blog
-      .getBySlug({ slug })
+    client.blog.getBySlug({ slug })
       .then((result) => {
-        if (!cancelled) {
-          setPost(result);
-        }
+        if (!cancelled) setPost(result);
       })
       .catch(() => {
-        if (!cancelled) {
-          setError("Post not found");
-        }
+        if (!cancelled) setError("Post not found");
       })
       .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [slug]);
 
   useEffect(() => {
     if (!post?.id || !likeKey) return;
-
     client.blog.getLikeCount({ blogId: post.id }).then(setLikeCount);
-    client.blog.checkLiked({ blogId: post.id, likeKey }).then((result) => setLiked(result.liked));
+    client.blog.checkLiked({ blogId: post.id, likeKey }).then((res) => setLiked(res.liked));
   }, [post?.id, likeKey]);
 
   useEffect(() => {
     if (!post?.id) return;
-
-    let cancelled = false;
-
-    const loadRelatedPosts = async () => {
-      try {
-        const scoped = await client.blog.list({
-          publishedOnly: true,
-          limit: 4,
-          offset: 0,
-          categorySlug: post.category?.slug,
-        });
-
-        let nextPosts = scoped.posts.filter((candidate) => candidate.id !== post.id);
-
-        if (nextPosts.length < 3) {
-          const fallback = await client.blog.list({
-            publishedOnly: true,
-            limit: 6,
-            offset: 0,
-          });
-
-          const seen = new Set<string>([post.id, ...nextPosts.map((candidate) => candidate.id)]);
-          for (const candidate of fallback.posts) {
-            if (!seen.has(candidate.id)) {
-              nextPosts.push(candidate);
-              seen.add(candidate.id);
-            }
-            if (nextPosts.length >= 3) break;
-          }
-        }
-
-        if (!cancelled) {
-          setRelatedPosts(nextPosts.slice(0, 3));
-        }
-      } catch {
-        if (!cancelled) {
-          setRelatedPosts([]);
-        }
-      }
-    };
-
-    void loadRelatedPosts();
-
-    return () => {
-      cancelled = true;
-    };
+    client.blog.list({
+      publishedOnly: true,
+      limit: 4,
+      categorySlug: post.category?.slug,
+    }).then(res => {
+      setRelatedPosts(res.posts.filter(p => p.id !== post.id).slice(0, 3));
+    }).catch(() => setRelatedPosts([]));
   }, [post?.id, post?.category?.slug]);
 
   useEffect(() => {
-    if (!post?.content) {
-      setHeadings([]);
-      return;
-    }
-
+    if (!post?.content) return;
     const collect = () => {
-      const nodes = Array.from(
-        document.querySelectorAll<HTMLElement>(".prose h2[id], .prose h3[id]")
-      );
-
-      const next = nodes
-        .map((node) => ({
-          id: node.id,
-          text: (node.textContent ?? "").trim(),
-          level: node.tagName.toLowerCase() === "h3" ? 3 : 2,
-        }))
-        .filter((heading) => heading.text && heading.text.toLowerCase() !== "table of contents");
-
-      setHeadings(next);
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>(".prose h2[id], .prose h3[id]"));
+      setHeadings(nodes.map(n => ({
+        id: n.id,
+        text: n.textContent?.trim() || "",
+        level: n.tagName.toLowerCase() === "h3" ? 3 : 2
+      })));
     };
-
-    const frame = window.requestAnimationFrame(collect);
-    return () => window.cancelAnimationFrame(frame);
+    setTimeout(collect, 500);
   }, [post?.content]);
-
-  useEffect(() => {
-    if (!headings.length) {
-      setActiveHeadingId(null);
-      return;
-    }
-
-    const elements = headings
-      .map((heading) => document.getElementById(heading.id))
-      .filter((element): element is HTMLElement => Boolean(element));
-
-    if (!elements.length) return;
-
-    let frameId: number | null = null;
-
-    const updateActiveHeading = () => {
-      const threshold = 140;
-      const candidates = elements.map((element) => ({
-        id: element.id,
-        top: element.getBoundingClientRect().top,
-      }));
-
-      const passed = candidates.filter((candidate) => candidate.top <= threshold);
-      const currentId =
-        passed.length > 0
-          ? passed.sort((a, b) => b.top - a.top)[0].id
-          : candidates.sort((a, b) => Math.abs(a.top - threshold) - Math.abs(b.top - threshold))[0]?.id ?? elements[0].id;
-
-      setActiveHeadingId((previous) => (previous === currentId ? previous : currentId));
-      frameId = null;
-    };
-
-    const onScroll = () => {
-      if (frameId !== null) return;
-      frameId = window.requestAnimationFrame(updateActiveHeading);
-    };
-
-    updateActiveHeading();
-    const scrollRoot = getScrollParent(elements[0]);
-    if (scrollRoot === window) {
-      window.addEventListener("scroll", onScroll, { passive: true });
-      window.addEventListener("resize", onScroll);
-    } else {
-      scrollRoot.addEventListener("scroll", onScroll, { passive: true });
-      window.addEventListener("resize", onScroll);
-    }
-
-    return () => {
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-      if (scrollRoot === window) {
-        window.removeEventListener("scroll", onScroll);
-      } else {
-        scrollRoot.removeEventListener("scroll", onScroll);
-      }
-      window.removeEventListener("resize", onScroll);
-    };
-  }, [headings]);
 
   const handleLike = async () => {
     if (!post || !likeKey) return;
-
     try {
-      const result = await client.blog.toggleLike({ blogId: post.id, likeKey });
-      setLiked(result.liked);
-      setLikeCount((count) => (result.liked ? count + 1 : count - 1));
+      const res = await client.blog.toggleLike({ blogId: post.id, likeKey });
+      setLiked(res.liked);
+      setLikeCount(c => res.liked ? c + 1 : c - 1);
     } catch {
       toast.error("Could not update like");
     }
   };
 
   const handleShare = (platform: string) => {
-    const url = typeof window !== "undefined" ? window.location.href : "";
+    const url = window.location.href;
     const text = post ? `${post.title} — EIPsInsight` : "";
 
     if (platform === "copy") {
       navigator.clipboard.writeText(url);
       setCopied(true);
-      toast.success("Link copied to clipboard");
+      toast.success("Link copied!");
       setTimeout(() => setCopied(false), 2000);
       return;
     }
 
-    const urls: Record<string, string> = {
+    const shareUrls: Record<string, string> = {
       twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
       linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
     };
 
-    const nextUrl = urls[platform];
-    if (nextUrl) {
-      window.open(nextUrl, "_blank", "width=600,height=400");
+    if (shareUrls[platform]) {
+      window.open(shareUrls[platform], "_blank", "width=600,height=400");
     }
-  };
-
-  const handleTocClick = (event: React.MouseEvent<HTMLAnchorElement>, id: string) => {
-    event.preventDefault();
-    setActiveHeadingId(id);
-    const element = document.getElementById(id);
-    if (!element) return;
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   if (loading) {
@@ -330,282 +203,264 @@ export default function BlogPostPage() {
 
   if (error || !post) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="mx-auto max-w-7xl px-4 py-24 text-center sm:px-6">
-          <h1 className="dec-title text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">Post not found</h1>
-          <Link
-            href="/resources/blogs"
-            className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Blogs
-          </Link>
-        </div>
+      <div className="mx-auto max-w-7xl px-4 py-24 text-center">
+        <h1 className="text-2xl font-bold">Post not found</h1>
+        <Link href="/resources/blogs" className="mt-4 inline-flex items-center text-primary hover:underline">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Blogs
+        </Link>
       </div>
     );
   }
 
+  const profile = post.author.blog_editor_profile;
+
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-8 lg:flex-row lg:gap-8">
-          <article className="min-w-0 max-w-[980px] flex-1">
+    <div className="min-h-screen bg-background pb-20">
+      <ReadingProgressBar />
+
+      {/* Hero Header */}
+      <header className="relative w-full border-b border-border bg-card/20 pt-12 lg:pt-20">
+        <div className="page-shell max-w-4xl px-4 sm:px-6">
+          <Link
+            href="/resources/blogs"
+            className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Editorial
+          </Link>
+
+          {post.category && (
             <Link
-              href="/resources/blogs"
-              className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              href={`/resources/blogs?category=${post.category.slug}`}
+              className="mb-6 inline-flex rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/20 transition-all"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Blogs
+              {post.category.name}
             </Link>
+          )}
 
-            <header className="mb-8">
-              {post.category && (
-                <div className="mb-4">
-                  <Link
-                    href={`/resources/blogs?category=${post.category.slug}`}
-                    className="inline-flex h-7 items-center rounded-full border border-primary/30 bg-primary/10 px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary transition-colors hover:border-primary/50 hover:bg-primary/15"
-                  >
-                    {post.category.name}
-                  </Link>
-                </div>
-              )}
+          <h1 className="font-libre-baskerville text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl leading-[1.1] text-balance">
+            {post.title}
+          </h1>
 
-              {post.coverImage && (
-                <div className="relative mb-8 aspect-[16/9] overflow-hidden rounded-2xl bg-muted">
-                  <Image
-                    src={post.coverImage}
-                    alt={post.title}
-                    fill
-                    className="object-cover object-center"
-                    priority
-                    sizes="(max-width: 1024px) 100vw, 980px"
-                  />
-                </div>
-              )}
+          {post.excerpt && (
+            <p className="mt-6 text-xl leading-relaxed text-muted-foreground/90 max-w-3xl">
+              {post.excerpt}
+            </p>
+          )}
 
-              <h1 className="dec-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] text-foreground sm:text-4xl">
-                {post.title}
-              </h1>
-
-              {post.excerpt && (
-                <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-                  {post.excerpt}
-                </p>
-              )}
-            </header>
-
-            <section className="mb-8 rounded-xl border border-border bg-card/60 p-5 backdrop-blur-sm">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex min-w-0 items-start gap-4">
-                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-muted">
-                    {post.author.image ? (
-                      <Image src={post.author.image} alt={post.author.name} fill className="object-cover" />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center text-lg font-semibold text-muted-foreground">
-                        {post.author.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+          <div className="mt-10 flex flex-wrap items-center gap-6 pb-12">
+            <div className="flex items-center gap-3">
+              <div className="relative h-12 w-12 overflow-hidden rounded-full border border-border shadow-sm">
+                {post.author.image ? (
+                  <Image src={post.author.image} alt={post.author.name} fill className="object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-muted text-sm font-bold">
+                    {post.author.name.charAt(0)}
                   </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Published by</p>
-                    <p className="mt-1 text-base font-semibold text-foreground">{post.author.name}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <time dateTime={new Date(post.createdAt).toISOString()}>{formatPublishedDate(post.createdAt)}</time>
-                      {post.readingTimeMinutes != null && post.readingTimeMinutes > 0 && (
-                        <>
-                          <span className="text-border">•</span>
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
-                            {post.readingTimeMinutes} min read
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    {profile?.bio && (
-                      <p className="mt-2 line-clamp-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{profile.bio}</p>
-                    )}
-                    {hasSocial && (
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {profile?.linkedin && (
-                          <a
-                            href={profile.linkedin}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                            title="LinkedIn"
-                          >
-                            <Linkedin className="h-4 w-4" />
-                          </a>
-                        )}
-                        {profile?.x && (
-                          <a
-                            href={profile.x}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                            title="X"
-                          >
-                            <Twitter className="h-4 w-4" />
-                          </a>
-                        )}
-                        {profile?.facebook && (
-                          <a
-                            href={profile.facebook}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                            title="Facebook"
-                          >
-                            <Facebook className="h-4 w-4" />
-                          </a>
-                        )}
-                        {profile?.telegram && (
-                          <a
-                            href={`https://t.me/${profile.telegram.replace(/^@/, "")}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                            title="Telegram"
-                          >
-                            <Send className="h-4 w-4" />
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                  <button
-                    onClick={handleLike}
-                    className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-all ${
-                      liked
-                        ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
-                        : "border-border bg-muted/40 text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                    }`}
-                  >
-                    <Heart className={`h-4 w-4 ${liked ? "fill-current" : ""}`} />
-                    {likeCount}
-                  </button>
-                  <button
-                    onClick={() => handleShare("twitter")}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                    title="Share on X"
-                  >
-                    <Twitter className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleShare("linkedin")}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                    title="Share on LinkedIn"
-                  >
-                    <Linkedin className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleShare("facebook")}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                    title="Share on Facebook"
-                  >
-                    <Facebook className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleShare("copy")}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted/40 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-                    title="Copy link"
-                  >
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </button>
-                </div>
+                )}
               </div>
-            </section>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-foreground">{post.author.name}</span>
+                <span className="text-xs text-muted-foreground">Editor @ EIPsInsight</span>
+              </div>
+            </div>
 
-            <div className="prose prose-sm max-w-none prose-headings:font-semibold prose-headings:text-foreground prose-p:text-foreground/90 prose-strong:text-foreground prose-a:text-primary prose-a:no-underline hover:prose-a:text-primary/80 prose-img:rounded-xl dark:prose-invert sm:prose-base [&_h2]:scroll-mt-28 [&_h3]:scroll-mt-28">
+            <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground border-l border-border pl-6">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                {formatPublishedDate(post.createdAt)}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                {post.readingTimeMinutes || 5} min read
+              </span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="page-shell max-w-[1440px] px-4 py-12 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-12 lg:flex-row lg:gap-16">
+          {/* Main Content */}
+          <article className="min-w-0 flex-1 max-w-4xl mx-auto lg:mx-0">
+            {post.coverImage && (
+              <div className="relative mb-12 aspect-video overflow-hidden rounded-3xl border border-border bg-muted shadow-2xl">
+                <Image
+                  src={post.coverImage}
+                  alt={post.title}
+                  fill
+                  priority
+                  className="object-cover"
+                  sizes="(max-width: 1200px) 100vw, 800px"
+                />
+              </div>
+            )}
+
+            <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-libre-baskerville prose-headings:tracking-tight prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-img:rounded-2xl prose-pre:bg-muted/40 prose-pre:border prose-pre:border-border">
               <MarkdownRenderer content={post.content} skipPreamble />
             </div>
 
-            {relatedPosts.length > 0 && (
-              <section className="mt-14 border-t border-border pt-8">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Related Reading</p>
-                <h2 className="mt-1 dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                  More {post.category?.name ? `in ${post.category.name}` : "commentary"}
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">Continue with adjacent writing on governance, standards, and protocol coordination.</p>
+            {/* Post Footer */}
+            <footer className="mt-16 space-y-12 border-t border-border pt-12">
+              {/* Engagement */}
+              <div className="flex flex-wrap items-center justify-between gap-6 rounded-2xl bg-card/40 p-6 border border-border">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={handleLike}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-full border transition-all font-bold text-sm",
+                      liked
+                        ? "bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/20"
+                        : "border-border bg-muted/20 text-muted-foreground hover:border-rose-500/50 hover:text-rose-500"
+                    )}
+                  >
+                    <Heart className={cn("h-4 w-4", liked && "fill-current")} />
+                    {likeCount}
+                  </button>
+                  <button
+                    onClick={() => document.getElementById("comments")?.scrollIntoView({ behavior: "smooth" })}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full border border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 transition-all font-bold text-sm"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Discuss
+                  </button>
+                </div>
 
-                <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {relatedPosts.map((relatedPost) => (
-                    <Link
-                      key={relatedPost.id}
-                      href={`/resources/blogs/${relatedPost.slug}`}
-                      className="group rounded-xl border border-border bg-card/60 p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card/80"
-                    >
-                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {relatedPost.category?.name && <span>{relatedPost.category.name}</span>}
-                        <span>•</span>
-                        <span>{formatPublishedDate(relatedPost.createdAt)}</span>
-                      </div>
-                      <h3 className="mt-3 text-base font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
-                        {relatedPost.title}
-                      </h3>
-                      {relatedPost.excerpt && (
-                        <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{relatedPost.excerpt}</p>
-                      )}
-                    </Link>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground mr-2">Share</span>
+                  <button onClick={() => handleShare("twitter")} className="p-2 rounded-full border border-border hover:bg-muted text-muted-foreground transition-all">
+                    <Twitter className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => handleShare("linkedin")} className="p-2 rounded-full border border-border hover:bg-muted text-muted-foreground transition-all">
+                    <Linkedin className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => handleShare("copy")} className="p-2 rounded-full border border-border hover:bg-muted text-muted-foreground transition-all">
+                    {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Tags */}
+              {post.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {post.tags.map(tag => (
+                    <span key={tag} className="px-3 py-1 rounded-full border border-border bg-muted/20 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                      #{tag}
+                    </span>
                   ))}
                 </div>
-              </section>
-            )}
+              )}
 
-            {post.tags.length > 0 && (
-              <div className="mt-8 flex flex-wrap gap-2">
-                {post.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
-                  >
-                    {tag}
-                  </span>
-                ))}
+              {/* Author Bio */}
+              <div className="flex flex-col gap-6 sm:flex-row sm:items-center rounded-3xl bg-linear-to-br from-primary/5 via-transparent to-transparent p-8 border border-border">
+                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-border shadow-lg">
+                  {post.author.image ? (
+                    <Image src={post.author.image} alt={post.author.name} fill className="object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-muted text-2xl font-bold">
+                      {post.author.name.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-foreground mb-2">Written by {post.author.name}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed max-w-2xl mb-4">
+                    {profile?.bio || `${post.author.name} is a core editor and contributor at EIPsInsight, focused on documenting the evolution of Ethereum standards.`}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {profile?.x && (
+                      <a href={profile.x} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                        <Twitter className="h-4 w-4" />
+                      </a>
+                    )}
+                    {profile?.linkedin && (
+                      <a href={profile.linkedin} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                        <Linkedin className="h-4 w-4" />
+                      </a>
+                    )}
+                    {profile?.telegram && (
+                      <a href={`https://t.me/${profile.telegram}`} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                        <Send className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
+            </footer>
 
-            <section className="mt-16 border-t border-border pt-8">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Discussion</p>
-              <h2 className="mt-1 dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Comments</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Join the conversation around this post.</p>
-              <div className="mt-6">
-                <PageComments />
-              </div>
+            {/* Comments Section */}
+            <section id="comments" className="mt-20">
+              <h2 className="text-2xl font-bold mb-8">Community Discussion</h2>
+              <PageComments />
             </section>
           </article>
 
-          {headings.length > 0 && (
-            <aside className="hidden w-72 shrink-0 xl:block">
-              <div className="sticky top-20 rounded-xl border border-border bg-card/60 p-4 backdrop-blur-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">On this page</p>
-                <nav className="mt-3 max-h-[calc(100vh-7rem)] overflow-y-auto border-l-2 border-border/70 pr-1">
-                  {headings.map((heading) => {
-                    const isActive = activeHeadingId === heading.id;
-                    return (
+          {/* Sidebar */}
+          <aside className="hidden w-80 shrink-0 lg:block">
+            <div className="sticky top-24 space-y-12">
+              {/* Table of Contents */}
+              {headings.length > 0 && (
+                <div className="rounded-2xl border border-border bg-card/20 p-6 backdrop-blur-sm">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">On this page</h3>
+                  <nav className="space-y-1">
+                    {headings.map(h => (
                       <a
-                        key={heading.id}
-                        href={`#${heading.id}`}
-                        onClick={(event) => handleTocClick(event, heading.id)}
-                        className={`relative block py-2.5 pl-4 pr-2 text-[13px] transition-colors ${
-                          isActive
-                            ? "font-medium text-primary"
-                            : "text-muted-foreground hover:text-foreground"
-                        } ${heading.level === 3 ? "pl-7" : ""}`}
+                        key={h.id}
+                        href={`#${h.id}`}
+                        className={cn(
+                          "block py-2 text-sm transition-all hover:text-primary",
+                          h.level === 3 ? "pl-4 border-l border-border text-xs" : "font-medium"
+                        )}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth' });
+                        }}
                       >
-                        {isActive && <span className="absolute -left-px top-0 h-full w-0.5 rounded-r bg-primary" />}
-                        {heading.text}
+                        {h.text}
                       </a>
-                    );
-                  })}
-                </nav>
+                    ))}
+                  </nav>
+                </div>
+              )}
+
+              {/* Related Posts */}
+              {relatedPosts.length > 0 && (
+                <div className="space-y-6">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Continue Reading</h3>
+                  <div className="space-y-4">
+                    {relatedPosts.map(rp => (
+                      <Link
+                        key={rp.id}
+                        href={`/resources/blogs/${rp.slug}`}
+                        className="group block rounded-2xl border border-border bg-card/20 p-4 transition-all hover:border-primary/50"
+                      >
+                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2 block">
+                          {rp.category?.name || "Insights"}
+                        </span>
+                        <h4 className="text-sm font-bold leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                          {rp.title}
+                        </h4>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Newsletter Nudge */}
+              <div className="rounded-2xl bg-linear-to-br from-primary/10 to-primary/5 p-6 border border-primary/20">
+                <h3 className="text-lg font-bold mb-2 leading-tight">Stay ahead of the curve</h3>
+                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                  Get the latest Ethereum standards updates and analysis delivered directly to your inbox.
+                </p>
+                <Link
+                  href="/newsletter"
+                  className="inline-flex w-full h-9 items-center justify-center rounded-lg bg-foreground text-background text-xs font-bold hover:bg-foreground/90 transition-all"
+                >
+                  Join Newsletter
+                </Link>
               </div>
-            </aside>
-          )}
+            </div>
+          </aside>
         </div>
       </div>
     </div>

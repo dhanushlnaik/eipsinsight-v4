@@ -11,6 +11,11 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Search,
+  ChevronRight,
+  TrendingUp,
+  Clock,
+  User,
 } from "lucide-react";
 import { client } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -36,7 +41,73 @@ function estimateReadTime(post: Pick<BlogPost, "title" | "excerpt">) {
     .trim()
     .split(/\s+/)
     .filter(Boolean).length;
-  return Math.max(3, Math.ceil(wordCount / 45));
+  return Math.max(3, Math.ceil(wordCount / 225)); // Standard reading speed
+}
+
+function BlogCard({ post, priority = false }: { post: BlogPost; priority?: boolean }) {
+  return (
+    <Link
+      href={`/resources/blogs/${post.slug}`}
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card/40 transition-all duration-300 hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/5"
+    >
+      <div className="relative aspect-[16/10] overflow-hidden bg-muted">
+        {post.coverImage ? (
+          <Image
+            src={post.coverImage}
+            alt={post.title}
+            fill
+            priority={priority}
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-muted/50 to-muted">
+            <FileText className="h-10 w-10 text-muted-foreground/50" />
+          </div>
+        )}
+        {post.category && (
+          <div className="absolute left-4 top-4">
+            <span className="inline-flex rounded-full border border-white/20 bg-black/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white backdrop-blur-md">
+              {post.category.name}
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="flex flex-1 flex-col p-5">
+        <div className="mb-3 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <User className="h-3 w-3" />
+            {post.author.name}
+          </span>
+          <span>•</span>
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {estimateReadTime(post)} min read
+          </span>
+        </div>
+        <h3 className="mb-2 line-clamp-2 text-lg font-bold leading-snug text-foreground transition-colors group-hover:text-primary">
+          {post.title}
+        </h3>
+        {post.excerpt && (
+          <p className="mb-4 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+            {post.excerpt}
+          </p>
+        )}
+        <div className="mt-auto flex items-center justify-between pt-2">
+          <span className="text-[10px] font-medium text-muted-foreground">
+            {new Date(post.createdAt).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </span>
+          <span className="flex items-center gap-1 text-xs font-bold text-primary opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0">
+            Read More <ChevronRight className="h-3 w-3" />
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 function BlogsContent() {
@@ -48,6 +119,7 @@ function BlogsContent() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +127,7 @@ function BlogsContent() {
     Promise.all([
       client.blog.list({
         publishedOnly: true,
-        limit: 50,
+        limit: 100,
       }),
       client.account
         .getMe()
@@ -92,11 +164,20 @@ function BlogsContent() {
   }, [posts]);
 
   const filteredPosts = useMemo(() => {
-    const base = categorySlug
+    let result = categorySlug
       ? posts.filter((post) => post.category?.slug === categorySlug)
       : posts;
 
-    const sorted = [...base];
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          (p.excerpt && p.excerpt.toLowerCase().includes(q))
+      );
+    }
+
+    const sorted = [...result];
     sorted.sort((a, b) => {
       if (sortMode === "featured") {
         const featuredDelta = Number(Boolean(b.featured)) - Number(Boolean(a.featured));
@@ -107,348 +188,205 @@ function BlogsContent() {
       return sortMode === "oldest" ? aTime - bTime : bTime - aTime;
     });
     return sorted;
-  }, [posts, categorySlug, sortMode]);
+  }, [posts, categorySlug, sortMode, searchQuery]);
 
   const featuredPosts = useMemo(
     () => filteredPosts.filter((post) => post.featured),
     [filteredPosts]
   );
 
-  const leadPost = useMemo(
-    () => featuredPosts[0] ?? filteredPosts[0] ?? null,
-    [featuredPosts, filteredPosts]
-  );
-
-  const supportingPosts = useMemo(() => {
-    if (!leadPost) return [];
-    return filteredPosts.filter((post) => post.id !== leadPost.id).slice(0, 3);
-  }, [filteredPosts, leadPost]);
-
-  const archivePosts = useMemo(() => {
-    if (!leadPost) return filteredPosts;
-    return filteredPosts.filter((post) => post.id !== leadPost.id).slice(3);
-  }, [filteredPosts, leadPost]);
+  const leadPost = featuredPosts[0] || filteredPosts[0];
+  const remainingPosts = filteredPosts.filter(p => p.id !== leadPost?.id);
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="page-shell py-6">
-        <Link
-          href="/resources"
-          className="mb-3 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Resources
-        </Link>
+      {/* Hero Section */}
+      <section className="relative border-b border-border bg-card/40 py-12 lg:py-20 overflow-hidden">
+        <div className="absolute inset-0 bg-linear-to-b from-primary/5 to-transparent pointer-events-none" />
+        <div className="page-shell relative z-10">
+          <Link
+            href="/resources"
+            className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Resources
+          </Link>
 
-        <header className="mb-6 grid gap-4 lg:grid-cols-12">
-          <div className="lg:col-span-8">
-            <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
-              Editorial Desk
+          <div className="max-w-3xl">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary">
+              <TrendingUp className="h-3.5 w-3.5" />
+              Insights & Commentary
             </span>
-            <h1 className="mt-3 dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
-              EIPsInsight Blogs
+            <h1 className="mt-6 dec-title text-4xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl">
+              EIPsInsight <span className="text-primary">Blog</span>
             </h1>
-            <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Long-form writing on Ethereum standards, governance workflows, upgrade intelligence, and contributor coordination.
+            <p className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl">
+              In-depth analysis of Ethereum standards, protocol evolution, and the future of decentralized coordination.
             </p>
           </div>
-          <div className="rounded-xl border border-border bg-card/60 p-4 lg:col-span-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reading Surface</p>
-            <p className="mt-1 text-sm text-foreground">
-              {filteredPosts.length} visible post{filteredPosts.length !== 1 ? "s" : ""}
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {categorySlug
-                ? `Filtered by ${categories.find((item) => item.slug === categorySlug)?.name ?? categorySlug}`
-                : "Unfiltered editorial stream"}
-            </p>
-          </div>
-        </header>
+        </div>
+      </section>
 
-        <section className="mb-8 rounded-xl border border-border bg-card/60 p-4 backdrop-blur-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
+      <div className="page-shell py-12">
+        {/* Toolbar */}
+        <div className="sticky top-20 z-30 mb-12 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/resources/blogs"
+              className={cn(
+                "inline-flex h-9 items-center rounded-full border px-4 text-xs font-bold transition-all",
+                !categorySlug
+                  ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                  : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              )}
+            >
+              All Categories
+            </Link>
+            {categories.map((cat) => (
               <Link
-                href="/resources/blogs"
+                key={cat.id}
+                href={`/resources/blogs?category=${cat.slug}`}
                 className={cn(
-                  "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors",
-                  !categorySlug
-                    ? "border-primary/30 bg-primary/10 text-primary"
-                    : "border-border bg-muted/40 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                  "inline-flex h-9 items-center rounded-full border px-4 text-xs font-bold transition-all",
+                  categorySlug === cat.slug
+                    ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                    : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
                 )}
               >
-                All posts ({posts.length})
+                {cat.name}
               </Link>
-              {categories.map((category) => (
-                <Link
-                  key={category.id}
-                  href={`/resources/blogs?category=${category.slug}`}
-                  className={cn(
-                    "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors",
-                    categorySlug === category.slug
-                      ? "border-primary/30 bg-primary/10 text-primary"
-                      : "border-border bg-muted/40 text-muted-foreground hover:border-primary/30 hover:text-foreground"
-                  )}
-                >
-                  {category.name} ({categoryCounts.get(category.slug) ?? 0})
-                </Link>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <label className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground">
-                <span>Sort</span>
-                <select
-                  value={sortMode}
-                  onChange={(e) => setSortMode(e.target.value as SortMode)}
-                  className="h-9 bg-transparent text-foreground outline-none"
-                >
-                  <option value="newest">Newest</option>
-                  <option value="featured">Featured</option>
-                  <option value="oldest">Oldest</option>
-                </select>
-              </label>
-              {isAdmin ? (
-                <>
-                  <Link
-                    href="/admin?tab=blogs"
-                    className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Manage
-                  </Link>
-                  <Link
-                    href="/admin/blogs/new"
-                    className="inline-flex h-9 items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 text-sm text-primary transition hover:bg-primary/15"
-                  >
-                    <Plus className="h-4 w-4" />
-                    New Post
-                  </Link>
-                </>
-              ) : null}
-            </div>
+            ))}
           </div>
-        </section>
 
-        <div className="mt-8">
-          {loading ? (
-            <div className="flex min-h-[360px] items-center justify-center rounded-xl border border-border bg-card/60">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 lg:w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search articles..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-10 w-full rounded-xl border border-border bg-card/60 pl-10 pr-4 text-sm focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+              />
             </div>
-          ) : filteredPosts.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card/60 p-10 text-center">
-              <div className="mx-auto inline-flex rounded-full border border-border bg-muted/60 p-5">
-                <FileText className="h-10 w-10 text-primary" />
-              </div>
-              <h2 className="mt-5 dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                {categorySlug ? "No Posts In This Category" : "No Posts Yet"}
-              </h2>
-              <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-                {categorySlug
-                  ? "Try another category or return to all posts to browse the full commentary archive."
-                  : "This space will collect commentary, explainers, and standards-focused writing across EIPs, ERCs, RIPs, and upgrade governance."}
-              </p>
-              {categorySlug ? (
-                <Link
-                  href="/resources/blogs"
-                  className="mt-6 inline-flex h-10 items-center gap-2 rounded-md border border-border bg-muted/40 px-4 text-sm text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
-                >
-                  View All Posts
-                </Link>
-              ) : null}
-              {isAdmin ? (
-                <Link
-                  href="/admin/blogs/new"
-                  className="mt-6 inline-flex h-10 items-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-4 text-sm text-primary transition hover:bg-primary/15"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create First Post
-                </Link>
-              ) : null}
-            </div>
-          ) : (
-            <div className="space-y-10">
-              {leadPost ? (
-                <section className="grid gap-4 xl:grid-cols-12">
-                  <Link
-                    href={`/resources/blogs/${leadPost.slug}`}
-                    className="group overflow-hidden rounded-xl border border-border bg-card/60 transition-all duration-300 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 xl:col-span-8"
-                  >
-                    <div className="relative aspect-[16/9] bg-muted">
-                      {leadPost.coverImage ? (
-                        <Image
-                          src={leadPost.coverImage}
-                          alt={leadPost.title}
-                          fill
-                          className="object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <FileText className="h-14 w-14 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
-                      <div className="absolute left-5 top-5 flex flex-wrap gap-2">
-                        {leadPost.featured ? (
-                          <span className="inline-flex rounded-full border border-primary/40 bg-primary/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                            Featured
-                          </span>
-                        ) : null}
-                        {leadPost.category ? (
-                          <span className="inline-flex rounded-full border border-white/25 bg-black/35 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/90 backdrop-blur-sm">
-                            {leadPost.category.name}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/75">
-                          Lead story
-                        </p>
-                        <h2 className="mt-2 dec-title text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                          {leadPost.title}
-                        </h2>
-                        {leadPost.excerpt ? (
-                          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/80">
-                            {leadPost.excerpt}
-                          </p>
-                        ) : null}
-                        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/70">
-                          <span>{leadPost.author.name}</span>
-                          <span>•</span>
-                          <span>{new Date(leadPost.createdAt).toLocaleDateString()}</span>
-                          <span>•</span>
-                          <span>{estimateReadTime(leadPost)} min read</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-
-                  <div className="space-y-4 xl:col-span-4">
-                    {supportingPosts.length > 0 ? (
-                      <div className="rounded-xl border border-border bg-card/60 p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          Editor Picks
-                        </p>
-                        <div className="mt-3 space-y-3">
-                          {supportingPosts.map((post) => (
-                            <Link
-                              key={post.id}
-                              href={`/resources/blogs/${post.slug}`}
-                              className="block rounded-lg border border-border bg-muted/25 p-3 transition-all duration-200 hover:border-primary/30 hover:bg-primary/5"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
-                                    {post.title}
-                                  </h3>
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    {post.category?.name || "Commentary"} • {new Date(post.createdAt).toLocaleDateString()}
-                                  </p>
-                                </div>
-                                <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="rounded-xl border border-border bg-card/60 p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Explore Further
-                      </p>
-                      <div className="mt-3 grid gap-2">
-                        <Link
-                          href="/resources/docs"
-                          className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
-                        >
-                          Understand the EIP process
-                        </Link>
-                        <Link
-                          href="/analytics/eips"
-                          className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
-                        >
-                          Explore proposal analytics
-                        </Link>
-                        <Link
-                          href="/resources/videos"
-                          className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground transition hover:border-primary/30 hover:text-foreground"
-                        >
-                          Watch explainers and videos
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              ) : null}
-
-              {archivePosts.length > 0 ? (
-                <section>
-                  <div className="mb-4 flex items-end justify-between gap-3">
-                    <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Latest Posts
-                    </p>
-                    <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                      Latest Writing
-                    </h2>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      Commentary and explainers across governance, standards, and protocol change coordination.
-                    </p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {archivePosts.map((post) => (
-                      <Link
-                        key={post.id}
-                        href={`/resources/blogs/${post.slug}`}
-                        className="group overflow-hidden rounded-xl border border-border bg-card/60 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10"
-                      >
-                        <div className="relative aspect-[16/10] bg-muted">
-                          {post.coverImage ? (
-                            <Image
-                              src={post.coverImage}
-                              alt={post.title}
-                              fill
-                              className="object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
-                            />
-                          ) : (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <FileText className="h-10 w-10 text-muted-foreground" />
-                            </div>
-                          )}
-                          {post.category ? (
-                            <span className="absolute bottom-3 left-3 inline-flex rounded-full border border-border bg-card/85 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-foreground backdrop-blur-sm">
-                              {post.category.name}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="p-4">
-                          <h3 className="line-clamp-2 text-base font-semibold text-foreground transition-colors group-hover:text-primary">
-                            {post.title}
-                          </h3>
-                          {post.excerpt ? (
-                            <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
-                              {post.excerpt}
-                            </p>
-                          ) : null}
-                          <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>{post.author.name}</span>
-                            <span>•</span>
-                            <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                            <span>•</span>
-                            <span>{estimateReadTime(post)} min read</span>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-            </div>
-          )}
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              className="h-10 rounded-xl border border-border bg-card/60 px-3 text-xs font-bold focus:outline-none"
+            >
+              <option value="newest">Newest</option>
+              <option value="featured">Featured First</option>
+              <option value="oldest">Oldest</option>
+            </select>
+            {isAdmin && (
+              <Link
+                href="/admin/blogs/new"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/20 transition hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                Write
+              </Link>
+            )}
+          </div>
         </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="aspect-[16/14] animate-pulse rounded-2xl bg-muted/20" />
+            ))}
+          </div>
+        ) : filteredPosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="mb-6 rounded-full bg-muted/20 p-6">
+              <Search className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h2 className="text-2xl font-bold">No results found</h2>
+            <p className="mt-2 text-muted-foreground">Try adjusting your search or category filters.</p>
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                window.history.pushState({}, "", "/resources/blogs");
+              }}
+              className="mt-6 text-sm font-bold text-primary hover:underline"
+            >
+              Clear all filters
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-16">
+            {/* Featured Post */}
+            {!searchQuery && !categorySlug && leadPost && (
+              <section>
+                <Link
+                  href={`/resources/blogs/${leadPost.slug}`}
+                  className="group relative grid grid-cols-1 overflow-hidden rounded-3xl border border-border bg-card/40 lg:grid-cols-12 transition-all hover:border-primary/50 hover:shadow-2xl"
+                >
+                  <div className="relative aspect-video w-full lg:col-span-7 lg:aspect-auto">
+                    {leadPost.coverImage ? (
+                      <Image
+                        src={leadPost.coverImage}
+                        alt={leadPost.title}
+                        fill
+                        priority
+                        className="object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-muted">
+                        <FileText className="h-20 w-20 text-muted-foreground/30" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-linear-to-r from-black/60 via-transparent to-transparent lg:hidden" />
+                  </div>
+                  <div className="flex flex-col justify-center p-8 lg:col-span-5 lg:p-12">
+                    <div className="mb-6 flex items-center gap-3">
+                      <span className="inline-flex rounded-full bg-primary/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary">
+                        Featured Story
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        {estimateReadTime(leadPost)} min read
+                      </span>
+                    </div>
+                    <h2 className="mb-4 text-3xl font-bold leading-tight text-foreground lg:text-5xl group-hover:text-primary transition-colors">
+                      {leadPost.title}
+                    </h2>
+                    <p className="mb-8 text-lg leading-relaxed text-muted-foreground line-clamp-3">
+                      {leadPost.excerpt}
+                    </p>
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-10 w-10 overflow-hidden rounded-full border border-border">
+                        {leadPost.author.image ? (
+                          <Image src={leadPost.author.image} alt={leadPost.author.name} fill className="object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-muted text-xs font-bold">
+                            {leadPost.author.name.charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-foreground">{leadPost.author.name}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(leadPost.createdAt).toLocaleDateString(undefined, {
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              </section>
+            )}
+
+            {/* Grid Posts */}
+            <section className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+              {remainingPosts.map((post) => (
+                <BlogCard key={post.id} post={post} />
+              ))}
+            </section>
+          </div>
+        )}
       </div>
     </div>
   );
