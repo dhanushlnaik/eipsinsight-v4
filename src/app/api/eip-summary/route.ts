@@ -8,6 +8,15 @@ const SUPPORTED_MODELS = [
 ];
 
 function formatSummaryForDisplay(summary: string): string {
+  // If the summary looks like raw metadata (contains multiple colon-separated lines), return a simplified version
+  if (summary.includes('title:') && summary.includes('status:') && summary.includes('author:')) {
+    const titleMatch = summary.match(/title:\s*(.*)/i);
+    const descMatch = summary.match(/description:\s*(.*)/i);
+    const title = titleMatch ? titleMatch[1].split('\n')[0].trim() : "Proposal Overview";
+    const desc = descMatch ? descMatch[1].split('\n')[0].trim() : "";
+    return `<h4 class="font-semibold text-cyan-600 dark:text-cyan-400 mt-4 mb-2">Purpose</h4><p class="mb-3 text-slate-600 dark:text-slate-400">${title}${desc ? ': ' + desc : ''}</p>`;
+  }
+
   return summary
     .trim()
     .replace(/^###\s*/gm, "")
@@ -49,12 +58,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Truncate content to avoid token limits (Cohere has large context but be safe)
-    const maxChars = 100_000;
+    // Clean up content to remove preamble if possible before sending to AI
+    let textToAnalyze = content;
+    if (typeof content === "string") {
+      const preambleEnd = content.indexOf("---", 4);
+      if (preambleEnd !== -1) {
+        textToAnalyze = content.slice(preambleEnd + 3).trim();
+      }
+    }
+
+    // Truncate content to avoid token limits
+    const maxChars = 80_000;
     const truncatedContent =
-      typeof content === "string" && content.length > maxChars
-        ? content.slice(0, maxChars) + "\n\n[... content truncated ...]"
-        : content;
+      typeof textToAnalyze === "string" && textToAnalyze.length > maxChars
+        ? textToAnalyze.slice(0, maxChars) + "\n\n[... content truncated ...]"
+        : textToAnalyze;
 
     let lastError: unknown = null;
 
@@ -70,7 +88,9 @@ export async function POST(req: NextRequest) {
             model,
             message: `Analyze ${type} ${eipNo} and create a concise, well-structured summary in 80-120 words.
 
-**Format your response with these sections:**
+IMPORTANT: Do NOT include raw metadata (like title, author, status, category) in your response. Focus ONLY on the editorial summary sections below.
+
+**Format your response with these exact section headers:**
 
 **Purpose**
 What problem does this ${type} solve? (1-2 sentences)
@@ -84,11 +104,11 @@ How it benefits developers, users, or the network (1-2 sentences)
 **Significance**
 Why this ${type} matters for Ethereum (1 sentence)
 
-Keep it concise, technical but accessible. Use bullet points for multiple items.
+Keep it concise, professional, and accessible.
 
 ${type} ${eipNo} Content:
 ${truncatedContent}`,
-            temperature: 0.4,
+            temperature: 0.3,
             chat_history: [],
             connectors: [],
           }),
