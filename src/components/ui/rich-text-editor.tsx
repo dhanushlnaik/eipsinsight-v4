@@ -296,7 +296,7 @@ export function RichTextEditor({
       </div>
 
       {/* Bubble Menu (Inline Formatting) */}
-      <BubbleMenu editor={editor} tippyOptions={{ duration: 150 }}>
+      <BubbleMenu editor={editor}>
         <div className="flex items-center gap-0.5 border border-border bg-background rounded-xl shadow-2xl p-1 animate-in fade-in zoom-in duration-200">
           <MenuButton
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -324,7 +324,7 @@ export function RichTextEditor({
       </BubbleMenu>
 
       {/* Floating Menu (Block selection on empty lines) */}
-      <FloatingMenu editor={editor} tippyOptions={{ duration: 150 }}>
+      <FloatingMenu editor={editor}>
         <div className="flex items-center gap-1 border border-border bg-background/80 backdrop-blur-md rounded-2xl shadow-xl p-1.5 animate-in slide-in-from-left-2 duration-300">
           <MenuButton
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}

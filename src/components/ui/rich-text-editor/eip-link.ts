@@ -1,4 +1,4 @@
-import { Mark, mergeAttributes } from "@tiptap/core";
+import { Mark, mergeAttributes, markInputRule } from "@tiptap/core";
 
 export const EIPLink = Mark.create({
   name: "eipLink",
@@ -37,23 +37,16 @@ export const EIPLink = Mark.create({
 
   addInputRules() {
     return [
-      {
+      markInputRule({
         find: /\b(EIP|ERC|RIP)-(\d+)\b/g,
-        handler: ({ range, match }) => {
-          const type = match[1];
-          const number = match[2];
-          this.editor
-            .chain()
-            .focus()
-            .insertContentAt(range, [
-              {
-                type: this.name,
-                attrs: { type, number },
-              },
-            ])
-            .run();
+        type: this.type,
+        getAttributes: (match) => {
+          return {
+            type: match[1],
+            number: match[2],
+          };
         },
-      },
+      }),
     ];
   },
 });
