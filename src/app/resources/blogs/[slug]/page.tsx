@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams } from "next/navigation";
@@ -9,16 +11,13 @@ import {
   Loader2,
   Linkedin,
   Twitter,
-  Facebook,
   Send,
   Clock,
   Heart,
   Copy,
   Check,
-  Share2,
   Calendar,
   MessageCircle,
-  Bookmark,
 } from "lucide-react";
 import { client } from "@/lib/orpc";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
@@ -221,103 +220,112 @@ export default function BlogPostPage() {
   const profile = post.author.blog_editor_profile;
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background pb-32">
       <ReadingProgressBar />
 
-      {/* Hero Header */}
-      <header className="relative w-full border-b border-border bg-card/20 pt-12 lg:pt-20">
+      {/* Modern Editorial Header */}
+      <header className="relative w-full pt-12 lg:pt-20">
         <div className="page-shell max-w-4xl px-4 sm:px-6">
           <Link
             href="/resources/blogs"
-            className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="mb-12 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Editorial
+            Back to Journal
           </Link>
 
-          {post.category && (
-            <Link
-              href={`/resources/blogs?category=${post.category.slug}`}
-              className="mb-6 inline-flex rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/20 transition-all"
-            >
-              {post.category.name}
-            </Link>
-          )}
+          <div className="space-y-8">
+            {post.category && (
+              <Link
+                href={`/resources/blogs?category=${post.category.slug}`}
+                className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/20 transition-all border border-primary/20"
+              >
+                {post.category.name}
+              </Link>
+            )}
 
-          <h1 className="font-libre-baskerville text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl leading-[1.1] text-balance">
-            {post.title}
-          </h1>
+            <h1 className="font-libre-baskerville text-4xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl leading-[1.05] text-balance">
+              {post.title}
+            </h1>
 
-          {post.excerpt && (
-            <p className="mt-6 text-xl leading-relaxed text-muted-foreground/90 max-w-3xl">
-              {post.excerpt}
-            </p>
-          )}
+            {post.excerpt && (
+              <p className="text-xl leading-relaxed text-muted-foreground/90 max-w-3xl font-medium">
+                {post.excerpt}
+              </p>
+            )}
 
-          <div className="mt-10 flex flex-wrap items-center gap-6 pb-12">
-            <div className="flex items-center gap-3">
-              <div className="relative h-12 w-12 overflow-hidden rounded-full border border-border shadow-sm">
-                {post.author.image ? (
-                  <Image src={post.author.image} alt={post.author.name} fill className="object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-muted text-sm font-bold">
-                    {post.author.name.charAt(0)}
-                  </div>
-                )}
+            <div className="flex flex-wrap items-center gap-8 pt-4 border-t border-border/50">
+              <div className="flex items-center gap-3">
+                <div className="relative h-10 w-10 overflow-hidden rounded-full border border-border">
+                  {post.author.image ? (
+                    <Image src={post.author.image} alt={post.author.name} fill className="object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-muted text-xs font-bold">
+                      {post.author.name.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-foreground">{post.author.name}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Editor</span>
+                </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-foreground">{post.author.name}</span>
-                <span className="text-xs text-muted-foreground">Editor @ EIPsInsight</span>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground border-l border-border pl-6">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                {formatPublishedDate(post.createdAt)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />
-                {post.readingTimeMinutes || 5} min read
-              </span>
+              <div className="flex items-center gap-6 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="h-3 w-3" />
+                  {formatPublishedDate(post.createdAt)}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Clock className="h-3 w-3" />
+                  {post.readingTimeMinutes || 5} min read
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="page-shell max-w-[1440px] px-4 py-12 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-12 lg:flex-row lg:gap-16">
-          {/* Main Content */}
-          <article className="min-w-0 flex-1 max-w-4xl mx-auto lg:mx-0">
-            {post.coverImage && (
-              <div className="relative mb-12 aspect-video overflow-hidden rounded-3xl border border-border bg-muted shadow-2xl">
-                <Image
-                  src={post.coverImage}
-                  alt={post.title}
-                  fill
-                  priority
-                  className="object-cover"
-                  sizes="(max-width: 1200px) 100vw, 800px"
-                />
-              </div>
-            )}
+      {/* Visual Anchor: Massive Cover Image */}
+      {post.coverImage && (
+        <div className="page-shell max-w-[1440px] px-4 pt-16 sm:px-6 lg:px-8">
+          <div className="relative aspect-video w-full overflow-hidden rounded-[2rem] border border-border bg-muted shadow-2xl shadow-primary/5 lg:aspect-[21/9]">
+            <Image
+              src={post.coverImage}
+              alt={post.title}
+              fill
+              priority
+              className="object-cover"
+              sizes="100vw"
+            />
+          </div>
+        </div>
+      )}
 
-            <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-libre-baskerville prose-headings:tracking-tight prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-img:rounded-2xl prose-pre:bg-muted/40 prose-pre:border prose-pre:border-border">
+      <div className="page-shell max-w-[1440px] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-20 lg:flex-row lg:items-start lg:justify-center">
+          {/* Main Content Column */}
+          <article className="min-w-0 flex-1 max-w-3xl">
+            <div className="prose prose-lg dark:prose-invert max-w-none 
+              prose-headings:font-libre-baskerville prose-headings:tracking-tight 
+              prose-p:text-foreground/90 prose-p:leading-relaxed 
+              prose-a:text-primary prose-a:no-underline hover:prose-a:underline 
+              prose-img:rounded-3xl prose-pre:bg-muted/40 prose-pre:border prose-pre:border-border">
               <MarkdownRenderer content={post.content} skipPreamble />
             </div>
 
             {/* Post Footer */}
-            <footer className="mt-16 space-y-12 border-t border-border pt-12">
-              {/* Engagement */}
-              <div className="flex flex-wrap items-center justify-between gap-6 rounded-2xl bg-card/40 p-6 border border-border">
+            <footer className="mt-24 space-y-16">
+              {/* Engagement Hub */}
+              <div className="flex flex-wrap items-center justify-between gap-8 rounded-3xl bg-card/30 p-8 border border-border/60 backdrop-blur-sm shadow-xl shadow-primary/5">
                 <div className="flex items-center gap-4">
                   <button
                     onClick={handleLike}
                     className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-full border transition-all font-bold text-sm",
+                      "flex items-center gap-2.5 px-6 py-2.5 rounded-full border transition-all font-bold text-xs uppercase tracking-widest",
                       liked
                         ? "bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-500/20"
-                        : "border-border bg-muted/20 text-muted-foreground hover:border-rose-500/50 hover:text-rose-500"
+                        : "border-border bg-background/50 text-muted-foreground hover:border-rose-500/50 hover:text-rose-500"
                     )}
                   >
                     <Heart className={cn("h-4 w-4", liked && "fill-current")} />
@@ -325,22 +333,22 @@ export default function BlogPostPage() {
                   </button>
                   <button
                     onClick={() => document.getElementById("comments")?.scrollIntoView({ behavior: "smooth" })}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full border border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 transition-all font-bold text-sm"
+                    className="flex items-center gap-2.5 px-6 py-2.5 rounded-full border border-border bg-background/50 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all font-bold text-xs uppercase tracking-widest"
                   >
                     <MessageCircle className="h-4 w-4" />
                     Discuss
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground mr-2">Share</span>
-                  <button onClick={() => handleShare("twitter")} className="p-2 rounded-full border border-border hover:bg-muted text-muted-foreground transition-all">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mr-2">Share Story</span>
+                  <button onClick={() => handleShare("twitter")} className="p-2.5 rounded-full border border-border bg-background/50 hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all">
                     <Twitter className="h-4 w-4" />
                   </button>
-                  <button onClick={() => handleShare("linkedin")} className="p-2 rounded-full border border-border hover:bg-muted text-muted-foreground transition-all">
+                  <button onClick={() => handleShare("linkedin")} className="p-2.5 rounded-full border border-border bg-background/50 hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all">
                     <Linkedin className="h-4 w-4" />
                   </button>
-                  <button onClick={() => handleShare("copy")} className="p-2 rounded-full border border-border hover:bg-muted text-muted-foreground transition-all">
+                  <button onClick={() => handleShare("copy")} className="p-2.5 rounded-full border border-border bg-background/50 hover:bg-primary/10 hover:text-primary text-muted-foreground transition-all">
                     {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
                   </button>
                 </div>
@@ -348,44 +356,44 @@ export default function BlogPostPage() {
 
               {/* Tags */}
               {post.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2.5">
                   {post.tags.map(tag => (
-                    <span key={tag} className="px-3 py-1 rounded-full border border-border bg-muted/20 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                    <span key={tag} className="px-4 py-1.5 rounded-full border border-border bg-muted/20 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                       #{tag}
                     </span>
                   ))}
                 </div>
               )}
 
-              {/* Author Bio */}
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center rounded-3xl bg-linear-to-br from-primary/5 via-transparent to-transparent p-8 border border-border">
-                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-border shadow-lg">
+              {/* Author Bio Box */}
+              <div className="flex flex-col gap-8 sm:flex-row sm:items-center rounded-[2.5rem] bg-linear-to-br from-primary/5 via-transparent to-transparent p-10 border border-border shadow-inner">
+                <div className="relative h-28 w-24 shrink-0 overflow-hidden rounded-3xl border border-border shadow-xl">
                   {post.author.image ? (
                     <Image src={post.author.image} alt={post.author.name} fill className="object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-muted text-2xl font-bold">
+                    <div className="flex h-full w-full items-center justify-center bg-muted text-3xl font-bold">
                       {post.author.name.charAt(0)}
                     </div>
                   )}
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-bold text-foreground mb-2">Written by {post.author.name}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed max-w-2xl mb-4">
-                    {profile?.bio || `${post.author.name} is a core editor and contributor at EIPsInsight, focused on documenting the evolution of Ethereum standards.`}
+                  <h3 className="text-2xl font-bold text-foreground mb-3 font-libre-baskerville">Written by {post.author.name}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed max-w-2xl mb-6">
+                    {profile?.bio || `${post.author.name} is a core editor and contributor at EIPsInsight, documenting the evolution of Ethereum standards and decentralized governance.`}
                   </p>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-4">
                     {profile?.x && (
-                      <a href={profile.x} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                      <a href={profile.x} target="_blank" rel="noreferrer" className="h-9 w-9 flex items-center justify-center rounded-full bg-background border border-border text-muted-foreground hover:text-primary hover:border-primary/50 transition-all">
                         <Twitter className="h-4 w-4" />
                       </a>
                     )}
                     {profile?.linkedin && (
-                      <a href={profile.linkedin} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                      <a href={profile.linkedin} target="_blank" rel="noreferrer" className="h-9 w-9 flex items-center justify-center rounded-full bg-background border border-border text-muted-foreground hover:text-primary hover:border-primary/50 transition-all">
                         <Linkedin className="h-4 w-4" />
                       </a>
                     )}
                     {profile?.telegram && (
-                      <a href={`https://t.me/${profile.telegram}`} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                      <a href={`https://t.me/${profile.telegram}`} target="_blank" rel="noreferrer" className="h-9 w-9 flex items-center justify-center rounded-full bg-background border border-border text-muted-foreground hover:text-primary hover:border-primary/50 transition-all">
                         <Send className="h-4 w-4" />
                       </a>
                     )}
@@ -395,31 +403,37 @@ export default function BlogPostPage() {
             </footer>
 
             {/* Comments Section */}
-            <section id="comments" className="mt-20">
-              <h2 className="text-2xl font-bold mb-8">Community Discussion</h2>
+            <section id="comments" className="mt-32">
+              <div className="mb-12 flex items-center justify-between border-b border-border pb-6">
+                <h2 className="text-3xl font-bold font-libre-baskerville">Community Discussion</h2>
+                <div className="h-px flex-1 mx-8 bg-border/40 hidden sm:block" />
+              </div>
               <PageComments />
             </section>
           </article>
 
           {/* Sidebar */}
-          <aside className="hidden w-80 shrink-0 lg:block">
-            <div className="sticky top-24 space-y-12">
+          <aside className="hidden w-72 shrink-0 lg:block lg:sticky lg:top-32">
+            <div className="space-y-16">
               {/* Table of Contents */}
               {headings.length > 0 && (
-                <div className="rounded-2xl border border-border bg-card/20 p-6 backdrop-blur-sm">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">On this page</h3>
+                <div className="space-y-6">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">On this page</h3>
                   <nav className="space-y-1">
                     {headings.map(h => (
                       <a
                         key={h.id}
                         href={`#${h.id}`}
                         className={cn(
-                          "block py-2 text-sm transition-all hover:text-primary",
-                          h.level === 3 ? "pl-4 border-l border-border text-xs" : "font-medium"
+                          "block py-1.5 text-sm transition-all hover:text-primary border-l-2",
+                          activeHeadingId === h.id 
+                            ? "border-primary text-primary pl-4 font-bold" 
+                            : "border-transparent text-muted-foreground hover:border-border pl-4"
                         )}
                         onClick={(e) => {
                           e.preventDefault();
                           document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth' });
+                          setActiveHeadingId(h.id);
                         }}
                       >
                         {h.text}
@@ -431,21 +445,25 @@ export default function BlogPostPage() {
 
               {/* Related Posts */}
               {relatedPosts.length > 0 && (
-                <div className="space-y-6">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Continue Reading</h3>
-                  <div className="space-y-4">
+                <div className="space-y-8">
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Continue Reading</h3>
+                  <div className="space-y-8">
                     {relatedPosts.map(rp => (
                       <Link
                         key={rp.id}
                         href={`/resources/blogs/${rp.slug}`}
-                        className="group block rounded-2xl border border-border bg-card/20 p-4 transition-all hover:border-primary/50"
+                        className="group block"
                       >
-                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2 block">
+                        <span className="text-[9px] font-bold text-primary uppercase tracking-widest mb-2 block">
                           {rp.category?.name || "Insights"}
                         </span>
-                        <h4 className="text-sm font-bold leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                        <h4 className="text-sm font-bold leading-snug text-foreground group-hover:text-primary transition-colors line-clamp-2 mb-2 font-libre-baskerville">
                           {rp.title}
                         </h4>
+                        <div className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest text-muted-foreground opacity-60">
+                          <Clock className="h-2.5 w-2.5" />
+                          {rp.readingTimeMinutes || 5} min read
+                        </div>
                       </Link>
                     ))}
                   </div>
@@ -453,16 +471,16 @@ export default function BlogPostPage() {
               )}
 
               {/* Newsletter Nudge */}
-              <div className="rounded-2xl bg-linear-to-br from-primary/10 to-primary/5 p-6 border border-primary/20">
-                <h3 className="text-lg font-bold mb-2 leading-tight">Stay ahead of the curve</h3>
-                <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-                  Get the latest Ethereum standards updates and analysis delivered directly to your inbox.
+              <div className="rounded-3xl bg-linear-to-br from-primary/10 to-primary/5 p-8 border border-primary/20 shadow-inner">
+                <h3 className="text-xl font-bold mb-3 leading-tight font-libre-baskerville">Stay informed</h3>
+                <p className="text-xs text-muted-foreground mb-6 leading-relaxed font-medium">
+                  The latest Ethereum standards updates and editorial analysis delivered to your inbox.
                 </p>
                 <Link
                   href="/newsletter"
-                  className="inline-flex w-full h-9 items-center justify-center rounded-lg bg-foreground text-background text-xs font-bold hover:bg-foreground/90 transition-all"
+                  className="inline-flex w-full h-11 items-center justify-center rounded-xl bg-foreground text-background text-xs font-bold uppercase tracking-widest hover:bg-foreground/90 transition-all shadow-lg"
                 >
-                  Join Newsletter
+                  Join the Journal
                 </Link>
               </div>
             </div>
