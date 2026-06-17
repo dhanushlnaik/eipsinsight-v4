@@ -35,7 +35,8 @@ function parseMarkdown(markdown: string): { body: string; frontmatter: Record<st
   const frontmatter: Record<string, string> = {};
   let body = markdown;
 
-  const frontmatterMatch = markdown.match(/^----- \n([\s\S]*?)\n---\n([\s\S]*)$/);
+  // Standard EIP frontmatter is delimited by ---
+  const frontmatterMatch = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
   if (frontmatterMatch) {
     const frontmatterText = frontmatterMatch[1];
     body = frontmatterMatch[2];
@@ -83,6 +84,10 @@ function splitByH2Sections(markdown: string): MarkdownSection[] {
   const pushCurrent = () => {
     const body = currentLines.join('\n').trim();
     if (!body) return;
+    
+    // If it's the default 'Overview' section and it's empty or just whitespace/newlines, skip it
+    if (currentTitle === 'Overview' && !body.replace(/[\n\r\s]/g, '')) return;
+    
     sections.push({ title: currentTitle, body });
   };
 
@@ -103,7 +108,8 @@ function splitByH2Sections(markdown: string): MarkdownSection[] {
   if (!hasH2 || sections.length === 0) {
     const fallback = markdown.trim();
     if (!fallback) return [];
-    return [{ title: 'Specification', body: fallback }];
+    // Use a more appropriate title if we're just showing the whole thing
+    return [{ title: 'Full Specification', body: fallback }];
   }
 
   return sections;

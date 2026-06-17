@@ -6,16 +6,12 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
-  ExternalLink,
   FileText,
   Loader2,
-  Pencil,
   Plus,
   Search,
   ChevronRight,
   TrendingUp,
-  Clock,
-  User,
 } from "lucide-react";
 import { client } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -48,16 +44,16 @@ function BlogCard({ post, priority = false }: { post: BlogPost; priority?: boole
   return (
     <Link
       href={`/resources/blogs/${post.slug}`}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card/40 transition-all duration-300 hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/5"
+      className="group relative flex flex-col transition-all duration-300"
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-muted">
+      <div className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-muted">
         {post.coverImage ? (
           <Image
             src={post.coverImage}
             alt={post.title}
             fill
             priority={priority}
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className="object-cover transition-transform duration-700 group-hover:scale-105"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         ) : (
@@ -73,19 +69,13 @@ function BlogCard({ post, priority = false }: { post: BlogPost; priority?: boole
           </div>
         )}
       </div>
-      <div className="flex flex-1 flex-col p-5">
-        <div className="mb-3 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <User className="h-3 w-3" />
-            {post.author.name}
-          </span>
-          <span>•</span>
-          <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {estimateReadTime(post)} min read
-          </span>
+      <div className="flex flex-1 flex-col pt-5">
+        <div className="mb-3 flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+          <span>{post.author.name}</span>
+          <span className="opacity-30">•</span>
+          <span>{estimateReadTime(post)} min read</span>
         </div>
-        <h3 className="mb-2 line-clamp-2 text-lg font-bold leading-snug text-foreground transition-colors group-hover:text-primary">
+        <h3 className="mb-3 line-clamp-2 text-xl font-bold leading-tight text-foreground transition-colors group-hover:text-primary">
           {post.title}
         </h3>
         {post.excerpt && (
@@ -93,16 +83,16 @@ function BlogCard({ post, priority = false }: { post: BlogPost; priority?: boole
             {post.excerpt}
           </p>
         )}
-        <div className="mt-auto flex items-center justify-between pt-2">
-          <span className="text-[10px] font-medium text-muted-foreground">
+        <div className="mt-auto flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
             {new Date(post.createdAt).toLocaleDateString(undefined, {
               month: "short",
               day: "numeric",
               year: "numeric",
             })}
           </span>
-          <span className="flex items-center gap-1 text-xs font-bold text-primary opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0">
-            Read More <ChevronRight className="h-3 w-3" />
+          <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-primary opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0">
+            Read Story <ChevronRight className="h-3 w-3" />
           </span>
         </div>
       </div>
@@ -153,16 +143,6 @@ function BlogsContent() {
     };
   }, []);
 
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    posts.forEach((post) => {
-      const slug = post.category?.slug;
-      if (!slug) return;
-      counts.set(slug, (counts.get(slug) ?? 0) + 1);
-    });
-    return counts;
-  }, [posts]);
-
   const filteredPosts = useMemo(() => {
     let result = categorySlug
       ? posts.filter((post) => post.category?.slug === categorySlug)
@@ -200,88 +180,150 @@ function BlogsContent() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <section className="relative border-b border-border bg-card/40 py-12 lg:py-20 overflow-hidden">
+      {/* Featured/Hero Section */}
+      <section className="relative border-b border-border bg-card/20 py-12 lg:py-24 overflow-hidden">
         <div className="absolute inset-0 bg-linear-to-b from-primary/5 to-transparent pointer-events-none" />
         <div className="page-shell relative z-10">
           <Link
             href="/resources"
-            className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="mb-12 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Resources
+            Back to Hub
           </Link>
 
-          <div className="max-w-3xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary">
-              <TrendingUp className="h-3.5 w-3.5" />
-              Insights & Commentary
-            </span>
-            <h1 className="mt-6 dec-title text-4xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl">
-              EIPsInsight <span className="text-primary">Blog</span>
-            </h1>
-            <p className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl">
-              In-depth analysis of Ethereum standards, protocol evolution, and the future of decentralized coordination.
-            </p>
-          </div>
+          {!searchQuery && !categorySlug && leadPost ? (
+            <Link
+              href={`/resources/blogs/${leadPost.slug}`}
+              className="group relative grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-center"
+            >
+              <div className="flex flex-col">
+                <div className="mb-6 flex items-center gap-3">
+                  <span className="inline-flex rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary-foreground">
+                    Featured Story
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    {estimateReadTime(leadPost)} min read
+                  </span>
+                </div>
+                <h1 className="mb-6 font-libre-baskerville text-4xl font-bold leading-[1.1] text-foreground transition-colors group-hover:text-primary lg:text-6xl xl:text-7xl">
+                  {leadPost.title}
+                </h1>
+                <p className="mb-10 line-clamp-3 text-lg leading-relaxed text-muted-foreground lg:text-xl">
+                  {leadPost.excerpt}
+                </p>
+                <div className="flex items-center gap-4">
+                  <div className="relative h-12 w-12 overflow-hidden rounded-full border border-border">
+                    {leadPost.author.image ? (
+                      <Image src={leadPost.author.image} alt={leadPost.author.name} fill className="object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-muted text-sm font-bold">
+                        {leadPost.author.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-foreground">{leadPost.author.name}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      {new Date(leadPost.createdAt).toLocaleDateString(undefined, {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-border bg-muted shadow-2xl lg:aspect-square">
+                {leadPost.coverImage ? (
+                  <Image
+                    src={leadPost.coverImage}
+                    alt={leadPost.title}
+                    fill
+                    priority
+                    className="object-cover transition-transform duration-1000 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-muted">
+                    <FileText className="h-24 w-24 text-muted-foreground/30" />
+                  </div>
+                )}
+              </div>
+            </Link>
+          ) : (
+            <div className="max-w-3xl">
+              <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Editorial Archive
+              </span>
+              <h1 className="mt-8 font-libre-baskerville text-5xl font-bold tracking-tight text-foreground lg:text-7xl">
+                The <span className="text-primary">Journal</span>
+              </h1>
+              <p className="mt-6 text-xl leading-relaxed text-muted-foreground">
+                {categorySlug 
+                  ? `Exploring the latest in ${categories.find(c => c.slug === categorySlug)?.name || 'the ecosystem'}.`
+                  : "In-depth analysis of Ethereum standards and decentralized coordination."}
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
-      <div className="page-shell py-12">
-        {/* Toolbar */}
-        <div className="sticky top-20 z-30 mb-12 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
+      <div className="page-shell py-16">
+        {/* Navigation & Toolbar */}
+        <div className="sticky top-20 z-30 mb-16 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between border-b border-border bg-background/80 pb-6 backdrop-blur-md">
+          <nav className="flex flex-wrap items-center gap-8">
             <Link
               href="/resources/blogs"
               className={cn(
-                "inline-flex h-9 items-center rounded-full border px-4 text-xs font-bold transition-all",
+                "relative py-1 text-xs font-bold uppercase tracking-widest transition-colors",
                 !categorySlug
-                  ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                  : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  ? "text-primary after:absolute after:bottom-[-25px] after:left-0 after:h-[2px] after:w-full after:bg-primary"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
-              All Categories
+              All Stories
             </Link>
             {categories.map((cat) => (
               <Link
                 key={cat.id}
                 href={`/resources/blogs?category=${cat.slug}`}
                 className={cn(
-                  "inline-flex h-9 items-center rounded-full border px-4 text-xs font-bold transition-all",
+                  "relative py-1 text-xs font-bold uppercase tracking-widest transition-colors",
                   categorySlug === cat.slug
-                    ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                    : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    ? "text-primary after:absolute after:bottom-[-25px] after:left-0 after:h-[2px] after:w-full after:bg-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {cat.name}
               </Link>
             ))}
-          </div>
+          </nav>
 
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 lg:w-64">
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1 lg:w-72">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search articles..."
+                placeholder="Search archive..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-card/60 pl-10 pr-4 text-sm focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                className="h-11 w-full rounded-xl border border-border bg-card/60 pl-10 pr-4 text-sm transition-all focus:border-primary/50 focus:ring-4 focus:ring-primary/5"
               />
             </div>
             <select
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
-              className="h-10 rounded-xl border border-border bg-card/60 px-3 text-xs font-bold focus:outline-none"
+              className="h-11 rounded-xl border border-border bg-card/60 px-4 text-xs font-bold uppercase tracking-widest focus:outline-none"
             >
               <option value="newest">Newest</option>
-              <option value="featured">Featured First</option>
+              <option value="featured">Featured</option>
               <option value="oldest">Oldest</option>
             </select>
             {isAdmin && (
               <Link
                 href="/admin/blogs/new"
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/20 transition hover:bg-primary/90"
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-6 text-xs font-bold uppercase tracking-widest text-primary-foreground shadow-xl shadow-primary/20 transition hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4" />
                 Write
@@ -291,97 +333,33 @@ function BlogsContent() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="aspect-[16/14] animate-pulse rounded-2xl bg-muted/20" />
             ))}
           </div>
         ) : filteredPosts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="mb-6 rounded-full bg-muted/20 p-6">
-              <Search className="h-10 w-10 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center py-32 text-center">
+            <div className="mb-8 rounded-full bg-muted/20 p-8 text-muted-foreground">
+              <Search className="h-12 w-12" />
             </div>
-            <h2 className="text-2xl font-bold">No results found</h2>
-            <p className="mt-2 text-muted-foreground">Try adjusting your search or category filters.</p>
+            <h2 className="text-3xl font-bold">No stories found</h2>
+            <p className="mt-4 text-lg text-muted-foreground">Try adjusting your search or category filters.</p>
             <button
               onClick={() => {
                 setSearchQuery("");
                 window.history.pushState({}, "", "/resources/blogs");
               }}
-              className="mt-6 text-sm font-bold text-primary hover:underline"
+              className="mt-8 text-sm font-bold uppercase tracking-widest text-primary hover:underline"
             >
-              Clear all filters
+              Reset Archive
             </button>
           </div>
         ) : (
-          <div className="space-y-16">
-            {/* Featured Post */}
-            {!searchQuery && !categorySlug && leadPost && (
-              <section>
-                <Link
-                  href={`/resources/blogs/${leadPost.slug}`}
-                  className="group relative grid grid-cols-1 overflow-hidden rounded-3xl border border-border bg-card/40 lg:grid-cols-12 transition-all hover:border-primary/50 hover:shadow-2xl"
-                >
-                  <div className="relative aspect-video w-full lg:col-span-7 lg:aspect-auto">
-                    {leadPost.coverImage ? (
-                      <Image
-                        src={leadPost.coverImage}
-                        alt={leadPost.title}
-                        fill
-                        priority
-                        className="object-cover transition-transform duration-700 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-muted">
-                        <FileText className="h-20 w-20 text-muted-foreground/30" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-linear-to-r from-black/60 via-transparent to-transparent lg:hidden" />
-                  </div>
-                  <div className="flex flex-col justify-center p-8 lg:col-span-5 lg:p-12">
-                    <div className="mb-6 flex items-center gap-3">
-                      <span className="inline-flex rounded-full bg-primary/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary">
-                        Featured Story
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                        {estimateReadTime(leadPost)} min read
-                      </span>
-                    </div>
-                    <h2 className="mb-4 text-3xl font-bold leading-tight text-foreground lg:text-5xl group-hover:text-primary transition-colors">
-                      {leadPost.title}
-                    </h2>
-                    <p className="mb-8 text-lg leading-relaxed text-muted-foreground line-clamp-3">
-                      {leadPost.excerpt}
-                    </p>
-                    <div className="flex items-center gap-4">
-                      <div className="relative h-10 w-10 overflow-hidden rounded-full border border-border">
-                        {leadPost.author.image ? (
-                          <Image src={leadPost.author.image} alt={leadPost.author.name} fill className="object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-muted text-xs font-bold">
-                            {leadPost.author.name.charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-foreground">{leadPost.author.name}</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {new Date(leadPost.createdAt).toLocaleDateString(undefined, {
-                            month: "long",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              </section>
-            )}
-
+          <div className="space-y-24">
             {/* Grid Posts */}
-            <section className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {remainingPosts.map((post) => (
+            <section className="grid grid-cols-1 gap-x-12 gap-y-16 md:grid-cols-2 lg:grid-cols-3">
+              {(!searchQuery && !categorySlug ? remainingPosts : filteredPosts).map((post) => (
                 <BlogCard key={post.id} post={post} />
               ))}
             </section>
