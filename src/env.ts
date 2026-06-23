@@ -37,6 +37,7 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
     COHERE_API_KEY: z.string().min(1).optional(),
+    GROQ_API_KEY: z.string().min(1).optional(),
 
     REDIS_URL: z.string().url(),
   },

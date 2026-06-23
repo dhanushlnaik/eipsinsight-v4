@@ -35,41 +35,123 @@ type AssistantDataQuery = {
 }
 
 const ANALYTICS_SQL_SCHEMA = `
-Tables you can query:
-- eips(id, eip_number, created_at, title, author)
-- eip_snapshots(eip_id, repository_id, status, type, category, deadline, updated_at)
-- eip_status_events(eip_id, repository_id, from_status, to_status, pr_number, changed_at)
-- pull_requests(pr_number, repository_id, title, author, merged_at, closed_at, updated_at, state, num_commits, num_files, num_participants, num_comments, num_reviews, labels, created_at)
-- pr_events(pr_number, repository_id, event_type, actor, actor_role, created_at)
-- pr_governance_state(pr_number, repository_id, current_state, waiting_since, last_actor, last_event_type, updated_at)
-- pr_custom_tags(pr_number, repository_id, tag, created_at)
-- pr_reviews(pr_number, repository_id, reviewer, review_state, submitted_at)
-- pr_monthly_snapshot(repository_id, pr_number, month_year, state, governance_state, category, subcategory, created_at, updated_at)
-- pr_monthly_board_stats(month_year, category, subcategory, count)
-- pr_label_snapshot(repository_id, pr_number, month_year, labels, created_at)
-- issues(issue_number, repository_id, title, author, state, created_at, updated_at, closed_at, labels, num_comments)
-- issue_events(issue_number, repository_id, event_type, actor, actor_role, created_at)
-- repositories(id, name, type, active)
-- contributor_activity(pr_number, repository_id, actor, role, action_type, occurred_at)
-- contributor_scores(actor, repository_id, total_score, commits_count, prs_created, prs_merged, reviews_count, comments_count, first_activity, last_activity)
-- pull_request_eips(pr_number, repository_id, eip_number, linked_at)
-- issue_eips(issue_number, repository_id, eip_number, linked_at)
-- insights_monthly(month_year, summary, highlights, created_at)
-- upgrades(id, slug, name, meta_eip, repo, file_path, created_at)
-- upgrade_composition_current(upgrade_id, eip_number, bucket, updated_at)
+== REPOSITORIES ==
+repositories(id INT PK, name TEXT, type TEXT, active BOOL)
+  - name examples: 'ethereum/EIPs', 'ethereum/ERCs', 'ethereum/RIPs'
+  - Filter by repo: LOWER(SPLIT_PART(r.name, '/', 2)) IN ('eips','ercs','rips')
+  - All other tables join to this via repository_id = repositories.id
+
+== PROPOSALS ==
+eips(id INT PK, eip_number INT, created_at TIMESTAMPTZ, title TEXT, author TEXT)
+  - Covers EIPs and ERCs (both stored here). RIPs are separate (rips table — not queryable).
+  - author is a comma-separated string of GitHub handles, e.g. '@vitalik,@ansgar'
+
+eip_snapshots(eip_id INT FK→eips.id, repository_id INT FK→repositories.id, status TEXT, type TEXT, category TEXT, deadline TIMESTAMPTZ, updated_at TIMESTAMPTZ)
+  - status values: 'Draft' | 'Review' | 'Last Call' | 'Final' | 'Living' | 'Stagnant' | 'Withdrawn'
+  - type values: 'Standards Track' | 'Meta' | 'Informational'
+  - category values: 'Core' | 'Networking' | 'Interface' | 'ERC' | 'RIP'
+  - One row per eip per repository (use DISTINCT ON (eip_id) if joining multiple repos)
+
+eip_status_events(eip_id INT FK→eips.id, repository_id INT, from_status TEXT, to_status TEXT, pr_number INT, changed_at TIMESTAMPTZ)
+  - Each row is one status transition. Use to answer "when did X move to Final?"
+
+== PULL REQUESTS ==
+pull_requests(pr_number INT, repository_id INT, title TEXT, author TEXT, merged_at TIMESTAMPTZ, closed_at TIMESTAMPTZ, updated_at TIMESTAMPTZ, state TEXT, num_commits INT, num_files INT, num_participants INT, num_comments INT, num_reviews INT, labels TEXT[], created_at TIMESTAMPTZ)
+  - state: 'open' | 'closed'  (merged PRs have state='closed' AND merged_at IS NOT NULL)
+  - labels is a PostgreSQL TEXT ARRAY — filter with: labels @> ARRAY['c-status']  OR  EXISTS (SELECT 1 FROM unnest(labels) l WHERE l = 'c-status')
+  - PK: (pr_number, repository_id)
+
+pr_events(pr_number INT, repository_id INT, event_type TEXT, actor TEXT, actor_role TEXT, created_at TIMESTAMPTZ)
+  - event_type values: 'commented' | 'issue_comment' | 'reviewed' | 'committed' | 'labeled' | 'unlabeled' | 'merged' | 'closed' | 'reopened'
+  - actor_role values: 'EDITOR' | 'REVIEWER' | 'AUTHOR' | 'CONTRIBUTOR'
+
+pr_governance_state(pr_number INT, repository_id INT, current_state TEXT, waiting_since TIMESTAMPTZ, last_actor TEXT, last_event_type TEXT, updated_at TIMESTAMPTZ, category TEXT, subcategory TEXT)
+  - current_state values: 'WAITING_EDITOR' | 'WAITING_AUTHOR' | 'WAITING_COMMUNITY' | 'IDLE' | 'CLOSED' | 'DRAFT'
+    (legacy aliases also in DB: 'WAITING_ON_EDITOR', 'WAITING_ON_AUTHOR' — always match both)
+  - waiting_since: when the current state began; use NOW() - waiting_since to compute wait days
+  - PK: (pr_number, repository_id)
+
+pr_custom_tags(pr_number INT, repository_id INT, tag TEXT, created_at TIMESTAMPTZ)
+  - tag values include: 'Status Change' | 'Typo' | 'New EIP' | 'Content Edit' | 'Website'
+
+pr_reviews(pr_number INT, repository_id INT, reviewer TEXT, review_state TEXT, submitted_at TIMESTAMPTZ)
+  - review_state values: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED'
+
+pr_monthly_snapshot(repository_id INT, pr_number INT, month_year TEXT, state TEXT, governance_state TEXT, category TEXT, subcategory TEXT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ)
+  - month_year format: 'YYYY-MM' (e.g. '2025-03')
+  - Use for historical monthly breakdowns of PR state
+
+pr_monthly_board_stats(month_year TEXT, category TEXT, subcategory TEXT, count BIGINT)
+  - Pre-aggregated counts per month/category; fastest for trend queries
+
+pr_label_snapshot(repository_id INT, pr_number INT, month_year TEXT, labels TEXT[], created_at TIMESTAMPTZ)
+
+== ISSUES ==
+issues(issue_number INT, repository_id INT, title TEXT, author TEXT, state TEXT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ, closed_at TIMESTAMPTZ, labels TEXT[], num_comments INT)
+  - state: 'open' | 'closed'
+
+issue_events(issue_number INT, repository_id INT, event_type TEXT, actor TEXT, actor_role TEXT, created_at TIMESTAMPTZ)
+
+== CONTRIBUTORS ==
+contributor_activity(pr_number INT, repository_id INT, actor TEXT, role TEXT, action_type TEXT, occurred_at TIMESTAMPTZ)
+  - action_type values: 'reviewed' | 'commented' | 'issue_comment' | 'merged' | 'opened'
+  - role values: 'EDITOR' | 'REVIEWER' | 'AUTHOR' | 'CONTRIBUTOR'
+  - Best table for "who did what" queries across all activity
+
+contributor_scores(actor TEXT, repository_id INT, total_score NUMERIC, commits_count INT, prs_created INT, prs_merged INT, reviews_count INT, comments_count INT, first_activity TIMESTAMPTZ, last_activity TIMESTAMPTZ)
+  - Pre-computed lifetime scores per actor. Fastest for leaderboard queries.
+  - PK: (actor, repository_id)
+
+== LINKING TABLES ==
+pull_request_eips(pr_number INT, repository_id INT, eip_number INT, linked_at TIMESTAMPTZ)
+  - Links PRs to the EIPs they touch
+
+issue_eips(issue_number INT, repository_id INT, eip_number INT, linked_at TIMESTAMPTZ)
+
+== OTHER ==
+insights_monthly(month_year TEXT, summary TEXT, highlights JSONB, created_at TIMESTAMPTZ)
+
+upgrades(id INT PK, slug TEXT, name TEXT, meta_eip INT, repo TEXT, file_path TEXT, created_at TIMESTAMPTZ)
+  - Network upgrades (Pectra, Fusaka, etc.)
+
+upgrade_composition_current(upgrade_id INT FK→upgrades.id, eip_number INT, bucket TEXT, updated_at TIMESTAMPTZ)
+  - bucket values: 'Included' | 'Considered' | 'Declined'
 `
 
 const ASSISTANT_WORKFLOW_CONTEXT = `
-Pipeline truth (from scheduler):
-- Governance waiting state comes from pr_governance_state.current_state.
-- Waiting on editor states are WAITING_ON_EDITOR (and compatibility alias WAITING_EDITOR in some legacy reads).
-- "Status change" PR signal should come from one of:
-  1) pr_custom_tags.tag = 'Status Change'
-  2) pr_governance_state.category = 'Status Change'
-  3) pull_requests.labels contains c-status or c-update.
-- PR timeline truth comes from pr_events (commented, issue_comment, reviewed, committed, labeled, unlabeled).
-- Proposal lifecycle truth comes from eip_status_events and eip_snapshots.
-- Repo filter by repositories.name split segment: eips / ercs / rips.
+== KEY DOMAIN CONVENTIONS ==
+
+Repos:
+- EIPs and ERCs share the eips + eip_snapshots tables; distinguish by LOWER(SPLIT_PART(r.name,'/',2))
+- To filter by repo type: LOWER(SPLIT_PART(r.name, '/', 2)) = 'eips' | 'ercs' | 'rips'
+
+PR state:
+- Open PRs: pull_requests.state = 'open'
+- Merged PRs: pull_requests.state = 'closed' AND merged_at IS NOT NULL
+- Closed/rejected: pull_requests.state = 'closed' AND merged_at IS NULL
+
+Governance waiting states (always match both spellings):
+- Waiting on editor: current_state IN ('WAITING_EDITOR', 'WAITING_ON_EDITOR')
+- Waiting on author: current_state IN ('WAITING_AUTHOR', 'WAITING_ON_AUTHOR')
+
+Status-change PR detection (use all three signals with OR):
+  1) EXISTS (SELECT 1 FROM pr_custom_tags pct WHERE pct.pr_number=pr.pr_number AND pct.repository_id=pr.repository_id AND LOWER(pct.tag)='status change')
+  2) pgs.category = 'Status Change'
+  3) pr.labels @> ARRAY['c-status'] OR pr.labels @> ARRAY['c-update']
+
+Editor identification:
+- pr_events.actor_role = 'EDITOR'
+- contributor_activity.role = 'EDITOR'
+- For leaderboard: contributor_scores (pre-aggregated, fast)
+
+Timestamps:
+- All timestamps are TIMESTAMPTZ (UTC)
+- month_year columns use 'YYYY-MM' string format — use TO_CHAR(ts, 'YYYY-MM') to group by month
+- Wait duration: EXTRACT(DAY FROM (NOW() - waiting_since))::int
+
+Array columns:
+- pull_requests.labels and issues.labels are TEXT[] — use @> for contains, unnest() for iteration
+- Example: labels @> ARRAY['c-status']::text[]
 `
 
 const ALLOWED_ANALYTICS_TABLES = new Set([
@@ -269,7 +351,7 @@ async function refineAnswerWithCohere(input: {
   topMatches: ProposalRow[]
   topGuides: SiteGuide[]
 }): Promise<string | null> {
-  if (!env.COHERE_API_KEY) return null
+  if (!env.GROQ_API_KEY && !env.COHERE_API_KEY) return null
 
   const facts = {
     baseAnswer: input.baseAnswer,
@@ -296,33 +378,60 @@ async function refineAnswerWithCohere(input: {
     topGuides: input.topGuides.map((g) => ({ title: g.title, summary: g.summary })),
   }
 
-  try {
-    const response = await fetch('https://api.cohere.ai/v1/chat', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.COHERE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'command-r-08-2024',
-        temperature: 0.1,
-        message: `You are a precise assistant for an Ethereum standards website.
+  const systemMsg = `You are a precise assistant for an Ethereum standards website.
 Answer the user question in 1-2 short sentences (max 55 words).
 Use only the provided facts. If facts are insufficient, say so briefly.
-Do not mention links or navigation.
+Do not mention links or navigation.`
+  const userMsg = `User question: ${input.question}\nFacts: ${JSON.stringify(facts)}`
 
-User question: ${input.question}
-Facts: ${JSON.stringify(facts)}`,
-      }),
-    })
-
-    const data = (await response.json()) as { text?: string }
-    const text = data.text?.trim()
-    if (!response.ok || !text) return null
-    return text.replace(/\s+/g, ' ').slice(0, 420)
-  } catch {
-    return null
+  if (env.GROQ_API_KEY) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.1,
+          messages: [
+            { role: 'system', content: systemMsg },
+            { role: 'user', content: userMsg },
+          ],
+        }),
+      })
+      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
+      const text = data.choices?.[0]?.message?.content?.trim()
+      if (response.ok && text) return text.replace(/\s+/g, ' ').slice(0, 420)
+    } catch {
+      // fall through to Cohere
+    }
   }
+
+  if (env.COHERE_API_KEY) {
+    try {
+      const response = await fetch('https://api.cohere.ai/v1/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.COHERE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'command-r-08-2024',
+          temperature: 0.1,
+          message: `${systemMsg}\n\n${userMsg}`,
+        }),
+      })
+      const data = (await response.json()) as { text?: string }
+      const text = data.text?.trim()
+      if (response.ok && text) return text.replace(/\s+/g, ' ').slice(0, 420)
+    } catch {
+      return null
+    }
+  }
+
+  return null
 }
 
 function getRepoPrefix(repoName: string): 'EIP' | 'ERC' | 'RIP' {
@@ -378,6 +487,14 @@ function normalizeSqlText(text: string): string {
     .trim()
 }
 
+function stripSqlComments(sql: string): string {
+  // Strip -- single-line comments and /* */ block comments before structural checks
+  return sql
+    .replace(/--[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .trim()
+}
+
 function extractJsonObject(text: string): string | null {
   const normalized = normalizeSqlText(text)
   const start = normalized.indexOf('{')
@@ -386,13 +503,52 @@ function extractJsonObject(text: string): string | null {
   return normalized.slice(start, end + 1)
 }
 
-function extractReferencedTables(sql: string): string[] {
+function extractCteNames(sql: string): Set<string> {
+  // Matches: WITH name AS ( and , name AS (
   const found = new Set<string>()
-  const regex = /\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b/gi
+  const regex = /\b(?:with|,)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s*\(/gi
   let match: RegExpExecArray | null
   while ((match = regex.exec(sql)) !== null) {
     found.add(match[1].toLowerCase())
   }
+  return found
+}
+
+function extractReferencedTables(sql: string): string[] {
+  // Parenthesis-depth-aware extraction — FROM inside EXTRACT(...FROM...) is a
+  // SQL keyword argument, not a table reference, so we skip depth > 0.
+  const found = new Set<string>()
+  let depth = 0
+  let i = 0
+
+  while (i < sql.length) {
+    // Skip single-quoted string literals
+    if (sql[i] === "'") {
+      i++
+      while (i < sql.length) {
+        if (sql[i] === "'" && sql[i - 1] !== '\\') { i++; break }
+        i++
+      }
+      continue
+    }
+
+    if (sql[i] === '(') { depth++; i++; continue }
+    if (sql[i] === ')') { depth--; i++; continue }
+
+    // Only match FROM/JOIN table references at the top-level clause (depth 0)
+    if (depth === 0) {
+      const slice = sql.slice(i)
+      const m = slice.match(/^(from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)/i)
+      if (m && (i === 0 || /\W/.test(sql[i - 1]))) {
+        found.add(m[2].toLowerCase())
+        i += m[0].length
+        continue
+      }
+    }
+
+    i++
+  }
+
   return [...found]
 }
 
@@ -400,13 +556,19 @@ function enforceSelectOnlySql(sql: string): string | null {
   const cleaned = normalizeSqlText(sql).replace(/;+\s*$/g, '')
   if (!cleaned) return null
   if (cleaned.length > 6000) return null
-  if (!/^\s*(select|with)\b/i.test(cleaned)) return null
-  if (SQL_BLOCKLIST.test(cleaned)) return null
 
-  const tables = extractReferencedTables(cleaned)
+  // Strip comments before structural and blocklist checks to avoid false positives
+  const stripped = stripSqlComments(cleaned)
+  if (!stripped) return null
+  if (!/^\s*(select|with)\b/i.test(stripped)) return null
+  if (SQL_BLOCKLIST.test(stripped)) return null
+
+  // CTE-aware table validation: exclude CTE names from the allowlist check
+  const cteNames = extractCteNames(stripped)
+  const tables = extractReferencedTables(stripped)
   if (tables.length === 0) return null
   for (const table of tables) {
-    if (!ALLOWED_ANALYTICS_TABLES.has(table)) {
+    if (!cteNames.has(table) && !ALLOWED_ANALYTICS_TABLES.has(table)) {
       return null
     }
   }
@@ -438,77 +600,121 @@ async function generateAnalyticsSql(input: {
   question: string
   history: AssistantTurn[]
 }): Promise<{ sql: string; title: string; description: string } | null> {
-  if (!env.COHERE_API_KEY) return null
+  if (!env.GROQ_API_KEY && !env.COHERE_API_KEY) return null
 
   const prior = input.history
     .slice(-8)
     .map((h) => `${h.role.toUpperCase()}: ${h.content}`)
     .join('\n')
 
-  const prompt = `You are a PostgreSQL analytics query planner for EIPsInsight.
-Generate one SAFE read-only SQL query and short metadata.
+  const systemPrompt = `You are a PostgreSQL analytics query planner for EIPsInsight, an Ethereum Improvement Proposal observability platform.
+Generate one SAFE read-only SQL query and short metadata for the user's question.
 
-Rules:
-- Output JSON only (no markdown).
-- Use only SELECT/WITH and the allowed schema.
-- Always include LIMIT <= 100 unless aggregate returning few rows.
-- Prefer grouping by repository when relevant.
-- Never query auth/payment/user-private tables.
-- Keep SQL valid for PostgreSQL.
+== RULES ==
+- Output JSON only. No markdown, no explanation, no code fences.
+- Use only SELECT or WITH...SELECT. Never INSERT/UPDATE/DELETE/DROP/ALTER.
+- Only reference tables listed in the schema below. No invented table names.
+- Always include LIMIT <= 100 unless the query is an aggregate that naturally returns few rows.
+- Use COALESCE to handle NULLs in join columns.
+- Prefer explicit column aliases for clarity.
+- When filtering labels (TEXT[]), use: labels @> ARRAY['label']::text[]
+- For "merged PRs": state = 'closed' AND merged_at IS NOT NULL
+- Always match both spellings of governance states: WAITING_EDITOR and WAITING_ON_EDITOR
 
-Domain context:
+== DOMAIN CONTEXT ==
 ${ASSISTANT_WORKFLOW_CONTEXT}
 
-Allowed schema:
+== SCHEMA ==
 ${ANALYTICS_SQL_SCHEMA}
 
-Return shape:
-{"title":"...","description":"...","sql":"..."}
+== RETURN SHAPE (JSON only) ==
+{"title":"short title","description":"one sentence description","sql":"SELECT ..."}
 
-Conversation context:
-${prior || 'none'}
+== EXAMPLES ==
 
-User question:
-${input.question}`
+Q: Who are the top 10 editors by number of PRs reviewed this year?
+A: {"title":"Top editors by reviews (this year)","description":"Editors ranked by review count in the current calendar year.","sql":"SELECT ca.actor, COUNT(*) AS review_count FROM contributor_activity ca JOIN repositories r ON r.id = ca.repository_id WHERE ca.action_type = 'reviewed' AND ca.role = 'EDITOR' AND EXTRACT(YEAR FROM ca.occurred_at) = EXTRACT(YEAR FROM NOW()) GROUP BY ca.actor ORDER BY review_count DESC LIMIT 10"}
 
-  try {
-    const response = await fetch('https://api.cohere.ai/v1/chat', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.COHERE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'command-r-08-2024',
-        temperature: 0.1,
-        message: prompt,
-      }),
-    })
+Q: How many EIPs reached Final status each year?
+A: {"title":"EIPs reaching Final status by year","description":"Count of proposals that transitioned to Final status, grouped by year.","sql":"SELECT EXTRACT(YEAR FROM ese.changed_at)::int AS year, COUNT(DISTINCT ese.eip_id) AS finalized FROM eip_status_events ese WHERE ese.to_status = 'Final' GROUP BY year ORDER BY year DESC LIMIT 20"}
 
-    const data = (await response.json()) as { text?: string }
-    if (!response.ok || !data.text) return null
+Q: Show open PRs waiting on editor review for more than 30 days
+A: {"title":"Open PRs waiting on editor 30+ days","description":"Pull requests in WAITING_EDITOR state for over 30 days, ordered by wait time.","sql":"SELECT pr.pr_number, r.name AS repo, pr.title, pr.author, EXTRACT(DAY FROM (NOW() - pgs.waiting_since))::int AS waiting_days FROM pr_governance_state pgs JOIN pull_requests pr ON pr.pr_number = pgs.pr_number AND pr.repository_id = pgs.repository_id JOIN repositories r ON r.id = pr.repository_id WHERE pgs.current_state IN ('WAITING_EDITOR','WAITING_ON_EDITOR') AND pr.state = 'open' AND pgs.waiting_since < NOW() - INTERVAL '30 days' ORDER BY waiting_days DESC LIMIT 50"}
 
-    const jsonText = extractJsonObject(data.text)
+${prior ? `== CONVERSATION CONTEXT ==\n${prior}\n\n` : ''}Now answer the user's question with the JSON return shape only.`
+
+  const parseResult = (text: string) => {
+    const jsonText = extractJsonObject(text)
     if (!jsonText) return null
-
-    const parsed = JSON.parse(jsonText) as {
-      sql?: string
-      title?: string
-      description?: string
+    try {
+      const parsed = JSON.parse(jsonText) as { sql?: string; title?: string; description?: string }
+      if (!parsed.sql) return null
+      const safeSql = enforceSelectOnlySql(parsed.sql)
+      if (!safeSql) return null
+      return {
+        sql: safeSql,
+        title: parsed.title?.trim() || 'Custom analysis',
+        description: parsed.description?.trim() || 'Generated from your question.',
+      }
+    } catch {
+      return null
     }
-
-    if (!parsed.sql) return null
-    const safeSql = enforceSelectOnlySql(parsed.sql)
-    if (!safeSql) return null
-
-    return {
-      sql: safeSql,
-      title: parsed.title?.trim() || 'Custom analysis',
-      description: parsed.description?.trim() || 'Generated from your question.',
-    }
-  } catch {
-    return null
   }
+
+  if (env.GROQ_API_KEY) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: input.question },
+          ],
+        }),
+      })
+      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; error?: { message?: string } }
+      if (!response.ok) {
+        console.error('[assistant/sql] Groq error:', response.status, data.error?.message)
+      } else if (data.choices?.[0]?.message?.content) {
+        const raw = data.choices[0].message.content
+        const result = parseResult(raw)
+        if (result) return result
+        console.error('[assistant/sql] Groq SQL rejected by validator. Raw output:', raw.slice(0, 400))
+      }
+    } catch (err) {
+      console.error('[assistant/sql] Groq fetch failed:', err)
+    }
+  }
+
+  if (env.COHERE_API_KEY) {
+    try {
+      const response = await fetch('https://api.cohere.ai/v1/chat', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.COHERE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'command-r-08-2024',
+          temperature: 0.1,
+          message: `${systemPrompt}\n\nUser question:\n${input.question}`,
+        }),
+      })
+      const data = (await response.json()) as { text?: string }
+      if (response.ok && data.text) return parseResult(data.text)
+    } catch {
+      return null
+    }
+  }
+
+  return null
 }
 
 async function runAnalyticsQuery(input: {
@@ -1165,7 +1371,7 @@ const searchTerm = `%${input.query}%`;
 
         if (dataQuery) {
           answer = summarizeDataQueryResult(dataQuery)
-        } else if (!env.COHERE_API_KEY) {
+        } else if (!env.GROQ_API_KEY && !env.COHERE_API_KEY) {
           answer = `${answer} Data-query mode needs AI query planning to be enabled on the backend.`
         }
       }
