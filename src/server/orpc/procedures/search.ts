@@ -487,6 +487,14 @@ function normalizeSqlText(text: string): string {
     .trim()
 }
 
+function stripSqlComments(sql: string): string {
+  // Strip -- single-line comments and /* */ block comments before structural checks
+  return sql
+    .replace(/--[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .trim()
+}
+
 function extractJsonObject(text: string): string | null {
   const normalized = normalizeSqlText(text)
   const start = normalized.indexOf('{')
@@ -495,13 +503,52 @@ function extractJsonObject(text: string): string | null {
   return normalized.slice(start, end + 1)
 }
 
-function extractReferencedTables(sql: string): string[] {
+function extractCteNames(sql: string): Set<string> {
+  // Matches: WITH name AS ( and , name AS (
   const found = new Set<string>()
-  const regex = /\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b/gi
+  const regex = /\b(?:with|,)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s*\(/gi
   let match: RegExpExecArray | null
   while ((match = regex.exec(sql)) !== null) {
     found.add(match[1].toLowerCase())
   }
+  return found
+}
+
+function extractReferencedTables(sql: string): string[] {
+  // Parenthesis-depth-aware extraction — FROM inside EXTRACT(...FROM...) is a
+  // SQL keyword argument, not a table reference, so we skip depth > 0.
+  const found = new Set<string>()
+  let depth = 0
+  let i = 0
+
+  while (i < sql.length) {
+    // Skip single-quoted string literals
+    if (sql[i] === "'") {
+      i++
+      while (i < sql.length) {
+        if (sql[i] === "'" && sql[i - 1] !== '\\') { i++; break }
+        i++
+      }
+      continue
+    }
+
+    if (sql[i] === '(') { depth++; i++; continue }
+    if (sql[i] === ')') { depth--; i++; continue }
+
+    // Only match FROM/JOIN table references at the top-level clause (depth 0)
+    if (depth === 0) {
+      const slice = sql.slice(i)
+      const m = slice.match(/^(from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)/i)
+      if (m && (i === 0 || /\W/.test(sql[i - 1]))) {
+        found.add(m[2].toLowerCase())
+        i += m[0].length
+        continue
+      }
+    }
+
+    i++
+  }
+
   return [...found]
 }
 
@@ -509,13 +556,19 @@ function enforceSelectOnlySql(sql: string): string | null {
   const cleaned = normalizeSqlText(sql).replace(/;+\s*$/g, '')
   if (!cleaned) return null
   if (cleaned.length > 6000) return null
-  if (!/^\s*(select|with)\b/i.test(cleaned)) return null
-  if (SQL_BLOCKLIST.test(cleaned)) return null
 
-  const tables = extractReferencedTables(cleaned)
+  // Strip comments before structural and blocklist checks to avoid false positives
+  const stripped = stripSqlComments(cleaned)
+  if (!stripped) return null
+  if (!/^\s*(select|with)\b/i.test(stripped)) return null
+  if (SQL_BLOCKLIST.test(stripped)) return null
+
+  // CTE-aware table validation: exclude CTE names from the allowlist check
+  const cteNames = extractCteNames(stripped)
+  const tables = extractReferencedTables(stripped)
   if (tables.length === 0) return null
   for (const table of tables) {
-    if (!ALLOWED_ANALYTICS_TABLES.has(table)) {
+    if (!cteNames.has(table) && !ALLOWED_ANALYTICS_TABLES.has(table)) {
       return null
     }
   }
@@ -626,13 +679,17 @@ ${prior ? `== CONVERSATION CONTEXT ==\n${prior}\n\n` : ''}Now answer the user's 
           ],
         }),
       })
-      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
-      if (response.ok && data.choices?.[0]?.message?.content) {
-        const result = parseResult(data.choices[0].message.content)
+      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; error?: { message?: string } }
+      if (!response.ok) {
+        console.error('[assistant/sql] Groq error:', response.status, data.error?.message)
+      } else if (data.choices?.[0]?.message?.content) {
+        const raw = data.choices[0].message.content
+        const result = parseResult(raw)
         if (result) return result
+        console.error('[assistant/sql] Groq SQL rejected by validator. Raw output:', raw.slice(0, 400))
       }
-    } catch {
-      // fall through to Cohere
+    } catch (err) {
+      console.error('[assistant/sql] Groq fetch failed:', err)
     }
   }
 
