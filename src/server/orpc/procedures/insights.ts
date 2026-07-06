@@ -36,22 +36,22 @@ export const insightsProcedures = {
       });
 
       // 2. Total finalized/accepted
-      const finalizedRows = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(`
+      const finalizedRows = await prisma.$queryRaw<Array<{ count: bigint }>>`
         SELECT COUNT(DISTINCT eip_id) as count
         FROM eip_status_events
         WHERE to_status = 'Final'
-          AND changed_at >= $1::date
-          AND changed_at < $2::date
-      `, startDate, endDate);
+          AND changed_at >= ${startDate}::date
+          AND changed_at < ${endDate}::date
+      `;
       const finalizedCount = Number(finalizedRows[0]?.count || 0);
 
       // 3. Month-by-month activity (proposals created)
-      const activityRows = await prisma.$queryRawUnsafe<Array<{ month: number, count: bigint }>>(`
+      const activityRows = await prisma.$queryRaw<Array<{ month: number, count: bigint }>>`
         SELECT EXTRACT(MONTH FROM created_at) as month, COUNT(*) as count
         FROM eips
-        WHERE created_at >= $1::date AND created_at < $2::date
+        WHERE created_at >= ${startDate}::date AND created_at < ${endDate}::date
         GROUP BY 1
-      `, startDate, endDate);
+      `;
       
       const activityMap = new Map(activityRows.map(r => [Number(r.month), Number(r.count)]));
       const monthlyActivity = Array.from({ length: 12 }, (_, i) => ({
@@ -60,13 +60,13 @@ export const insightsProcedures = {
       }));
 
       // 4. Category breakdown
-      const categoryRows = await prisma.$queryRawUnsafe<Array<{ category: string, count: bigint }>>(`
+      const categoryRows = await prisma.$queryRaw<Array<{ category: string, count: bigint }>>`
         SELECT COALESCE(NULLIF(s.category, ''), NULLIF(s.type, ''), 'Other') as category, COUNT(*) as count
         FROM eips e
         JOIN eip_snapshots s ON s.eip_id = e.id
-        WHERE e.created_at >= $1::date AND e.created_at < $2::date
+        WHERE e.created_at >= ${startDate}::date AND e.created_at < ${endDate}::date
         GROUP BY 1
-      `, startDate, endDate);
+      `;
       
       const categoryBreakdown = categoryRows.map(r => ({
         category: r.category,
@@ -74,15 +74,15 @@ export const insightsProcedures = {
       }));
 
       // 5. Top 5 most active authors (by activity in that year)
-      const topAuthorsRows = await prisma.$queryRawUnsafe<Array<{ actor: string, count: bigint }>>(`
+      const topAuthorsRows = await prisma.$queryRaw<Array<{ actor: string, count: bigint }>>`
         SELECT actor, COUNT(*) as count
         FROM contributor_activity
-        WHERE occurred_at >= $1::date AND occurred_at < $2::date
+        WHERE occurred_at >= ${startDate}::date AND occurred_at < ${endDate}::date
           AND action_type IN ('pr_created', 'pr_merged', 'review_submitted', 'issue_opened')
         GROUP BY actor
         ORDER BY count DESC
         LIMIT 5
-      `, startDate, endDate);
+      `;
       
       const topAuthors = topAuthorsRows.map(r => ({
         actor: r.actor,
