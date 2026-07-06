@@ -20,6 +20,7 @@ import { feedbackProcedures } from './procedures/feedback'
 import { pageCommentProcedures } from './procedures/pageComment'
 import { commentVoteProcedures } from './procedures/commentVote'
 import { subscriptionsProcedures } from './procedures/subscriptions'
+import { watchlistProcedures } from './procedures/watchlist'
 
 export const router = {
   auth: authProcedures,
@@ -44,4 +45,5 @@ export const router = {
   pageComment: pageCommentProcedures,
   commentVote: commentVoteProcedures,
   subscriptions: subscriptionsProcedures,
+  watchlist: watchlistProcedures,
 }
