@@ -17,6 +17,10 @@ import {
   Settings2,
   Twitter,
   Github,
+  Youtube,
+  Linkedin,
+  Globe,
+  Heart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { client } from '@/lib/orpc';
@@ -493,28 +497,70 @@ export function UpgradeShell({ children }: { children: React.ReactNode }) {
             <span>tracking data refreshes every 5 minutes</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <a
               href="https://x.com/EIPsInsight"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
-              title="Follow EIPsInsight on X"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              title="X (Twitter)"
             >
-              <Twitter className="h-4 w-4" />
-              <span>X (Twitter)</span>
+              <Twitter className="h-4 w-4 text-sky-400" />
+              <span className="hidden sm:inline">X</span>
             </a>
-            <span className="h-3 w-px bg-border" />
+            <span className="h-3 w-px bg-border/80 hidden sm:inline" />
             <a
               href="https://github.com/AvarchLLC/eipsinsight-v4"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
-              title="EIPsInsight GitHub Repository"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              title="GitHub"
             >
-              <Github className="h-4 w-4" />
-              <span>GitHub</span>
+              <Github className="h-4 w-4 text-foreground/80 dark:text-foreground/60" />
+              <span className="hidden sm:inline">GitHub</span>
             </a>
+            <span className="h-3 w-px bg-border/80 hidden sm:inline" />
+            <a
+              href="https://www.youtube.com/@etherworldco"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              title="YouTube"
+            >
+              <Youtube className="h-4 w-4 text-red-500" />
+              <span className="hidden sm:inline">YouTube</span>
+            </a>
+            <span className="h-3 w-px bg-border/80 hidden sm:inline" />
+            <a
+              href="https://www.linkedin.com/company/eipsinsight/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              title="LinkedIn"
+            >
+              <Linkedin className="h-4 w-4 text-blue-500" />
+              <span className="hidden sm:inline">LinkedIn</span>
+            </a>
+            <span className="h-3 w-px bg-border/80 hidden sm:inline" />
+            <a
+              href="https://etherworld.co/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              title="EtherWorld Website"
+            >
+              <Globe className="h-4 w-4 text-emerald-500" />
+              <span className="hidden sm:inline">EtherWorld</span>
+            </a>
+            <span className="h-3 w-px bg-border/80 hidden sm:inline" />
+            <Link
+              href="/donate"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+              title="Donate to support EIPsInsight"
+            >
+              <Heart className="h-4 w-4 text-rose-500 fill-rose-500" />
+              <span>Donate</span>
+            </Link>
           </div>
         </div>
       </footer>
