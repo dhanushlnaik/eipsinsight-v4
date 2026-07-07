@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ExternalLink, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { StageBadge } from '@/components/upgrade/stage-badge';
 import type { UpgradeCompositionEip } from '@/components/upgrade/types';
 
 function statusChipClass(status: string | null): string {
@@ -37,18 +36,16 @@ const NORTH_STAR_LABELS: Record<string, string> = {
 };
 
 /**
- * EIP card for upgrade detail pages. Collapsed: number, title, layman
- * summary. "Show more" expands benefits, tradeoffs, stakeholder impacts,
- * North-Star alignment, and metadata via a CSS grid-rows transition.
+ * EIP card for upgrade detail pages. Collapsed: number, layer, title, and a
+ * plain-language summary. "Show more" expands benefits, tradeoffs, who it
+ * affects, roadmap alignment, and metadata via a CSS grid-rows transition.
  */
 export function UpgradeEipCard({
   eip,
   upgradeSlug,
-  technical,
 }: {
   eip: UpgradeCompositionEip;
   upgradeSlug: string;
-  technical: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -116,20 +113,17 @@ export function UpgradeEipCard({
                 {eip.curation.layer}
               </span>
             )}
-            {technical && eip.status && (
-              <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', statusChipClass(eip.status))}>
+            {eip.status && (
+              <span
+                title={`Current status of the proposal itself: ${eip.status}`}
+                className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', statusChipClass(eip.status))}
+              >
                 {eip.status}
-              </span>
-            )}
-            {technical && eip.category && (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {eip.category}
               </span>
             )}
           </div>
           <h4 className="mt-1 text-sm font-semibold text-foreground">{displayTitle}</h4>
         </div>
-        {technical && <StageBadge bucket={eip.bucket} abbreviated />}
       </div>
 
       {summary && (

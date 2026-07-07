@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { getInProgressUpgrades, getLiveUpgrades } from '@/data/upgrade-registry';
-import { UpgradeStatusBadge } from '@/components/upgrade/stage-badge';
+import { getCurrentPhase } from '@/data/fork-schedule';
+import { PhaseBadge, UpgradeStatusBadge } from '@/components/upgrade/stage-badge';
 
 /**
  * Responsive horizontal strip of recent and upcoming network upgrades with a
@@ -19,6 +20,7 @@ export function UpgradeTimelineStrip({
   const live = getLiveUpgrades().slice(0, liveCount).reverse();
   const inProgress = getInProgressUpgrades();
   const entries = [...live, ...inProgress];
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="overflow-x-auto pb-1">
@@ -28,6 +30,7 @@ export function UpgradeTimelineStrip({
           const previous = entries[index - 1];
           const showHereMarker =
             previous?.status === 'Live' && entry.status !== 'Live';
+          const phase = entry.status !== 'Live' ? getCurrentPhase(entry.slug, today) : null;
 
           return (
             <div key={entry.slug} className="flex items-stretch">
@@ -70,12 +73,20 @@ export function UpgradeTimelineStrip({
                   {entry.name}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <UpgradeStatusBadge status={entry.status} className="text-[10px]" />
-                  {entry.activationDate && (
+                  {phase ? (
+                    <PhaseBadge phaseId={phase.id} label={phase.label} className="text-[10px]" />
+                  ) : (
+                    <UpgradeStatusBadge status={entry.status} className="text-[10px]" />
+                  )}
+                  {entry.activationDate ? (
                     <span className="text-[10px] text-muted-foreground">
                       {entry.activationDate}
                     </span>
-                  )}
+                  ) : phase ? (
+                    <span className="text-[10px] text-muted-foreground">
+                      → {phase.targetYear}
+                    </span>
+                  ) : null}
                 </span>
               </Link>
             </div>

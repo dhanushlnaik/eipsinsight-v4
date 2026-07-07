@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, GitCommit, Search, Star, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -47,25 +46,12 @@ export function UpgradeDetailBody({
   events: UpgradeCompositionEvent[];
   timelineData: UpgradeTimelinePoint[];
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const technical = searchParams.get('view') === 'technical';
-
   const [searchQuery, setSearchQuery] = useState('');
   const [layerFilter, setLayerFilter] = useState<'all' | 'EL' | 'CL'>('all');
   const [isDeclinedExpanded, setIsDeclinedExpanded] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('about');
   const [articles, setArticles] = useState<UpgradeArticle[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
-
-  const setView = (view: 'simple' | 'technical') => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (view === 'technical') params.set('view', 'technical');
-    else params.delete('view');
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -117,8 +103,8 @@ export function UpgradeDetailBody({
     (bucket) => (byStage.get(bucket)?.length ?? 0) > 0
   );
   const headliners = entry?.headliners ?? [];
-  const showTimelineChart = technical && timelineData.length > 1;
-  const showActivity = technical && events.length > 0;
+  const showTimelineChart = timelineData.length > 1;
+  const showActivity = events.length > 0;
 
   const tocItems: TocItem[] = useMemo(() => {
     const items: TocItem[] = [{ id: 'about', label: `About ${name}` }];
@@ -130,8 +116,8 @@ export function UpgradeDetailBody({
         count: byStage.get(bucket)?.length ?? 0,
       });
     }
-    if (showTimelineChart) items.push({ id: 'timeline-chart', label: 'Composition timeline' });
-    if (showActivity) items.push({ id: 'activity', label: 'Recent activity' });
+    if (showTimelineChart) items.push({ id: 'timeline-chart', label: 'Scope over time' });
+    if (showActivity) items.push({ id: 'activity', label: 'Recent changes' });
     if (articles.length > 0) items.push({ id: 'related-articles', label: 'Related articles' });
     return items;
   }, [name, headliners.length, visibleStages, byStage, showTimelineChart, showActivity, articles.length]);
@@ -160,36 +146,7 @@ export function UpgradeDetailBody({
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 pb-12 sm:px-6">
-      {/* View toggle */}
-      <div className="flex items-center justify-end gap-1 py-3">
-        <span className="mr-2 text-xs text-muted-foreground">View:</span>
-        <div className="inline-flex overflow-hidden rounded-md border border-border">
-          <button
-            onClick={() => setView('simple')}
-            className={cn(
-              'px-3 py-1.5 text-xs font-medium transition-colors',
-              !technical
-                ? 'bg-primary/10 text-primary'
-                : 'bg-muted/40 text-muted-foreground hover:text-foreground'
-            )}
-          >
-            Simple
-          </button>
-          <button
-            onClick={() => setView('technical')}
-            className={cn(
-              'border-l border-border px-3 py-1.5 text-xs font-medium transition-colors',
-              technical
-                ? 'bg-primary/10 text-primary'
-                : 'bg-muted/40 text-muted-foreground hover:text-foreground'
-            )}
-          >
-            Technical
-          </button>
-        </div>
-      </div>
-
+    <div className="mx-auto w-full max-w-6xl px-4 pb-12 pt-6 sm:px-6">
       <div className="flex gap-6">
         {/* Sticky sidebar: TOC + search + subscription */}
         <aside className="hidden w-64 shrink-0 lg:block">
@@ -403,12 +360,7 @@ export function UpgradeDetailBody({
                 {!collapsed && (
                   <div className="space-y-3">
                     {eips.map((eip) => (
-                      <UpgradeEipCard
-                        key={eip.eip_number}
-                        eip={eip}
-                        upgradeSlug={slug}
-                        technical={technical}
-                      />
+                      <UpgradeEipCard key={eip.eip_number} eip={eip} upgradeSlug={slug} />
                     ))}
                     {eips.length === 0 && isFiltering && (
                       <p className="rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
@@ -427,22 +379,22 @@ export function UpgradeDetailBody({
             </div>
           )}
 
-          {/* Composition timeline (technical) */}
+          {/* Scope over time */}
           {showTimelineChart && (
             <section id="timeline-chart" className="scroll-mt-28">
               <UpgradeTimelineChart data={timelineData} upgradeName={name} />
             </section>
           )}
 
-          {/* Activity feed (technical) */}
+          {/* Recent changes */}
           {showActivity && (
             <section id="activity" className="scroll-mt-28">
               <div className="mb-3">
                 <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                  Recent activity
+                  Recent changes
                 </h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Composition changes parsed from meta-EIP commits.
+                  Every time an EIP entered, left, or moved stages in this upgrade.
                 </p>
               </div>
               <div className="overflow-hidden rounded-xl border border-border bg-card/60">

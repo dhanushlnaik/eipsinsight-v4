@@ -15,6 +15,8 @@ import {
   History,
   LogOut,
   Settings2,
+  Twitter,
+  Github,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { client } from '@/lib/orpc';
@@ -480,23 +482,40 @@ export function UpgradeShell({ children }: { children: React.ReactNode }) {
         </section>
       </main>
 
-      <footer className="border-t border-border/60">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-muted-foreground sm:px-6">
-          <span>
-            Powered by{' '}
-            <Link href="/" className="text-foreground/80 hover:text-primary">
+      <footer className="border-t border-border/60 bg-muted/20">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 text-xs text-muted-foreground sm:px-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span>© 2026</span>
+            <Link href="/" className="font-medium text-foreground hover:text-primary">
               EIPsInsight
-            </Link>{' '}
-            · tracking data refreshes every 5 minutes
-          </span>
-          <a
-            href="https://github.com/AvarchLLC/EIPsInsight"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-primary"
-          >
-            GitHub
-          </a>
+            </Link>
+            <span className="text-muted-foreground/60">·</span>
+            <span>tracking data refreshes every 5 minutes</span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <a
+              href="https://x.com/EIPsInsight"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+              title="Follow EIPsInsight on X"
+            >
+              <Twitter className="h-4 w-4" />
+              <span>X (Twitter)</span>
+            </a>
+            <span className="h-3 w-px bg-border" />
+            <a
+              href="https://github.com/AvarchLLC/eipsinsight-v4"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+              title="EIPsInsight GitHub Repository"
+            >
+              <Github className="h-4 w-4" />
+              <span>GitHub</span>
+            </a>
+          </div>
         </div>
       </footer>
     </div>

@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { ArrowLeft, Box, CalendarDays, FileText, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UpgradeRegistryEntry } from '@/data/upgrade-registry';
-import { UpgradeStatusBadge } from '@/components/upgrade/stage-badge';
+import { getCurrentPhase } from '@/data/fork-schedule';
+import { PhaseBadge, UpgradeStatusBadge } from '@/components/upgrade/stage-badge';
 import { UpgradeTimelineStrip } from '@/components/upgrade/upgrade-timeline-strip';
 
 export type UpgradeSubtab =
@@ -58,6 +59,10 @@ export function UpgradeDetailHeader({
   activeTab: UpgradeSubtab;
 }) {
   const subtabs = subtabsFor(slug, entry);
+  const phase =
+    entry && entry.status !== 'Live'
+      ? getCurrentPhase(slug, new Date().toISOString().slice(0, 10))
+      : null;
 
   return (
     <div className="relative w-full border-b border-border/60 bg-background">
@@ -74,7 +79,16 @@ export function UpgradeDetailHeader({
           <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
             {name}
           </h1>
-          {entry && <UpgradeStatusBadge status={entry.status} />}
+          {phase ? (
+            <PhaseBadge phaseId={phase.id} label={phase.label} />
+          ) : (
+            entry && <UpgradeStatusBadge status={entry.status} />
+          )}
+          {phase && (
+            <span className="text-xs font-medium text-muted-foreground">
+              Target: {phase.targetYear}
+            </span>
+          )}
         </div>
 
         {entry?.tagline && (

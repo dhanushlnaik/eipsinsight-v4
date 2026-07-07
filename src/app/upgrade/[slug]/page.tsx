@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import '@/lib/orpc.server';
@@ -128,16 +127,14 @@ export default async function UpgradeDetailPage({ params }: Props) {
         activeTab="overview"
       />
 
-      <Suspense fallback={null}>
-        <UpgradeDetailBody
-          slug={slug}
-          name={upgrade.name || entry?.name || slug}
-          entry={entry}
-          composition={composition}
-          events={events}
-          timelineData={timeline}
-        />
-      </Suspense>
+      <UpgradeDetailBody
+        slug={slug}
+        name={upgrade.name || entry?.name || slug}
+        entry={entry}
+        composition={composition}
+        events={events}
+        timelineData={timeline}
+      />
     </div>
   );
 }

@@ -137,6 +137,33 @@ export function groupScheduleIntoPhases(
   });
 }
 
+const PHASE_SHORT_LABELS: Record<SchedulePhaseId, string> = {
+  scoping: 'Scoping',
+  development: 'Devnets',
+  testnets: 'Testnets',
+  mainnet: 'Launching',
+};
+
+/**
+ * The phase a fork is in right now (derived from its schedule), for status
+ * badges — e.g. "Devnets" instead of a generic "Upcoming".
+ * Returns null for forks without a schedule config.
+ */
+export function getCurrentPhase(
+  slug: string,
+  today: string
+): { id: SchedulePhaseId; label: string; targetYear: string } | null {
+  const config = FORK_SCHEDULE_CONFIGS.find((c) => c.slug === slug);
+  if (!config) return null;
+  const phases = groupScheduleIntoPhases(calculateForkSchedule(config), today);
+  const active = phases.find((phase) => phase.status === 'active') ?? phases[phases.length - 1];
+  return {
+    id: active.id,
+    label: PHASE_SHORT_LABELS[active.id],
+    targetYear: config.mainnetTarget.slice(0, 4),
+  };
+}
+
 function addDays(iso: string, days: number): string {
   const date = new Date(`${iso}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);

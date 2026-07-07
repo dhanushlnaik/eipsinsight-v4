@@ -42,6 +42,39 @@ export function StageBadge({
   );
 }
 
+const PHASE_BADGE_CLASSES: Record<string, string> = {
+  scoping: 'border-purple-500/30 bg-purple-500/15 text-purple-700 dark:text-purple-300',
+  development: 'border-cyan-500/30 bg-cyan-500/15 text-cyan-700 dark:text-cyan-300',
+  testnets: 'border-blue-500/30 bg-blue-500/15 text-blue-700 dark:text-blue-300',
+  mainnet: 'border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300',
+};
+
+/**
+ * Current-phase pill for in-progress forks: Scoping / Devnets / Testnets /
+ * Launching — more informative than the generic lifecycle status.
+ */
+export function PhaseBadge({
+  phaseId,
+  label,
+  className,
+}: {
+  phaseId: string;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+        PHASE_BADGE_CLASSES[phaseId] ?? 'border-border bg-muted text-muted-foreground',
+        className
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** Fork-level lifecycle pill: Live / Upcoming / Planning / Research. */
 export function UpgradeStatusBadge({
   status,

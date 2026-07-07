@@ -13,9 +13,9 @@ import {
   stageBadgeClass,
   stageDefinition,
   stageLabel,
-  lifecycleDefinition,
   type UpgradeBucket,
 } from '@/lib/upgrade-stages';
+import { getCurrentPhase } from '@/data/fork-schedule';
 import {
   getCachedRecentActivity,
   getCachedRecentCalls,
@@ -30,7 +30,7 @@ import {
   callSeriesShort,
 } from '@/data/call-series';
 import { UpgradeTimelineStrip } from '@/components/upgrade/upgrade-timeline-strip';
-import { StageBadge, UpgradeStatusBadge } from '@/components/upgrade/stage-badge';
+import { PhaseBadge, StageBadge, UpgradeStatusBadge } from '@/components/upgrade/stage-badge';
 import { EipInclusionProcessGraph } from '@/components/upgrade/eip-inclusion-process-graph';
 
 export const revalidate = 300;
@@ -51,14 +51,27 @@ function stageCounts(composition: Awaited<ReturnType<typeof getCachedUpgradeComp
   return counts;
 }
 
-function InProgressCard({
+function formatDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function UpgradeCard({
   entry,
   counts,
+  today,
 }: {
   entry: UpgradeRegistryEntry;
   counts: Map<UpgradeBucket, number>;
+  today: string;
 }) {
   const totalEips = Array.from(counts.values()).reduce((sum, count) => sum + count, 0);
+  const isLive = entry.status === 'Live';
+  const phase = isLive ? null : getCurrentPhase(entry.slug, today);
 
   return (
     <Link
@@ -69,10 +82,22 @@ function InProgressCard({
         <h3 className="dec-title text-xl font-semibold tracking-tight text-foreground">
           {entry.name}
         </h3>
-        <UpgradeStatusBadge status={entry.status} />
+        {phase ? (
+          <PhaseBadge phaseId={phase.id} label={phase.label} />
+        ) : (
+          <UpgradeStatusBadge status={entry.status} />
+        )}
       </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">{lifecycleDefinition(entry.status)}</p>
-      <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">{entry.tagline}</p>
+      <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+        {isLive && entry.activationDate
+          ? `Activated: ${formatDate(entry.activationDate)}`
+          : phase
+            ? `Target: ${phase.targetYear}`
+            : null}
+      </p>
+      <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">
+        {entry.statusNote ?? entry.tagline}
+      </p>
 
       {entry.headliners && entry.headliners.length > 0 && (
         <p className="mt-3 flex items-start gap-1.5 text-xs text-muted-foreground">
@@ -116,8 +141,11 @@ function InProgressCard({
 }
 
 export default async function UpgradeIndexPage() {
+  const today = new Date().toISOString().slice(0, 10);
   const inProgress = getInProgressUpgrades();
   const live = getLiveUpgrades();
+  // Featured cards: newest live fork + everything in progress.
+  const featured = [live[0], ...inProgress].filter(Boolean);
 
   const [list, stats, activity, recentCalls, upcomingCalls, ...compositions] = await Promise.all([
     getCachedUpgradeList(),
@@ -125,7 +153,7 @@ export default async function UpgradeIndexPage() {
     getCachedRecentActivity(10),
     getCachedRecentCalls(5),
     getCachedUpcomingCalls(),
-    ...inProgress.map((entry) => getCachedUpgradeComposition(entry.slug)),
+    ...featured.map((entry) => getCachedUpgradeComposition(entry.slug)),
   ]);
 
   const eipCountBySlug = new Map(list.map((upgrade) => [upgrade.slug, upgrade.stats.totalEIPs]));
@@ -148,22 +176,23 @@ export default async function UpgradeIndexPage() {
         <UpgradeTimelineStrip />
       </section>
 
-      {/* In progress */}
-      <section id="in-progress">
+      {/* Network upgrades */}
+      <section id="network-upgrades">
         <div className="mb-4">
           <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            In progress
+            Network upgrades
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Upgrades being scoped, implemented, and tested right now.
+            Where each upgrade stands right now.
           </p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {inProgress.map((entry, index) => (
-            <InProgressCard
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {featured.map((entry, index) => (
+            <UpgradeCard
               key={entry.slug}
               entry={entry}
               counts={stageCounts(compositions[index] ?? [])}
+              today={today}
             />
           ))}
         </div>
