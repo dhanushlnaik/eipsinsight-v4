@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
         destination: '/upgrade',
         permanent: true,
       },
-      // Upgrade dashboard shortcuts (Forkcast-style root paths)
+      // Upgrade dashboard shortcuts (Root path redirects)
       {
         source: '/schedule',
         destination: '/upgrade/schedule',
