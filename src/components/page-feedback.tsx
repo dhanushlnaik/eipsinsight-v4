@@ -129,20 +129,19 @@ export function PageFeedback() {
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "fixed bottom-[72px] right-4 z-40 inline-flex h-10 items-center gap-2 rounded-lg border px-3.5 text-sm font-semibold shadow-lg backdrop-blur-xl transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-95",
+          "fixed bottom-4 right-16 z-40 inline-flex h-10 w-10 items-center justify-center rounded-lg border shadow-lg backdrop-blur-xl transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-95",
           isOpen
             ? "border-primary/50 bg-primary/20 text-primary scale-105"
             : "border-border bg-card/85 text-foreground hover:border-primary/45 hover:bg-primary/10 hover:text-primary"
         )}
         title="Page Feedback"
       >
-        <MessageSquare className="h-4 w-4" />
-        <span>Feedback</span>
+        <MessageSquare className="h-4.5 w-4.5" />
       </button>
 
       {/* Floating Panel Popup */}
       {isOpen && (
-        <Card className="fixed bottom-[124px] right-4 z-50 w-[385px] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-border bg-card/95 p-0 shadow-2xl shadow-black/30 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <Card className="fixed bottom-[64px] right-4 z-50 w-[385px] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-border bg-card/95 p-0 shadow-2xl shadow-black/30 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300">
           <CardHeader className="border-b border-border/60 px-4 py-3 flex flex-row items-center justify-between bg-muted/20">
             <CardTitle className="text-sm font-semibold tracking-tight text-foreground flex items-center gap-1.5">
               <MessageSquare className="h-4 w-4 text-primary" />
