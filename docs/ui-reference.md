@@ -155,7 +155,8 @@ Primary utility classes for persona-aware styling:
 | Icon default | `h-4 w-4`, `h-5 w-5` | 16px, 20px icons |
 | Container | `max-w-7xl`, `px-4 sm:px-6` | Main content |
 | Shared shell | `.page-shell` | Use for centered page bodies that should stay within `max-w-7xl` |
-| Full-width page padding | `mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6` | Use for full-width page sections such as `/upgrade`, `/search`, and the global page feedback wrapper |
+| Full-width page padding | `mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6` | Use for full-width page sections such as `/search` and the global page feedback wrapper |
+| Upgrade shell column | `mx-auto w-full max-w-6xl px-4 sm:px-6` | All `/upgrade/*` pages (dedicated shell — see Upgrade Shell section) |
 
 ### Border Radius
 
@@ -215,6 +216,18 @@ Primary utility classes for persona-aware styling:
   `mx-auto w-full px-3 sm:px-4 lg:px-5 xl:px-6`
 - Use that full-width wrapper for `/upgrade`, `/search`, and the global page feedback section
 - Do not add another outer `max-w-*` wrapper around page feedback when it is already inside the full-width wrapper
+
+### Upgrade Shell (`/upgrade/*`)
+
+The `/upgrade` tree renders inside its own minimal chrome (`src/components/upgrade/upgrade-shell.tsx`), selected by `src/components/shell-switcher.tsx` — no main sidebar or main navbar. `/oldupgrade` keeps the standard shell.
+
+- Navbar: sticky `h-14`, `border-b border-border bg-background/80 backdrop-blur-xl`; brand → `/`, "Upgrades" wordmark → `/upgrade`, nav links (Overview · forks · Analytics · Archive), freshness dot, avatar only when signed in
+- Nav link active state: `text-primary underline decoration-primary/50 underline-offset-8`; inactive: `text-muted-foreground hover:text-foreground`
+- Content column: `mx-auto w-full max-w-6xl px-4 sm:px-6` on every page — never full-bleed
+- Vertical rhythm: `space-y-10` between page sections
+- Calmer-card rules for this surface: `rounded-xl border-border bg-card/60`; hover = `hover:border-primary/40` only (no glow shadows); no radial-gradient/blur-orb backdrops; no motion section entrances (only accordion grid-rows transitions and the timeline "we are here" pulse)
+- Accents: persona primary + the five inclusion-stage colors only
+- Footer: single line ("Powered by EIPsInsight · composition parsed from meta-EIPs every 5 minutes · GitHub")
 
 ### Collapsible Page Header
 

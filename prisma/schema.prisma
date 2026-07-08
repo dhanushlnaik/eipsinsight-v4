@@ -433,6 +433,18 @@ model devnet_specs {
   @@index([active])
 }
 
+/// Per-upgrade client-team prioritization (EL/CL stances on candidate EIPs).
+/// Seeded from a public snapshot, then owned + edited via /admin/client-priority.
+/// One row per fork; `eips` holds [{ eipId, stances: [...] }].
+model upgrade_client_priority {
+  fork_slug    String   @id
+  last_updated String?
+  eips         Json?
+  updated_by   String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @default(now()) @updatedAt
+}
+
 model pgmigrations {
   id     Int      @id @default(autoincrement())
   name   String   @unique @db.VarChar(255)

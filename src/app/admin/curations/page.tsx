@@ -2,17 +2,21 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { FileText, Loader2, Pencil, Plus, Star, Trash2, X } from 'lucide-react';
+import { FileText, Loader2, Pencil, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { client } from '@/lib/orpc';
-import { cn } from '@/lib/utils';
+import { STAKEHOLDER_GROUPS } from '@/lib/stakeholders';
+
+const STAKEHOLDERS = STAKEHOLDER_GROUPS;
 
 type Curation = {
   eip_number: number;
   layman_title: string | null;
   layman_summary: string | null;
+  layer: string | null;
   benefits: string[];
   tradeoffs: string[];
+  stakeholder_impacts: Record<string, { description?: string }> | null;
   headliner_of: string | null;
   headliner_note: string | null;
   updated_by: string | null;
@@ -23,20 +27,26 @@ type EditorState = {
   eip_number: string;
   layman_title: string;
   layman_summary: string;
+  layer: '' | 'EL' | 'CL';
   benefits: string;
   tradeoffs: string;
   headliner_of: string;
   headliner_note: string;
+  stakeholders: Record<string, string>;
 };
+
+const EMPTY_STAKEHOLDERS = Object.fromEntries(STAKEHOLDERS.map((s) => [s.key, '']));
 
 const EMPTY_EDITOR: EditorState = {
   eip_number: '',
   layman_title: '',
   layman_summary: '',
+  layer: '',
   benefits: '',
   tradeoffs: '',
   headliner_of: '',
   headliner_note: '',
+  stakeholders: { ...EMPTY_STAKEHOLDERS },
 };
 
 function toEditorState(curation: Curation): EditorState {
@@ -44,10 +54,17 @@ function toEditorState(curation: Curation): EditorState {
     eip_number: String(curation.eip_number),
     layman_title: curation.layman_title ?? '',
     layman_summary: curation.layman_summary ?? '',
+    layer: curation.layer === 'EL' || curation.layer === 'CL' ? curation.layer : '',
     benefits: curation.benefits.join('\n'),
     tradeoffs: curation.tradeoffs.join('\n'),
     headliner_of: curation.headliner_of ?? '',
     headliner_note: curation.headliner_note ?? '',
+    stakeholders: {
+      ...EMPTY_STAKEHOLDERS,
+      ...Object.fromEntries(
+        STAKEHOLDERS.map((s) => [s.key, curation.stakeholder_impacts?.[s.key]?.description ?? ''])
+      ),
+    },
   };
 }
 
@@ -66,7 +83,43 @@ export default function AdminCurationsPage() {
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [deletingEip, setDeletingEip] = useState<number | null>(null);
+
+  const generateWithAi = async () => {
+    if (!editor) return;
+    const eipNumber = Number.parseInt(editor.eip_number, 10);
+    if (!Number.isFinite(eipNumber) || eipNumber <= 0) {
+      toast.error('Enter a valid EIP number first');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const g = await client.curations.generateEipCuration({ eip_number: eipNumber });
+      setEditor((current) =>
+        current
+          ? {
+              ...current,
+              layman_title: g.layman_title ?? current.layman_title,
+              layman_summary: g.layman_summary ?? current.layman_summary,
+              benefits: g.benefits.length ? g.benefits.join('\n') : current.benefits,
+              tradeoffs: g.tradeoffs.length ? g.tradeoffs.join('\n') : current.tradeoffs,
+              stakeholders: {
+                ...EMPTY_STAKEHOLDERS,
+                ...Object.fromEntries(
+                  STAKEHOLDERS.map((s) => [s.key, g.stakeholder_impacts?.[s.key]?.description ?? '']),
+                ),
+              },
+            }
+          : current,
+      );
+      toast.success('Draft generated — review, then Save to keep it');
+    } catch {
+      toast.error('Could not generate (no spec or model error)');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   // All state updates happen in async callbacks (initial `loading` is true),
   // so the effect body never calls setState synchronously.
@@ -112,10 +165,14 @@ export default function AdminCurationsPage() {
         eip_number: eipNumber,
         layman_title: editor.layman_title.trim() || null,
         layman_summary: editor.layman_summary.trim() || null,
+        layer: editor.layer || null,
         benefits: splitLines(editor.benefits),
         tradeoffs: splitLines(editor.tradeoffs),
         headliner_of: editor.headliner_of.trim() || null,
         headliner_note: editor.headliner_note.trim() || null,
+        stakeholder_impacts: Object.fromEntries(
+          STAKEHOLDERS.map((s) => [s.key, { description: editor.stakeholders[s.key]?.trim() ?? '' }])
+        ),
       });
       toast.success(`Saved curation for EIP-${eipNumber}`);
       setEditor(null);
@@ -196,19 +253,30 @@ export default function AdminCurationsPage() {
 
         {editor && (
           <div className="rounded-xl border border-primary/30 bg-card/60 p-4 sm:p-6">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                 {isNew ? 'New curation' : `Editing EIP-${editor.eip_number}`}
               </h2>
-              <button
-                onClick={() => {
-                  setEditor(null);
-                  setIsNew(false);
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={generateWithAi}
+                  disabled={generating}
+                  title="Draft summary, benefits, tradeoffs & stakeholder impacts from the EIP spec"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+                >
+                  {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  Generate with AI
+                </button>
+                <button
+                  onClick={() => {
+                    setEditor(null);
+                    setIsNew(false);
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
@@ -276,8 +344,59 @@ export default function AdminCurationsPage() {
                   className="h-9 rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
                 />
               </label>
+              <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                Layer
+                <select
+                  value={editor.layer}
+                  onChange={(event) =>
+                    setEditor({ ...editor, layer: event.target.value as EditorState['layer'] })
+                  }
+                  className="h-9 rounded-md border border-border bg-muted/60 px-3 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                >
+                  <option value="">— unset —</option>
+                  <option value="EL">Execution Layer (EL)</option>
+                  <option value="CL">Consensus Layer (CL)</option>
+                </select>
+              </label>
             </div>
-            <div className="mt-4 flex justify-end gap-2">
+
+            {/* Stakeholder impacts */}
+            <div className="mt-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Stakeholder impacts
+              </h3>
+              <p className="mt-0.5 text-xs text-muted-foreground/70">
+                Who this EIP affects and how. Shown on the upgrade&apos;s Stakeholders tab. Leave a
+                group blank to omit it.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {STAKEHOLDERS.map((stakeholder) => (
+                  <label
+                    key={stakeholder.key}
+                    className="flex flex-col gap-1 text-xs font-medium text-muted-foreground"
+                  >
+                    {stakeholder.label}
+                    <textarea
+                      value={editor.stakeholders[stakeholder.key] ?? ''}
+                      onChange={(event) =>
+                        setEditor({
+                          ...editor,
+                          stakeholders: {
+                            ...editor.stakeholders,
+                            [stakeholder.key]: event.target.value,
+                          },
+                        })
+                      }
+                      rows={2}
+                      placeholder={`How ${stakeholder.label.toLowerCase()} are affected…`}
+                      className="rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => {
                   setEditor(null);

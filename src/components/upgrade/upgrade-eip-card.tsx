@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ChevronDown, ExternalLink, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UpgradeCompositionEip } from '@/components/upgrade/types';
+import { STAKEHOLDER_LABEL } from '@/lib/stakeholders';
 
 function statusChipClass(status: string | null): string {
   const normalized = (status ?? '').toLowerCase();
@@ -17,17 +18,6 @@ function statusChipClass(status: string | null): string {
   if (normalized === 'stagnant') return 'bg-gray-500/15 text-gray-600 dark:text-gray-400';
   return 'bg-muted text-muted-foreground';
 }
-
-const STAKEHOLDER_LABELS: Record<string, string> = {
-  endUsers: 'End users',
-  appDevs: 'App developers',
-  walletDevs: 'Wallet developers',
-  toolingInfra: 'Tooling & infra',
-  layer2s: 'Layer 2s',
-  stakersNodes: 'Stakers & node operators',
-  clClients: 'CL clients',
-  elClients: 'EL clients',
-};
 
 const NORTH_STAR_LABELS: Record<string, string> = {
   scaleL1: 'Scale L1',
@@ -178,7 +168,7 @@ export function UpgradeEipCard({
                     {stakeholderImpacts.map(([key, value]) => (
                       <div key={key} className="rounded-lg bg-muted/40 p-2.5">
                         <dt className="text-[11px] font-semibold text-foreground/80">
-                          {STAKEHOLDER_LABELS[key] ?? key}
+                          {STAKEHOLDER_LABEL[key] ?? key}
                         </dt>
                         <dd className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
                           {value.description}

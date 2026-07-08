@@ -140,6 +140,18 @@ export const getCachedDevnetList = unstable_cache(
   { revalidate: REVALIDATE_SECONDS }
 );
 
+export const getCachedClientPriority = unstable_cache(
+  async (slug: string) => {
+    try {
+      return await publicClient.clientPriority.getClientPriority({ slug });
+    } catch {
+      return null;
+    }
+  },
+  ['client-priority'],
+  { revalidate: REVALIDATE_SECONDS }
+);
+
 export const getCachedDevnetMatrix = unstable_cache(
   async (series: string[]) => {
     try {
