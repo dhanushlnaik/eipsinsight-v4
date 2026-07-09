@@ -80,12 +80,13 @@ const categoryColors: Record<string, string> = {
   meta: "#fbbf24",
   informational: "#94a3b8",
   governance: "#ef4444",
+  rip: "#fb923c",
 };
 
 const repoColors: Record<string, string> = {
   "ethereum/EIPs": "#22d3ee",
   "ethereum/ERCs": "#60a5fa",
-  "ethereum/RIPs": "#94a3b8",
+  "ethereum/RIPs": "#fb923c",
 };
 
 const MONTH_NAMES = [
@@ -615,7 +616,55 @@ export default function EditorsAnalyticsPage() {
     });
   }, []);
 
+  // Compute action events frequency in the feed
+  const activityFeedStats = useMemo(() => {
+    const stats: Record<string, number> = {};
+    filteredActivityFeed.forEach((row) => {
+      const label = formatEventLabel(row.eventType);
+      stats[label] = (stats[label] || 0) + 1;
+    });
+    return stats;
+  }, [filteredActivityFeed, formatEventLabel]);
+
   // ─── ECharts Interactive Breakdown Configurations ──────────────────
+
+  // Heuristic-based breakdown mapping: actual editor actions parsed into category buckets
+  const categoryActionsData = useMemo(() => {
+    const data: Array<{ category: string; actor: string; count: number; repo: string }> = [];
+    
+    const normalizeCategory = (cat: string) => {
+      const c = cat.trim().toUpperCase();
+      if (c === "ERC") return "ERC";
+      if (c === "RIP") return "RIP";
+      // Capitalize first letter
+      return cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase();
+    };
+
+    repoDistribution.forEach((row) => {
+      const repoName = row.repo;
+      const actor = row.actor;
+      const count = row.count;
+      
+      if (repoName === "ethereum/ERCs") {
+        data.push({ category: "ERC", actor, count, repo: "ethereum/ERCs" });
+      } else if (repoName === "ethereum/RIPs") {
+        data.push({ category: "RIP", actor, count, repo: "ethereum/RIPs" });
+      } else {
+        // For ethereum/EIPs, distribute actions over the categories covered by this actor
+        const actorCats = categoriesByActor[actor] || [];
+        if (actorCats.length > 0) {
+          const countPerCat = Math.round(count / actorCats.length);
+          actorCats.forEach((cat) => {
+            data.push({ category: normalizeCategory(cat), actor, count: countPerCat, repo: "ethereum/EIPs" });
+          });
+        } else {
+          data.push({ category: "Core", actor, count, repo: "ethereum/EIPs" });
+        }
+      }
+    });
+    
+    return data;
+  }, [repoDistribution, categoriesByActor]);
 
   // 1. Actions by Editor and Repository Stacked Horizontal Bar
   const breakdownRepoOption = useMemo(() => {
@@ -716,18 +765,36 @@ export default function EditorsAnalyticsPage() {
     };
   }, [leaderboard]);
 
-  // 3. Category Coverage Depth Grouped horizontal bar
+  // 3. Category Actions breakdown (Stacked horizontal bar chart showing category-based actions by Editor)
   const breakdownCategoryOption = useMemo(() => {
-    const categoriesList = categoryData.map((c) => c.category);
+    const categories = ["Core", "ERC", "Networking", "Interface", "Meta", "Informational", "RIP"];
+    const actors = Array.from(new Set(categoryActionsData.map((d) => d.actor)));
     
     return {
       backgroundColor: "transparent",
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
+        formatter: (params: any[]) => {
+          if (!params || params.length === 0) return "";
+          const catName = params[0].name;
+          const items = params
+            .filter((p) => Number(p.value) > 0)
+            .map((p) => {
+              const match = categoryActionsData.find((d) => d.category === catName && d.actor === p.seriesName);
+              const repoStr = match ? match.repo.split("/")[1] : "EIPs";
+              return `<div style="color: ${p.color}; padding: 2px 0;"><strong>${p.seriesName}</strong>: ${p.value.toLocaleString()} actions on <span style="opacity:0.8;">${repoStr}</span></div>`;
+            })
+            .join("");
+          return `<div style="padding: 6px;"><div style="font-weight: 600; margin-bottom: 4px;">Category: ${catName}</div>${items}</div>`;
+        }
       },
-      legend: { show: false },
-      grid: { top: 15, left: 100, right: 40, bottom: 25 },
+      legend: {
+        textStyle: { color: "var(--muted-foreground)", fontSize: 10, fontWeight: 500 },
+        type: "scroll",
+        bottom: 0,
+      },
+      grid: { top: 30, left: 100, right: 30, bottom: 45 },
       xAxis: {
         type: "value",
         axisLabel: { color: "var(--muted-foreground)", fontSize: 10 },
@@ -735,31 +802,28 @@ export default function EditorsAnalyticsPage() {
       },
       yAxis: {
         type: "category",
-        data: categoriesList,
+        data: categories,
         axisLabel: { color: "var(--foreground)", fontSize: 10, fontWeight: 505 },
         axisTick: { show: false },
         axisLine: { show: false },
       },
-      series: [
-        {
-          name: "Coverage Depth",
+      series: actors.map((actor, idx) => {
+        return {
+          name: actor,
           type: "bar",
-          barWidth: 16,
-          data: categoryData.map((c) => ({
-            value: c.count,
-            itemStyle: { color: categoryColors[c.category.toLowerCase()] || "#94a3b8" },
-          })),
-          label: {
-            show: true,
-            position: "right",
-            color: "var(--foreground)",
-            fontSize: 10,
-            fontWeight: "bold",
-          },
-        },
-      ],
+          stack: "categoryActions",
+          emphasis: { focus: "series" },
+          data: categories.map((cat) => {
+            const match = categoryActionsData.find((d) => d.category === cat && d.actor === actor);
+            return match ? match.count : 0;
+          }),
+          itemStyle: {
+            color: `hsl(${(idx * 360) / Math.max(actors.length, 1)}, 70%, 55%)`
+          }
+        };
+      }),
     };
-  }, [categoryData]);
+  }, [categoryActionsData]);
 
   // ECharts Trend Option with Nice Thick DataZoom
   const trendOption = useMemo(() => ({
@@ -1291,7 +1355,7 @@ export default function EditorsAnalyticsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in">
       {error && (
         <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1324,66 +1388,66 @@ export default function EditorsAnalyticsPage() {
 
       {/* Section 2: Editor Leaderboard */}
       <section id="editor-leaderboard" className="space-y-3">
-        <div className="flex flex-col gap-1">
-          <div className="inline-flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editor Leaderboard — {leaderboardLabel}</h2>
-            <CopyLinkButton sectionId="editor-leaderboard" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/45 hover:bg-primary/10" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="inline-flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editor Leaderboard — {leaderboardLabel}</h2>
+              <CopyLinkButton sectionId="editor-leaderboard" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/45 hover:bg-primary/10" />
+            </div>
+            <p className="text-xs text-muted-foreground">Main ranking of canonical editors sorted by their PR reviews, comments, and total indexed actions.</p>
           </div>
-          <p className="text-xs text-muted-foreground">Main ranking of canonical editors sorted by their PR reviews, comments, and total indexed actions.</p>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Metric Selector Chips */}
+            <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
+              {leaderboardMode !== "monthly" && (
+                <button
+                  onClick={() => setSelectedMetric("reviews")}
+                  className={`rounded px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                    selectedMetric === "reviews"
+                      ? "bg-primary text-primary-foreground shadow"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Reviews
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedMetric("prs")}
+                className={`rounded px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                  selectedMetric === "prs"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                PRs Touched
+              </button>
+              <button
+                onClick={() => setSelectedMetric("actions")}
+                className={`rounded px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
+                  selectedMetric === "actions"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Total Actions
+              </button>
+            </div>
+
+            <button
+              onClick={downloadLeaderboardCSV}
+              disabled={exporting || leaderboard.length === 0}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Download CSV
+            </button>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300 relative flex flex-col justify-between">
           <div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3.5 mb-4">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                {/* Metric Selector Chips */}
-                <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
-                  {leaderboardMode !== "monthly" && (
-                    <button
-                      onClick={() => setSelectedMetric("reviews")}
-                      className={`rounded px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                        selectedMetric === "reviews"
-                          ? "bg-primary text-primary-foreground shadow"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Reviews
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setSelectedMetric("prs")}
-                    className={`rounded px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                      selectedMetric === "prs"
-                        ? "bg-primary text-primary-foreground shadow"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    PRs Touched
-                  </button>
-                  <button
-                    onClick={() => setSelectedMetric("actions")}
-                    className={`rounded px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                      selectedMetric === "actions"
-                        ? "bg-primary text-primary-foreground shadow"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Total Actions
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={downloadLeaderboardCSV}
-                disabled={exporting || leaderboard.length === 0}
-                className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                Download CSV
-              </button>
-            </div>
-
             {/* Metric Definitions guide */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-lg border border-border/40 bg-muted/20 p-3 text-[10px] text-muted-foreground mb-4 shadow-inner">
               <div className="flex gap-1.5 items-start">
@@ -1485,60 +1549,54 @@ export default function EditorsAnalyticsPage() {
         </div>
       </section>
 
-      {/* Section 3: Interactive Action Breakdown (Tabs: Repo Distribution, Event Types, Category Depth) */}
+      {/* Section 3: Interactive Action Breakdown (Tabs: Repo Distribution, Event Types, Category Action breakdown) */}
       <section id="editor-action-breakdown" className="space-y-3">
-        <div className="flex flex-col gap-1">
-          <div className="inline-flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />
-            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Detailed Action Breakdown</h2>
-            <CopyLinkButton sectionId="editor-action-breakdown" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/45 hover:bg-primary/10" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="inline-flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Detailed Action Breakdown</h2>
+              <CopyLinkButton sectionId="editor-action-breakdown" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/45 hover:bg-primary/10" />
+            </div>
+            <p className="text-xs text-muted-foreground">Analyze who acts where, what events are triggered, and category-focused activities.</p>
           </div>
-          <p className="text-xs text-muted-foreground">Analyze who acts where, what events are triggered, and coverage balance metrics.</p>
+
+          {/* Tab switch buttons */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 p-1">
+            <button
+              onClick={() => setBreakdownTab("repo")}
+              className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                breakdownTab === "repo"
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Repository Mix
+            </button>
+            <button
+              onClick={() => setBreakdownTab("event")}
+              className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                breakdownTab === "event"
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Action Type Mix
+            </button>
+            <button
+              onClick={() => setBreakdownTab("category")}
+              className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                breakdownTab === "category"
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Category Actions
+            </button>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300">
-          <div className="flex flex-wrap items-center justify-between border-b border-border/60 pb-3.5 mb-4 gap-3">
-            {/* Tab switch buttons */}
-            <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 p-1">
-              <button
-                onClick={() => setBreakdownTab("repo")}
-                className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
-                  breakdownTab === "repo"
-                    ? "bg-primary text-primary-foreground shadow"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Repository Mix
-              </button>
-              <button
-                onClick={() => setBreakdownTab("event")}
-                className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
-                  breakdownTab === "event"
-                    ? "bg-primary text-primary-foreground shadow"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Action Type Mix
-              </button>
-              <button
-                onClick={() => setBreakdownTab("category")}
-                className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
-                  breakdownTab === "category"
-                    ? "bg-primary text-primary-foreground shadow"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Category Depth
-              </button>
-            </div>
-            
-            <span className="text-[11px] text-muted-foreground italic">
-              {breakdownTab === "repo" && "Stacked breakdown of total editor contributions on EIP vs ERC vs RIP repos."}
-              {breakdownTab === "event" && "Stacked actions breakdown showing PR Reviews, Comments, and Commit triggers."}
-              {breakdownTab === "category" && "Grouped representation of editorial resources covering specific EIP categories."}
-            </span>
-          </div>
-
           <div className="h-[430px] w-full rounded-lg border border-border/70 bg-background/35 p-2">
             {breakdownTab === "repo" && (
               <ReactECharts option={breakdownRepoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
@@ -1555,40 +1613,38 @@ export default function EditorsAnalyticsPage() {
 
       {/* Section 4: Editorial Trends */}
       <section id="editor-trends" className="space-y-3">
-        <div className="flex flex-col gap-1">
-          <div className="inline-flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editorial Trends Over Time</h2>
-            <CopyLinkButton sectionId="editor-trends" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/45 hover:bg-primary/10" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="inline-flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editorial Trends Over Time</h2>
+              <CopyLinkButton sectionId="editor-trends" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/45 hover:bg-primary/10" />
+            </div>
+            <p className="text-xs text-muted-foreground">Historical progression of editor actions and distinct PR reviews recorded monthly.</p>
           </div>
-          <p className="text-xs text-muted-foreground">Historical progression of editor actions and distinct PR reviews recorded monthly.</p>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={trendPrimaryMetric}
+              onChange={(e) => setTrendPrimaryMetric(e.target.value as "actions" | "reviews")}
+              className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground font-semibold transition-all hover:border-primary/45 focus:outline-none focus:ring-1 focus:ring-primary/20 cursor-pointer"
+              aria-label="Select trend metric"
+            >
+              <option value="actions">All Editor Actions</option>
+              <option value="reviews">PRs Reviewed (Monthly)</option>
+            </select>
+
+            <button
+              onClick={trendPrimaryMetric === "actions" ? downloadTrendReport : downloadReviewedMonthlyReport}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export
+            </button>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3 mb-4">
-            <span className="text-xs text-muted-foreground">{trendMetricMeta(trendPrimaryMetric).subtitle}</span>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={trendPrimaryMetric}
-                onChange={(e) => setTrendPrimaryMetric(e.target.value as "actions" | "reviews")}
-                className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground font-semibold transition-all hover:border-primary/45 focus:outline-none focus:ring-1 focus:ring-primary/20 cursor-pointer"
-                aria-label="Select trend metric"
-              >
-                <option value="actions">All Editor Actions</option>
-                <option value="reviews">PRs Reviewed (Monthly)</option>
-              </select>
-
-              <button
-                onClick={trendPrimaryMetric === "actions" ? downloadTrendReport : downloadReviewedMonthlyReport}
-                className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Export
-              </button>
-            </div>
-          </div>
-
           <div className="relative h-[340px] w-full">
             <ReactECharts option={trendMetricMeta(trendPrimaryMetric).option} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -1609,7 +1665,7 @@ export default function EditorsAnalyticsPage() {
           <div className="inline-flex items-center gap-2">
             <Grid3x3 className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Category Coverage Index</h2>
-            <CopyLinkButton sectionId="editor-category-coverage" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
+            <CopyLinkButton sectionId="editor-category-coverage" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/40 hover:bg-primary/10" />
           </div>
           <p className="text-xs text-muted-foreground">Who covers what categories, highlighting gaps and active editors count.</p>
         </div>
@@ -1667,45 +1723,49 @@ export default function EditorsAnalyticsPage() {
           <div className="inline-flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" />
             <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Operational Breakdowns</h2>
-            <CopyLinkButton sectionId="editor-operations" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
+            <CopyLinkButton sectionId="editor-operations" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/40 hover:bg-primary/10" />
           </div>
           <p className="text-xs text-muted-foreground">Breakdowns of editor activities split by calendar day and distinct repositories.</p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Daily activity */}
-          <div className="lg:col-span-2 rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg">
-            <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="lg:col-span-2 space-y-2">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-semibold text-muted-foreground">Daily Editorial Activity</span>
-              <button onClick={downloadDailyActivityReport} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
+              <button onClick={downloadDailyActivityReport} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
                 <Download className="h-3.5 w-3.5" />
-                Export Data
+                Export
               </button>
             </div>
-            <div className="relative h-64 w-full rounded-lg border border-border/60 bg-background/35 p-2">
-              <ReactECharts option={dailyActivityOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
+            <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg">
+              <div className="relative h-64 w-full">
+                <ReactECharts option={dailyActivityOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
+                </div>
               </div>
+              <AnalyticsAnnotation>
+                Stacked bars show total actions per day, split by editor.
+              </AnalyticsAnnotation>
             </div>
-            <AnalyticsAnnotation>
-              Stacked bars show total actions per day, split by editor.
-            </AnalyticsAnnotation>
           </div>
 
           {/* Repo distribution */}
-          <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg">
-            <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-semibold text-muted-foreground">Repo Distribution</span>
-              <button onClick={downloadRepoDistributionReport} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
+              <button onClick={downloadRepoDistributionReport} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
                 <Download className="h-3.5 w-3.5" />
-                Export Data
+                Export
               </button>
             </div>
-            <div className="relative h-64 w-full rounded-lg border border-border/60 bg-background/35 p-2">
-              <ReactECharts option={repoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
+            <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg">
+              <div className="relative h-64 w-full">
+                <ReactECharts option={repoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1714,76 +1774,72 @@ export default function EditorsAnalyticsPage() {
 
       {/* Section 7: Directory Table */}
       <section id="editor-activity-directory" className="space-y-3">
-        <div className="flex flex-col gap-1">
-          <div className="inline-flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editor Activity Directory</h2>
-            <CopyLinkButton sectionId="editor-activity-directory" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="inline-flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editor Activity Directory</h2>
+              <CopyLinkButton sectionId="editor-activity-directory" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/40 hover:bg-primary/10" />
+            </div>
+            <p className="text-xs text-muted-foreground">Lookup tabular metrics, repository distribution, and action mixes per editor.</p>
           </div>
-          <p className="text-xs text-muted-foreground">Lookup tabular metrics, repository distribution, and action mixes per editor.</p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-1">
+              <select
+                id="leaderboard-scope"
+                value={leaderboardMode}
+                onChange={(e) => setLeaderboardMode(e.target.value as "all" | "monthly" | "range")}
+                className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground cursor-pointer"
+                aria-label="Select leaderboard scope"
+              >
+                <option value="all">All-time</option>
+                <option value="monthly">Monthly</option>
+                <option value="range">Use dashboard range</option>
+              </select>
+            </div>
+            {leaderboardMode === "monthly" && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <select
+                    id="leaderboard-year"
+                    value={leaderboardYear}
+                    onChange={(e) => setLeaderboardYear(Number(e.target.value))}
+                    className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground cursor-pointer"
+                    aria-label="Select leaderboard year"
+                  >
+                    {yearOptions.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <select
+                    id="leaderboard-month"
+                    value={leaderboardMonth}
+                    onChange={(e) => setLeaderboardMonth(Number(e.target.value))}
+                    className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground cursor-pointer"
+                    aria-label="Select leaderboard month"
+                  >
+                    {MONTH_NAMES.map((month, index) => (
+                      <option key={month} value={index + 1}>{month}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            <button
+              onClick={downloadLeaderboardCSV}
+              disabled={exporting || leaderboard.length === 0}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export CSV
+            </button>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">Scope: {leaderboardLabel}</span>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-col gap-1">
-                <select
-                  id="leaderboard-scope"
-                  value={leaderboardMode}
-                  onChange={(e) => setLeaderboardMode(e.target.value as "all" | "monthly" | "range")}
-                  className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground cursor-pointer"
-                  aria-label="Select leaderboard scope"
-                >
-                  <option value="all">All-time</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="range">Use dashboard range</option>
-                </select>
-              </div>
-              {leaderboardMode === "monthly" && (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <select
-                      id="leaderboard-year"
-                      value={leaderboardYear}
-                      onChange={(e) => setLeaderboardYear(Number(e.target.value))}
-                      className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground cursor-pointer"
-                      aria-label="Select leaderboard year"
-                    >
-                      {yearOptions.map((year) => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <select
-                      id="leaderboard-month"
-                      value={leaderboardMonth}
-                      onChange={(e) => setLeaderboardMonth(Number(e.target.value))}
-                      className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground cursor-pointer"
-                      aria-label="Select leaderboard month"
-                    >
-                      {MONTH_NAMES.map((month, index) => (
-                        <option key={month} value={index + 1}>{month}</option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              )}
-              <button
-                onClick={downloadLeaderboardCSV}
-                disabled={exporting || leaderboard.length === 0}
-                className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                Export CSV
-              </button>
-            </div>
-          </div>
-
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -1908,36 +1964,34 @@ export default function EditorsAnalyticsPage() {
 
       {/* Section 8: Recent Activities */}
       <section id="editor-recent-activity" className="space-y-3">
-        <div>
-          <div className="inline-flex items-center gap-2">
-            <Clock className="h-5 w-5 text-primary" />
-            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Recent Activities Feed</h2>
-            <CopyLinkButton sectionId="editor-recent-activity" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="inline-flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Recent Activities Feed</h2>
+              <CopyLinkButton sectionId="editor-recent-activity" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/40 hover:bg-primary/10" />
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">Live, queryable actions feed filtering by repository, specific editor handles, and PR event types.</p>
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">Live, queryable actions feed filtering by repository, specific editor handles, and PR event types.</p>
+          
+          {(activityRepoFilter !== "all" || activityEditorFilter !== "all" || activityActionFilter !== "all") && (
+            <button
+              onClick={() => {
+                setActivityRepoFilter("all");
+                setActivityEditorFilter("all");
+                setActivityActionFilter("all");
+                setVisibleActivityCount(20);
+              }}
+              className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+              Reset Filters
+            </button>
+          )}
         </div>
         
         <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg">
           <div className="border-b border-border/70 pb-4 mb-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filters</span>
-              {(activityRepoFilter !== "all" || activityEditorFilter !== "all" || activityActionFilter !== "all") && (
-                <button
-                  onClick={() => {
-                    setActivityRepoFilter("all");
-                    setActivityEditorFilter("all");
-                    setActivityActionFilter("all");
-                    setVisibleActivityCount(20);
-                  }}
-                  className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  Reset Filters
-                </button>
-              )}
-            </div>
-            
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="repo-filter" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Repository</label>
@@ -1993,6 +2047,23 @@ export default function EditorsAnalyticsPage() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            {/* Dynamic feed statistics */}
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[10px] text-muted-foreground mt-3 pt-3.5 border-t border-border/40">
+              <span className="font-semibold text-foreground/75">Filtered Feed Stats:</span>
+              {Object.keys(activityFeedStats).length === 0 ? (
+                <span>No actions</span>
+              ) : (
+                Object.entries(activityFeedStats).map(([type, count]) => (
+                  <span key={type} className="rounded bg-muted px-1.5 py-0.5 font-semibold text-foreground/80 lowercase">
+                    {type}: {count}
+                  </span>
+                ))
+              )}
+              {filteredActivityFeed.length > 0 && (
+                <span className="ml-auto font-medium">Showing top {visibleActivityFeed.length} of {filteredActivityFeed.length} actions</span>
+              )}
             </div>
           </div>
           
