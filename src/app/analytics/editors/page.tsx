@@ -222,6 +222,9 @@ export default function EditorsAnalyticsPage() {
   // Sorted metric filters
   const [selectedMetric, setSelectedMetric] = useState<"reviews" | "prs" | "actions">("reviews");
 
+  // Breakdown tabs
+  const [breakdownTab, setBreakdownTab] = useState<"repo" | "event" | "category">("repo");
+
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
   const { from, to } = getTimeWindow(timeRange, customFromMonth, customToMonth);
   const [exporting, setExporting] = useState(false);
@@ -503,16 +506,6 @@ export default function EditorsAnalyticsPage() {
     return map;
   }, [categoryCoverage]);
 
-  const reposByActor = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    repoDistribution.forEach((row) => {
-      const repoName = row.repo.split("/")[1] || row.repo;
-      if (!map[row.actor]) map[row.actor] = [];
-      if (!map[row.actor]!.includes(repoName)) map[row.actor]!.push(repoName);
-    });
-    return map;
-  }, [repoDistribution]);
-
   const trendActors = useMemo(() => {
     if (monthlyTrend.length === 0) return [];
     const actors = new Set<string>();
@@ -622,131 +615,139 @@ export default function EditorsAnalyticsPage() {
     });
   }, []);
 
-  // ─── ECharts Configurations ──────────────────────────────────────────
+  // ─── ECharts Interactive Breakdown Configurations ──────────────────
 
-  // Performance Radar Chart (Top 5 Editors compared across 5 dimensions)
-  const radarOption = useMemo(() => {
-    const top5 = sortedLeaderboard.slice(0, 5);
-    const indicator = [
-      { name: "Total Actions", max: Math.max(10, ...leaderboard.map(e => e.totalActions)) },
-      { name: "PR Reviews", max: Math.max(10, ...leaderboard.map(e => e.reviews)) },
-      { name: "PRs Touched", max: Math.max(10, ...leaderboard.map(e => e.prsTouched)) },
-      { name: "Response Speed", max: 10 },
-      { name: "Categories Covered", max: 7 },
-    ];
+  // 1. Actions by Editor and Repository Stacked Horizontal Bar
+  const breakdownRepoOption = useMemo(() => {
+    const sorted = [...leaderboard].sort((a, b) => b.totalActions - a.totalActions);
+    const actors = sorted.map((r) => r.actor);
+    const repos = ["ethereum/EIPs", "ethereum/ERCs", "ethereum/RIPs"];
     
-    const palette = [
-      "#79d2e8",
-      "#8b7dff",
-      "#ff8a80",
-      "#7ea8ff",
-      "#ffd166"
-    ];
-
-    const data = top5.map((editor, idx) => {
-      // Speed score: 10 - medianResponseDays (bounded 1-10)
-      const speedScore = editor.medianResponseDays !== null 
-        ? Math.max(1, Math.min(10, 10 - editor.medianResponseDays))
-        : 1;
-      const catCount = (categoriesByActor[editor.actor] || []).length;
-      return {
-        value: [
-          editor.totalActions,
-          editor.reviews,
-          editor.prsTouched,
-          speedScore,
-          catCount
-        ],
-        name: editor.actor,
-        itemStyle: { color: palette[idx % palette.length] },
-        lineStyle: { width: 2 },
-        areaStyle: {
-          color: palette[idx % palette.length] + "1a" // Add opacity hex
-        }
-      };
-    });
-
-    return {
-      backgroundColor: "transparent",
-      tooltip: { trigger: "item" },
-      legend: {
-        bottom: 0,
-        textStyle: { color: "var(--muted-foreground)", fontSize: 10, fontWeight: 500 },
-        type: "scroll",
-        itemGap: 6,
-        itemWidth: 10,
-        itemHeight: 10
-      },
-      radar: {
-        indicator,
-        shape: "polygon",
-        splitNumber: 4,
-        axisName: {
-          color: "var(--muted-foreground)",
-          fontSize: 9,
-          fontWeight: 600,
-        },
-        splitLine: {
-          lineStyle: { color: "rgba(148,163,184,0.15)" }
-        },
-        splitArea: { show: false },
-        axisLine: {
-          lineStyle: { color: "rgba(148,163,184,0.15)" }
-        }
-      },
-      series: [
-        {
-          type: "radar",
-          data,
-          symbol: "circle",
-          symbolSize: 4
-        }
-      ]
-    };
-  }, [sortedLeaderboard, leaderboard, categoriesByActor]);
-
-  // Response Speed Ranking (Median days lookup)
-  const responseSpeedOption = useMemo(() => {
-    const speedRows = [...leaderboard]
-      .filter(e => e.medianResponseDays !== null && e.totalActions > 0)
-      .sort((a, b) => (a.medianResponseDays || 0) - (b.medianResponseDays || 0))
-      .slice(0, 8)
-      .reverse();
-
     return {
       backgroundColor: "transparent",
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
-        formatter: (params: any) => {
-          const name = params[0]?.name || "";
-          const val = params[0]?.value || 0;
-          return `<div style="padding: 6px;"><strong style="font-size:12px; color:var(--foreground);">${name}</strong><br/><span style="color:var(--muted-foreground);">Median Response:</span> <strong>${val} days</strong></div>`;
-        }
       },
-      grid: { top: 10, left: 90, right: 40, bottom: 20 },
+      legend: {
+        textStyle: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
+        bottom: 0,
+      },
+      grid: { top: 30, left: 100, right: 30, bottom: 45 },
       xAxis: {
         type: "value",
         axisLabel: { color: "var(--muted-foreground)", fontSize: 10 },
-        splitLine: { lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } }
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
       },
       yAxis: {
         type: "category",
-        data: speedRows.map(e => e.actor),
+        data: actors,
         axisLabel: { color: "var(--foreground)", fontSize: 10, fontWeight: 505 },
         axisTick: { show: false },
-        axisLine: { show: false }
+        axisLine: { show: false },
+      },
+      series: repos.map((repo) => {
+        const repoName = repo.split("/")[1] || repo;
+        return {
+          name: repoName,
+          type: "bar",
+          stack: "repos",
+          data: actors.map((actor) => {
+            const match = repoDistribution.find((r) => r.actor === actor && r.repo === repo);
+            return match ? match.count : 0;
+          }),
+          itemStyle: { color: repoColors[repo] },
+        };
+      }),
+    };
+  }, [repoDistribution, leaderboard]);
+
+  // 2. Actions by Editor and Event Type Stacked Horizontal Bar
+  const breakdownEventOption = useMemo(() => {
+    const sorted = [...leaderboard].sort((a, b) => b.totalActions - a.totalActions);
+    const actors = sorted.map((e) => e.actor);
+    
+    return {
+      backgroundColor: "transparent",
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+      },
+      legend: {
+        textStyle: { color: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 },
+        bottom: 0,
+      },
+      grid: { top: 30, left: 100, right: 30, bottom: 45 },
+      xAxis: {
+        type: "value",
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 10 },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
+      },
+      yAxis: {
+        type: "category",
+        data: actors,
+        axisLabel: { color: "var(--foreground)", fontSize: 10, fontWeight: 505 },
+        axisTick: { show: false },
+        axisLine: { show: false },
       },
       series: [
         {
+          name: "PR Reviews",
           type: "bar",
-          barWidth: 12,
-          data: speedRows.map(e => ({
-            value: e.medianResponseDays,
-            itemStyle: {
-              color: "rgba(139, 125, 255, 0.75)",
-              borderRadius: [0, 4, 4, 0]
-            }
+          stack: "events",
+          data: sorted.map((e) => e.reviews),
+          itemStyle: { color: "#60a5fa" }, // ERC-like blue
+        },
+        {
+          name: "Comments",
+          type: "bar",
+          stack: "events",
+          data: sorted.map((e) => e.comments),
+          itemStyle: { color: "#a78bfa" }, // networking purple
+        },
+        {
+          name: "Other Actions",
+          type: "bar",
+          stack: "events",
+          data: sorted.map((e) => Math.max(0, e.totalActions - e.reviews - e.comments)),
+          itemStyle: { color: "rgba(148, 163, 184, 0.45)" },
+        },
+      ],
+    };
+  }, [leaderboard]);
+
+  // 3. Category Coverage Depth Grouped horizontal bar
+  const breakdownCategoryOption = useMemo(() => {
+    const categoriesList = categoryData.map((c) => c.category);
+    
+    return {
+      backgroundColor: "transparent",
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "shadow" },
+      },
+      legend: { show: false },
+      grid: { top: 15, left: 100, right: 40, bottom: 25 },
+      xAxis: {
+        type: "value",
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 10 },
+        splitLine: { lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
+      },
+      yAxis: {
+        type: "category",
+        data: categoriesList,
+        axisLabel: { color: "var(--foreground)", fontSize: 10, fontWeight: 505 },
+        axisTick: { show: false },
+        axisLine: { show: false },
+      },
+      series: [
+        {
+          name: "Coverage Depth",
+          type: "bar",
+          barWidth: 16,
+          data: categoryData.map((c) => ({
+            value: c.count,
+            itemStyle: { color: categoryColors[c.category.toLowerCase()] || "#94a3b8" },
           })),
           label: {
             show: true,
@@ -754,12 +755,11 @@ export default function EditorsAnalyticsPage() {
             color: "var(--foreground)",
             fontSize: 10,
             fontWeight: "bold",
-            formatter: (p: any) => `${p.value}d`
-          }
-        }
-      ]
+          },
+        },
+      ],
     };
-  }, [leaderboard]);
+  }, [categoryData]);
 
   // ECharts Trend Option with Nice Thick DataZoom
   const trendOption = useMemo(() => ({
@@ -1052,7 +1052,7 @@ export default function EditorsAnalyticsPage() {
       xAxis: {
         type: "category",
         data: dates,
-        axisLabel: { color: "var(--muted-foreground)", fontSize: 10, hideOverlap: true, fontWeight: 500 },
+        axisLabel: { color: "var(--muted-foreground)", fontSize: 10, hideOverlap: true, fontWeight: 505 },
         axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
         splitLine: { show: true, lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
       },
@@ -1291,7 +1291,7 @@ export default function EditorsAnalyticsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {error && (
         <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1322,19 +1322,21 @@ export default function EditorsAnalyticsPage() {
         </span>
       </div>
 
-      {/* Main Grid: Row 1 — Leaderboard (2/3) + Radar Analysis (1/3) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Editor Leaderboard */}
-        <div className="lg:col-span-2 rounded-2xl border border-border/45 bg-gradient-to-br from-card/90 to-card/40 p-5 shadow-lg relative flex flex-col justify-between">
+      {/* Section 2: Editor Leaderboard */}
+      <section id="editor-leaderboard" className="space-y-3">
+        <div className="flex flex-col gap-1">
+          <div className="inline-flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editor Leaderboard — {leaderboardLabel}</h2>
+            <CopyLinkButton sectionId="editor-leaderboard" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/45 hover:bg-primary/10" />
+          </div>
+          <p className="text-xs text-muted-foreground">Main ranking of canonical editors sorted by their PR reviews, comments, and total indexed actions.</p>
+        </div>
+
+        <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300 relative flex flex-col justify-between">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3.5 mb-4">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                <div className="inline-flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editors - {leaderboardLabel}</h2>
-                  <CopyLinkButton sectionId="editor-leaderboard-hero" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/45 hover:bg-primary/10" />
-                </div>
-                
                 {/* Metric Selector Chips */}
                 <div className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 p-1">
                   {leaderboardMode !== "monthly" && (
@@ -1480,128 +1482,140 @@ export default function EditorsAnalyticsPage() {
               )}
             </div>
           </div>
-          
-          <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/50 pt-2.5">
-            <span>EIPsInsight.com</span>
-            <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+        </div>
+      </section>
+
+      {/* Section 3: Interactive Action Breakdown (Tabs: Repo Distribution, Event Types, Category Depth) */}
+      <section id="editor-action-breakdown" className="space-y-3">
+        <div className="flex flex-col gap-1">
+          <div className="inline-flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Detailed Action Breakdown</h2>
+            <CopyLinkButton sectionId="editor-action-breakdown" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/45 hover:bg-primary/10" />
           </div>
+          <p className="text-xs text-muted-foreground">Analyze who acts where, what events are triggered, and coverage balance metrics.</p>
         </div>
 
-        {/* Performance Radar Chart (Top 5 Editors compared) */}
-        <div className="lg:col-span-1 rounded-2xl border border-border/45 bg-gradient-to-br from-card/90 to-card/40 p-5 shadow-lg flex flex-col justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-foreground tracking-tight flex items-center gap-1.5">
-              <Zap className="h-4 w-4 text-primary" />
-              Top 5 Performance Matrix
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5 mb-4">Radar comparison of editors across 5 key dimensions.</p>
+        <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300">
+          <div className="flex flex-wrap items-center justify-between border-b border-border/60 pb-3.5 mb-4 gap-3">
+            {/* Tab switch buttons */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 p-1">
+              <button
+                onClick={() => setBreakdownTab("repo")}
+                className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                  breakdownTab === "repo"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Repository Mix
+              </button>
+              <button
+                onClick={() => setBreakdownTab("event")}
+                className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                  breakdownTab === "event"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Action Type Mix
+              </button>
+              <button
+                onClick={() => setBreakdownTab("category")}
+                className={`rounded px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                  breakdownTab === "category"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Category Depth
+              </button>
+            </div>
             
-            <div className="h-[390px] w-full flex items-center justify-center">
-              {leaderboard.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No data available</p>
-              ) : (
-                <ReactECharts option={radarOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-              )}
+            <span className="text-[11px] text-muted-foreground italic">
+              {breakdownTab === "repo" && "Stacked breakdown of total editor contributions on EIP vs ERC vs RIP repos."}
+              {breakdownTab === "event" && "Stacked actions breakdown showing PR Reviews, Comments, and Commit triggers."}
+              {breakdownTab === "category" && "Grouped representation of editorial resources covering specific EIP categories."}
+            </span>
+          </div>
+
+          <div className="h-[430px] w-full rounded-lg border border-border/70 bg-background/35 p-2">
+            {breakdownTab === "repo" && (
+              <ReactECharts option={breakdownRepoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+            )}
+            {breakdownTab === "event" && (
+              <ReactECharts option={breakdownEventOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+            )}
+            {breakdownTab === "category" && (
+              <ReactECharts option={breakdownCategoryOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Section 4: Editorial Trends */}
+      <section id="editor-trends" className="space-y-3">
+        <div className="flex flex-col gap-1">
+          <div className="inline-flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editorial Trends Over Time</h2>
+            <CopyLinkButton sectionId="editor-trends" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/45 hover:bg-primary/10" />
+          </div>
+          <p className="text-xs text-muted-foreground">Historical progression of editor actions and distinct PR reviews recorded monthly.</p>
+        </div>
+
+        <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3 mb-4">
+            <span className="text-xs text-muted-foreground">{trendMetricMeta(trendPrimaryMetric).subtitle}</span>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={trendPrimaryMetric}
+                onChange={(e) => setTrendPrimaryMetric(e.target.value as "actions" | "reviews")}
+                className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground font-semibold transition-all hover:border-primary/45 focus:outline-none focus:ring-1 focus:ring-primary/20 cursor-pointer"
+                aria-label="Select trend metric"
+              >
+                <option value="actions">All Editor Actions</option>
+                <option value="reviews">PRs Reviewed (Monthly)</option>
+              </select>
+
+              <button
+                onClick={trendPrimaryMetric === "actions" ? downloadTrendReport : downloadReviewedMonthlyReport}
+                className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export
+              </button>
+            </div>
+          </div>
+
+          <div className="relative h-[340px] w-full">
+            <ReactECharts option={trendMetricMeta(trendPrimaryMetric).option} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
             </div>
           </div>
           
-          <div className="text-[10px] text-muted-foreground leading-normal border-t border-border/50 pt-2.5 mt-2">
-            Radar score scales are normalized dynamically to show relative balance between top actions, reviews count, speed score, and scope depth.
-          </div>
-        </div>
-      </div>
-
-      {/* Main Grid: Row 2 — Trends (1/2) + Response Latency (1/2) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Editorial Trends */}
-        <div className="rounded-2xl border border-border/75 bg-gradient-to-br from-card/90 to-card/40 p-5 shadow-lg flex flex-col justify-between">
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3 mb-4">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editorial Trends</h2>
-                <CopyLinkButton sectionId="editor-trends" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/45 hover:bg-primary/10" />
-              </div>
-              
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={trendPrimaryMetric}
-                  onChange={(e) => setTrendPrimaryMetric(e.target.value as "actions" | "reviews")}
-                  className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground font-semibold transition-all hover:border-primary/45 focus:outline-none focus:ring-1 focus:ring-primary/20 cursor-pointer"
-                  aria-label="Select trend metric"
-                >
-                  <option value="actions">All Editor Actions</option>
-                  <option value="reviews">PRs Reviewed (Monthly)</option>
-                </select>
-
-                <button
-                  onClick={trendPrimaryMetric === "actions" ? downloadTrendReport : downloadReviewedMonthlyReport}
-                  className="flex h-8 items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Export
-                </button>
-              </div>
-            </div>
-
-            <div className="relative h-[280px] w-full">
-              <ReactECharts option={trendMetricMeta(trendPrimaryMetric).option} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2.5">
-            <p className="text-[10px] text-muted-foreground">{trendMetricMeta(trendPrimaryMetric).footer}</p>
+          <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2.5 text-[10px] text-muted-foreground">
+            <span>{trendMetricMeta(trendPrimaryMetric).footer}</span>
             <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
           </div>
         </div>
+      </section>
 
-        {/* Response Speed Latency Ranking */}
-        <div className="rounded-2xl border border-border/75 bg-gradient-to-br from-card/90 to-card/40 p-5 shadow-lg flex flex-col justify-between">
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3 mb-4">
-              <div className="flex items-center gap-3">
-                <Clock className="h-5 w-5 text-primary" />
-                <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Response Latency</h2>
-                <CopyLinkButton sectionId="editor-latency" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/45 hover:bg-primary/10" />
-              </div>
-              <span className="text-xs font-semibold text-muted-foreground">Fastest Response (Median Days)</span>
-            </div>
-
-            <div className="relative h-[280px] w-full">
-              {leaderboard.filter(e => e.medianResponseDays !== null).length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center">
-                  <Clock className="mb-2 h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-xs text-muted-foreground">No response latency logs indexed for current filter range.</p>
-                </div>
-              ) : (
-                <ReactECharts option={responseSpeedOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-              )}
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2.5">
-            <p className="text-[10px] text-muted-foreground">Measures median calendar days from PR submission to first official editor action.</p>
-            <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
-          </div>
-        </div>
-      </div>
-
-      {/* Sleek Category Coverage Grid */}
-      <section id="editor-category-coverage" className="space-y-4">
-        <div>
+      {/* Section 5: Category Coverage */}
+      <section id="editor-category-coverage" className="space-y-3">
+        <div className="flex flex-col gap-1">
           <div className="inline-flex items-center gap-2">
             <Grid3x3 className="h-5 w-5 text-primary" />
-            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Category Coverage</h2>
+            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Category Coverage Index</h2>
             <CopyLinkButton sectionId="editor-category-coverage" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">Who covers what categories, highlighting gaps and active editors count.</p>
+          <p className="text-xs text-muted-foreground">Who covers what categories, highlighting gaps and active editors count.</p>
         </div>
         
-        <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 mb-2">
+        <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7">
             {categoryData.map((category) => {
               const isThin = category.count <= 1;
               const color = categoryColors[category.category.toLowerCase()] || "#94a3b8";
@@ -1647,15 +1661,72 @@ export default function EditorsAnalyticsPage() {
         </div>
       </section>
 
-      {/* Editor Directory Table */}
-      <section id="editor-activity-directory" className="space-y-4">
-        <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
+      {/* Section 6: Daily + Repo Operations Breakdown */}
+      <section id="editor-operations" className="space-y-3">
+        <div className="flex flex-col gap-1">
+          <div className="inline-flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Operational Breakdowns</h2>
+            <CopyLinkButton sectionId="editor-operations" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
+          </div>
+          <p className="text-xs text-muted-foreground">Breakdowns of editor activities split by calendar day and distinct repositories.</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Daily activity */}
+          <div className="lg:col-span-2 rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <span className="text-xs font-semibold text-muted-foreground">Daily Editorial Activity</span>
+              <button onClick={downloadDailyActivityReport} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
+                <Download className="h-3.5 w-3.5" />
+                Export Data
+              </button>
+            </div>
+            <div className="relative h-64 w-full rounded-lg border border-border/60 bg-background/35 p-2">
+              <ReactECharts option={dailyActivityOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
+              </div>
+            </div>
+            <AnalyticsAnnotation>
+              Stacked bars show total actions per day, split by editor.
+            </AnalyticsAnnotation>
+          </div>
+
+          {/* Repo distribution */}
+          <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <span className="text-xs font-semibold text-muted-foreground">Repo Distribution</span>
+              <button onClick={downloadRepoDistributionReport} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
+                <Download className="h-3.5 w-3.5" />
+                Export Data
+              </button>
+            </div>
+            <div className="relative h-64 w-full rounded-lg border border-border/60 bg-background/35 p-2">
+              <ReactECharts option={repoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 7: Directory Table */}
+      <section id="editor-activity-directory" className="space-y-3">
+        <div className="flex flex-col gap-1">
+          <div className="inline-flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Editor Activity Directory</h2>
+            <CopyLinkButton sectionId="editor-activity-directory" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
+          </div>
+          <p className="text-xs text-muted-foreground">Lookup tabular metrics, repository distribution, and action mixes per editor.</p>
+        </div>
+
+        <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg hover:border-primary/20 transition-all duration-300">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3">
             <div className="flex flex-col gap-1">
-              <h3 className="text-base font-semibold text-foreground">
-                Directory Table
-                <span className="ml-2 text-xs font-normal text-muted-foreground">— {leaderboardLabel}</span>
-              </h3>
+              <span className="text-xs text-muted-foreground">Scope: {leaderboardLabel}</span>
             </div>
             
             <div className="flex flex-wrap items-center gap-2">
@@ -1835,70 +1906,19 @@ export default function EditorsAnalyticsPage() {
         </div>
       </section>
 
-      {/* Daily + Repo Operations Breakdown */}
-      <section id="editor-operations" className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="space-y-2 lg:col-span-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground flex items-center gap-1.5">
-                  <Zap className="h-4 w-4 text-primary" />
-                  Daily Editorial Activity
-                </h3>
-              </div>
-              <button onClick={downloadDailyActivityReport} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
-                <Download className="h-3.5 w-3.5" />
-                Export Data
-              </button>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
-              <div className="relative h-64 w-full">
-                <ReactECharts option={dailyActivityOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
-                </div>
-              </div>
-              <AnalyticsAnnotation>
-                Stacked bars show total actions per day, split by editor.
-              </AnalyticsAnnotation>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">Repo Distribution</h3>
-              </div>
-              <button onClick={downloadRepoDistributionReport} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
-                <Download className="h-3.5 w-3.5" />
-                Export Data
-              </button>
-            </div>
-            <div className="rounded-lg border border-border/70 bg-card/60 p-4 backdrop-blur-sm">
-              <div className="relative h-64 w-full">
-                <ReactECharts option={repoOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <span className="text-2xl font-semibold text-foreground/5">EIPsInsight.com</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Recent Activities Section */}
-      <section id="editor-recent-activity" className="space-y-4">
+      {/* Section 8: Recent Activities */}
+      <section id="editor-recent-activity" className="space-y-3">
         <div>
           <div className="inline-flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
-            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Recent Activities</h2>
+            <h2 className="dec-title text-base font-semibold tracking-tight text-foreground sm:text-lg">Recent Activities Feed</h2>
             <CopyLinkButton sectionId="editor-recent-activity" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">Live feed with repository/editor/action filters.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Live, queryable actions feed filtering by repository, specific editor handles, and PR event types.</p>
         </div>
         
-        <div className="rounded-xl border border-border/70 bg-card/60 backdrop-blur-sm shadow-sm">
-          <div className="border-b border-border/70 px-5 py-4">
+        <div className="rounded-2xl border border-border/40 bg-gradient-to-br from-card/85 to-card/45 p-6 backdrop-blur-md shadow-lg">
+          <div className="border-b border-border/70 pb-4 mb-4">
             <div className="mb-3 flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filters</span>
@@ -1976,13 +1996,13 @@ export default function EditorsAnalyticsPage() {
             </div>
           </div>
           
-          <div>
+          <div className="space-y-3">
             {visibleActivityFeed.map((row, idx) => {
               const key = `${row.actor}-${row.prNumber}-${row.actedAt}-${row.eventType}-${idx}`;
               const expanded = Boolean(expandedActivityKeys[key]);
               const eventLabel = formatEventLabel(row.eventType);
               return (
-                <div key={key} className="border-b border-border/60 px-5 py-4 last:border-b-0">
+                <div key={key} className="rounded-xl border border-border/50 bg-background/20 px-4 py-3 transition-all hover:border-primary/25">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1992,10 +2012,10 @@ export default function EditorsAnalyticsPage() {
                         <span className="rounded border border-border/60 bg-background/60 px-2 py-0.5 text-[10px] text-muted-foreground">
                           {row.repoShort}
                         </span>
-                        <span className="text-xs font-semibold text-foreground/80">{row.actor}</span>
+                        <span className="text-xs font-semibold text-foreground/85">{row.actor}</span>
                       </div>
                       {row.title && (
-                        <p className="mt-2 text-sm text-foreground/90 font-medium">{row.title}</p>
+                        <p className="mt-2 text-sm text-foreground/95 font-medium">{row.title}</p>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground tabular-nums font-mono">{formatActivityTime(row.actedAt)}</p>
@@ -2039,7 +2059,7 @@ export default function EditorsAnalyticsPage() {
             })}
             
             {visibleActivityFeed.length === 0 && (
-              <div className="flex flex-col items-center justify-center px-5 py-8">
+              <div className="flex flex-col items-center justify-center py-8">
                 <Zap className="mb-2 h-8 w-8 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">No editor actions found for current filters.</p>
               </div>
@@ -2047,7 +2067,7 @@ export default function EditorsAnalyticsPage() {
           </div>
           
           {hasMoreActivities && (
-            <div className="border-t border-border/60 px-5 py-4">
+            <div className="border-t border-border/60 mt-4 pt-4">
               <button
                 onClick={() => setVisibleActivityCount((count) => count + 20)}
                 className="inline-flex h-9 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
