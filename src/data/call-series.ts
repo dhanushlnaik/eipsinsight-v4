@@ -29,6 +29,11 @@ export const CALL_SERIES: Record<string, CallSeriesMeta> = {
     short: 'ACDT',
     badgeClass: 'border-cyan-500/30 bg-cyan-500/15 text-cyan-700 dark:text-cyan-300',
   },
+  acdtcl: {
+    label: 'AllCoreDevs — Testing CL Breakout',
+    short: 'ACDT-CL',
+    badgeClass: 'border-teal-500/30 bg-teal-500/15 text-teal-700 dark:text-teal-300',
+  },
   epbs: {
     label: 'ePBS Breakout',
     short: 'ePBS',

@@ -23,6 +23,7 @@ const ARTIFACTS_BASE =
 /** Normalized series slug → the manifest/artifact directory key. */
 export function getRemoteSeries(series: string): string {
   const map: Record<string, string> = {
+    acdtcl: 'acdt',
     price: 'glamsterdamrepricings',
     tli: 'trustlesslogindex',
     pqts: 'pqtransactionsignatures',
@@ -77,7 +78,8 @@ async function fetchArtifact(series: string, callId: string, files: string[]): P
 }
 
 export async function fetchTranscriptCues(series: string, callId: string): Promise<TranscriptCue[] | null> {
-  const raw = await fetchArtifact(series, callId, ['transcript_corrected.vtt', 'transcript.vtt']);
+  const files = series === 'acdtcl' ? ['transcript_cl.vtt'] : ['transcript_corrected.vtt', 'transcript.vtt'];
+  const raw = await fetchArtifact(series, callId, files);
   if (!raw || !raw.includes('WEBVTT')) return null;
   const cues = parseVtt(raw);
   return cues.length > 0 ? cues : null;
@@ -136,7 +138,8 @@ export function parseChat(raw: string): ChatMessage[] {
 }
 
 export async function fetchChatMessages(series: string, callId: string): Promise<ChatMessage[] | null> {
-  const raw = await fetchArtifact(series, callId, ['chat.txt']);
+  const files = series === 'acdtcl' ? ['chat_cl.txt'] : ['chat.txt'];
+  const raw = await fetchArtifact(series, callId, files);
   if (!raw) return null;
   const parsed = parseChat(raw);
   return parsed.length > 0 ? parsed : null;
