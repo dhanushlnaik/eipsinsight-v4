@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import '@/lib/orpc.server';
 import { buildMetadata } from '@/lib/seo';
 import { getCachedRecentDecisions } from '@/lib/upgrade-data.server';
@@ -19,7 +20,7 @@ export default async function DecisionsPage() {
   const calls = await getCachedRecentDecisions(300);
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-8 px-4 pb-12 pt-8 sm:px-6">
+    <div className="mx-auto w-full max-w-6xl space-y-8 px-4 pb-12 pt-8 sm:px-6">
       <header>
         <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
           Protocol decisions
@@ -37,7 +38,9 @@ export default async function DecisionsPage() {
           fetched alongside call summaries).
         </p>
       ) : (
-        <DecisionsBrowser calls={calls} />
+        <Suspense fallback={null}>
+          <DecisionsBrowser calls={calls} />
+        </Suspense>
       )}
     </div>
   );

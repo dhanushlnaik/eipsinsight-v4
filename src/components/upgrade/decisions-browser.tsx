@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Github, Video, ArrowRightLeft, Server, Star, Circle, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { callDisplayName, callSeriesBadgeClass, callSeriesShort } from '@/data/call-series';
@@ -45,10 +46,56 @@ const TYPE_FILTERS: Array<{ key: DecisionType; label: string; icon: typeof Circl
  * Client browser for protocol decisions: colorful per-series tabs plus
  * decision-type filters over the per-call decision groups.
  */
+const DECISION_TYPES = ['stage_change', 'devnet_inclusion', 'headliner_selected', 'other'] as const;
+
 export function DecisionsBrowser({ calls }: { calls: DecisionCall[] }) {
-  const [series, setSeries] = useState<SeriesFilterValue>(DEFAULT_SERIES_FILTER);
-  const [type, setType] = useState<DecisionType | 'all'>('all');
-  const [search, setSearch] = useState('');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Initialise from the URL so shared links restore the exact filter state.
+  const [series, setSeries] = useState<SeriesFilterValue>(() => {
+    const g = searchParams.get('series');
+    if (g === 'acd') return { group: 'acd', acd: searchParams.get('acd') ?? 'all' };
+    if (g === 'breakouts') return { group: 'breakouts', acd: 'all' };
+    return DEFAULT_SERIES_FILTER;
+  });
+  const [type, setType] = useState<DecisionType | 'all'>(() => {
+    const t = searchParams.get('type');
+    return (DECISION_TYPES as readonly string[]).includes(t ?? '') ? (t as DecisionType) : 'all';
+  });
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
+
+  // Reflect the current filters into the URL (shareable, back-button friendly).
+  const syncUrl = (next: {
+    series?: SeriesFilterValue;
+    type?: DecisionType | 'all';
+    search?: string;
+  }) => {
+    const s = next.series ?? series;
+    const t = next.type ?? type;
+    const q = (next.search ?? search).trim();
+    const params = new URLSearchParams();
+    if (s.group !== 'all') params.set('series', s.group);
+    if (s.group === 'acd' && s.acd !== 'all') params.set('acd', s.acd);
+    if (t && t !== 'all') params.set('type', t);
+    if (q) params.set('q', q);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const changeSeries = (v: SeriesFilterValue) => {
+    setSeries(v);
+    syncUrl({ series: v });
+  };
+  const changeType = (t: DecisionType | 'all') => {
+    setType(t);
+    syncUrl({ type: t });
+  };
+  const changeSearch = (v: string) => {
+    setSearch(v);
+    syncUrl({ search: v });
+  };
 
   // Pre-parse decisions once per call.
   const parsed = useMemo(
@@ -107,22 +154,22 @@ export function DecisionsBrowser({ calls }: { calls: DecisionCall[] }) {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => changeSearch(e.target.value)}
             placeholder="Search decisions, EIP #, or call…"
             className="h-9 w-full rounded-lg border border-border bg-background pl-9 pr-3 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Series</span>
-          <SeriesFilter value={series} onChange={setSeries} counts={seriesCounts} />
+          <SeriesFilter value={series} onChange={changeSeries} counts={seriesCounts} />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Type</span>
-          <button type="button" onClick={() => setType('all')} className={chip(type === 'all')}>
+          <button type="button" onClick={() => changeType('all')} className={chip(type === 'all')}>
             All
           </button>
           {TYPE_FILTERS.map(({ key, label, icon: Icon }) => (
-            <button key={key} type="button" onClick={() => setType(key)} className={chip(type === key)}>
+            <button key={key} type="button" onClick={() => changeType(key)} className={chip(type === key)}>
               <Icon className="h-3.5 w-3.5" />
               {label}
             </button>

@@ -214,36 +214,36 @@ export default async function UpgradeIndexPage() {
               {activity.map((event, index) => (
                 <li
                   key={`${event.commit_date}-${event.eip_number}-${index}`}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm"
                 >
-                  <GitCommit className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <GitCommit className="h-4 w-4 shrink-0 text-muted-foreground" />
                   {event.eip_number && (
                     <Link
                       href={`/eip/${event.eip_number}`}
-                      className="font-mono text-xs font-semibold text-primary hover:underline"
+                      className="font-mono text-sm font-semibold text-primary hover:underline"
                     >
                       EIP-{event.eip_number}
                     </Link>
                   )}
-                  <span className="hidden max-w-56 truncate text-xs text-muted-foreground md:inline">
+                  <span className="hidden max-w-72 truncate text-sm text-muted-foreground md:inline">
                     {event.title}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {event.event_type === 'removed' ? 'removed from' : `${event.event_type} to`}
                   </span>
                   <StageBadge bucket={event.bucket} abbreviated />
                   {event.upgrade_slug && (
                     <>
-                      <span className="text-xs text-muted-foreground">in</span>
+                      <span className="text-sm text-muted-foreground">in</span>
                       <Link
                         href={`/upgrade/${event.upgrade_slug}`}
-                        className="text-xs font-medium text-foreground hover:text-primary"
+                        className="text-sm font-medium text-foreground hover:text-primary"
                       >
                         {event.upgrade_name ?? event.upgrade_slug}
                       </Link>
                     </>
                   )}
-                  <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                     {event.commit_date ? timeAgo(event.commit_date) : ''}
                   </span>
                 </li>
