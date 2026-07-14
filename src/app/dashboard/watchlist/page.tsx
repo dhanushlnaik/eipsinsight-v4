@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, FolderGit2, Loader2, Package, Users, Bell } from "lucide-react";
 import { client } from "@/lib/orpc";
+import { useSession } from "@/hooks/useSession";
 import { WatchToggle } from "@/components/watch-toggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,11 +14,20 @@ import { Badge } from "@/components/ui/badge";
 type WatchlistState = Awaited<ReturnType<typeof client.watchlist.getWatchlist>>;
 
 export default function WatchlistPage() {
+  const { data: session, loading: sessionLoading } = useSession();
+  const router = useRouter();
   const [data, setData] = useState<WatchlistState | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"proposals" | "repositories" | "upgrades" | "authors">("proposals");
 
   useEffect(() => {
+    if (!sessionLoading && !session) {
+      router.push(`/login?redirect=${encodeURIComponent("/dashboard/watchlist")}`);
+    }
+  }, [session, sessionLoading, router]);
+
+  useEffect(() => {
+    if (!session) return;
     async function load() {
       try {
         const result = await client.watchlist.getWatchlist({});
@@ -28,9 +39,9 @@ export default function WatchlistPage() {
       }
     }
     load();
-  }, []);
+  }, [session]);
 
-  if (loading) {
+  if (sessionLoading || loading) {
     return (
       <div className="flex h-[400px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
