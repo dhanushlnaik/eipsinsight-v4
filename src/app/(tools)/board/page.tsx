@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { client } from "@/lib/orpc";
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  ArrowUpDown,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -47,6 +51,10 @@ type StatsData = {
   govStates: { state: string; label: string; count: number }[];
   totalOpen: number;
 };
+
+type RepoKey = "" | "eips" | "ercs" | "rips";
+type SortBy = "wait" | "pr" | "created";
+type SortDir = "asc" | "desc";
 
 const GOV_STATES = [
   {
@@ -94,7 +102,19 @@ const PT_COLORS: Record<string, string> = {
   Misc: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20",
 };
 
+/** Unknown process types fall back to the Misc chip rather than rendering unstyled. */
+const ptColor = (type: string) => PT_COLORS[type] ?? PT_COLORS.Misc;
+
 const PROCESS_ORDER = ["Status Change", "New EIP", "PR DRAFT", "Typo", "Website", "EIP-1", "Content Edit", "Misc"];
+
+const DEFAULT_GOV_STATES = ["Waiting on Editor"];
+const DEFAULT_SORT: SortBy = "wait";
+const DEFAULT_DIR: SortDir = "desc";
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZES = [10, 25, 50, 100];
+
+const isDefaultStatuses = (s: string[]) =>
+  s.length === DEFAULT_GOV_STATES.length && s.every((x) => DEFAULT_GOV_STATES.includes(x));
 
 function getLabelColor(label: string): string {
   if (label.startsWith("c-")) return "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300";
@@ -107,107 +127,191 @@ function getLabelColor(label: string): string {
 }
 
 function fmtWait(days: number): string {
-  if (days >= 7) {
-    const w = Math.floor(days / 7);
-    return `${w}w`;
-  }
+  if (days >= 7) return `${Math.floor(days / 7)}w`;
   return `${days}d`;
 }
 
 function fmtDate(d: string): string {
-  return new Date(`${d}T00:00:00`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function fmtDateShort(d: string): string {
+  return new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function priorityOf(days: number) {
-  if (days > 28) return { color: "text-red-600 dark:text-red-400", Icon: Flame };
-  if (days > 7) return { color: "text-amber-600 dark:text-amber-400", Icon: AlertTriangle };
-  return { color: "text-emerald-600 dark:text-emerald-400", Icon: Minus };
+  if (days > 28) return { color: "text-red-600 dark:text-red-400", Icon: Flame, note: "Waiting over 4 weeks" };
+  if (days > 7) return { color: "text-amber-600 dark:text-amber-400", Icon: AlertTriangle, note: "Waiting over a week" };
+  return { color: "text-emerald-600 dark:text-emerald-400", Icon: Minus, note: "Recently active" };
 }
 
 export default function BoardPage() {
+  return (
+    <Suspense fallback={null}>
+      <BoardBrowser />
+    </Suspense>
+  );
+}
+
+function BoardBrowser() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Filters initialise from the URL, so a shared board link opens exactly as sent.
+  const [repo, setRepo] = useState<RepoKey>(() => {
+    const r = searchParams.get("repo");
+    return r === "eips" || r === "ercs" || r === "rips" ? r : "";
+  });
+  const [selectedGovStates, setSelectedGovStates] = useState<string[]>(() => {
+    const s = searchParams.get("status");
+    if (s === null) return DEFAULT_GOV_STATES;
+    if (s === "none") return [];
+    return s.split(",").filter(Boolean);
+  });
+  const [selectedProcessTypes, setSelectedProcessTypes] = useState<string[]>(() => {
+    const p = searchParams.get("process");
+    return p ? p.split(",").filter(Boolean) : [];
+  });
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+  const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get("page")) || 1));
+  const [pageSize, setPageSize] = useState(() => {
+    const s = Number(searchParams.get("size"));
+    return PAGE_SIZES.includes(s) ? s : DEFAULT_PAGE_SIZE;
+  });
+  const [sortBy, setSortBy] = useState<SortBy>(() => {
+    const s = searchParams.get("sort");
+    return s === "pr" || s === "created" || s === "wait" ? s : DEFAULT_SORT;
+  });
+  const [sortDir, setSortDir] = useState<SortDir>(() => (searchParams.get("dir") === "asc" ? "asc" : "desc"));
+
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [repo, setRepo] = useState<"" | "eips" | "ercs" | "rips">("");
-  const [selectedGovStates, setSelectedGovStates] = useState<string[]>(["Waiting on Editor"]);
-  const [selectedProcessTypes, setSelectedProcessTypes] = useState<string[]>([]);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [showInfo, setShowInfo] = useState(false);
   const [data, setData] = useState<BoardData | null>(null);
   const [stats, setStats] = useState<StatsData | null>(null);
   const [csvExporting, setCsvExporting] = useState(false);
   const [mdExporting, setMdExporting] = useState(false);
 
+  // Computed once, not on every render (a bare new Date() in the body is an impure render).
+  const [monthLabel] = useState(() => new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" }));
+
+  // One debounced value drives BOTH queries, so typing no longer fires a stats request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const typedRepo = repo || undefined;
+  const govFilter = selectedGovStates.length ? selectedGovStates : undefined;
+  const processFilter = selectedProcessTypes.length ? selectedProcessTypes : undefined;
+  const searchFilter = debouncedSearch || undefined;
+
+  // Mirror state into the URL so "Copy link" (and browser back/refresh) actually work.
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (repo) p.set("repo", repo);
+    if (selectedGovStates.length === 0) p.set("status", "none");
+    else if (!isDefaultStatuses(selectedGovStates)) p.set("status", selectedGovStates.join(","));
+    if (selectedProcessTypes.length) p.set("process", selectedProcessTypes.join(","));
+    if (debouncedSearch) p.set("q", debouncedSearch);
+    if (page > 1) p.set("page", String(page));
+    if (pageSize !== DEFAULT_PAGE_SIZE) p.set("size", String(pageSize));
+    if (sortBy !== DEFAULT_SORT) p.set("sort", sortBy);
+    if (sortDir !== DEFAULT_DIR) p.set("dir", sortDir);
+    const qs = p.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [repo, selectedGovStates, selectedProcessTypes, debouncedSearch, page, pageSize, sortBy, sortDir, pathname, router]);
 
   useEffect(() => {
-    setStatsLoading(true);
-    client.tools
-      .getOpenPRBoardStats({
-        repo: typedRepo,
-        govState: selectedGovStates.length ? selectedGovStates : undefined,
-        search: search || undefined,
-      })
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => setStatsLoading(false));
-  }, [typedRepo, selectedGovStates, search]);
+    let cancelled = false;
+    // Deferred so the state updates don't run synchronously inside the effect body.
+    const timer = setTimeout(async () => {
+      setStatsLoading(true);
+      try {
+        const s = await client.tools.getOpenPRBoardStats({ repo: typedRepo, govState: govFilter, search: searchFilter });
+        if (!cancelled) setStats(s);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [typedRepo, govFilter, searchFilter]);
 
   useEffect(() => {
-    const load = async () => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
       setLoading(true);
       try {
         const d = await client.tools.getOpenPRBoard({
           repo: typedRepo,
-          govState: selectedGovStates.length ? selectedGovStates : undefined,
-          processType: selectedProcessTypes.length ? selectedProcessTypes : undefined,
-          search: search || undefined,
+          govState: govFilter,
+          processType: processFilter,
+          search: searchFilter,
           page,
-          pageSize: 10,
+          pageSize,
+          sortBy,
+          sortDir,
         });
-        setData(d);
+        if (!cancelled) setData(d);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
     };
-    const timer = setTimeout(load, search ? 250 : 0);
-    return () => clearTimeout(timer);
-  }, [typedRepo, selectedGovStates, selectedProcessTypes, search, page]);
+  }, [typedRepo, govFilter, processFilter, searchFilter, page, pageSize, sortBy, sortDir]);
 
-  const now = new Date();
-  const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const totalMatching = data?.total ?? 0;
   const rows = data?.rows ?? [];
-  const startIdx = totalMatching > 0 ? (page - 1) * 10 + 1 : 0;
-  const endIdx = Math.min(page * 10, totalMatching);
+  const startIdx = totalMatching > 0 ? (page - 1) * pageSize + 1 : 0;
+  const endIdx = Math.min(page * pageSize, totalMatching);
 
-  const hasActiveFilters = Boolean(repo || selectedGovStates.length || selectedProcessTypes.length || search);
+  const hasActiveFilters =
+    Boolean(repo) ||
+    !isDefaultStatuses(selectedGovStates) ||
+    selectedProcessTypes.length > 0 ||
+    Boolean(search) ||
+    sortBy !== DEFAULT_SORT ||
+    sortDir !== DEFAULT_DIR;
 
   const toggleGovState = (state: string) => {
     setPage(1);
-    setSelectedGovStates((prev) =>
-      prev.includes(state) ? prev.filter((s) => s !== state) : [...prev, state],
-    );
+    setSelectedGovStates((prev) => (prev.includes(state) ? prev.filter((s) => s !== state) : [...prev, state]));
   };
 
   const toggleProcessType = (type: string) => {
     setPage(1);
-    setSelectedProcessTypes((prev) =>
-      prev.includes(type) ? prev.filter((s) => s !== type) : [...prev, type],
-    );
+    setSelectedProcessTypes((prev) => (prev.includes(type) ? prev.filter((s) => s !== type) : [...prev, type]));
+  };
+
+  const toggleSort = (col: SortBy) => {
+    setPage(1);
+    if (sortBy === col) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortBy(col);
+      setSortDir("desc");
+    }
   };
 
   const resetFilters = () => {
     setRepo("");
-    setSelectedGovStates(["Waiting on Editor"]);
+    setSelectedGovStates(DEFAULT_GOV_STATES);
     setSelectedProcessTypes([]);
     setSearch("");
+    setSortBy(DEFAULT_SORT);
+    setSortDir(DEFAULT_DIR);
     setPage(1);
   };
 
@@ -218,36 +322,25 @@ export default function BoardPage() {
     return [...sorted, ...rest];
   }, [stats]);
 
-  const csvEscape = (value: string | number | null | undefined) => `"${String(value ?? "").replaceAll(`"`, `""`)}` + `"`;
+  const csvEscape = (value: string | number | null | undefined) => `"${String(value ?? "").replaceAll(`"`, `""`)}"`;
 
   const getAllFilteredRows = async (): Promise<PRRow[]> => {
     const exportPageSize = 500;
-    const firstPage = await client.tools.getOpenPRBoard({
+    const query = {
       repo: typedRepo,
-      govState: selectedGovStates.length ? selectedGovStates : undefined,
-      processType: selectedProcessTypes.length ? selectedProcessTypes : undefined,
-      search: search || undefined,
-      page: 1,
-      pageSize: exportPageSize,
-    });
+      govState: govFilter,
+      processType: processFilter,
+      search: searchFilter,
+      sortBy,
+      sortDir,
+    };
+    const firstPage = await client.tools.getOpenPRBoard({ ...query, page: 1, pageSize: exportPageSize });
 
     let exportRows = firstPage.rows ?? [];
-    if ((firstPage.totalPages ?? 1) > 1) {
-      const remainingPages = await Promise.all(
-        Array.from({ length: firstPage.totalPages - 1 }, (_, idx) =>
-          client.tools.getOpenPRBoard({
-            repo: typedRepo,
-            govState: selectedGovStates.length ? selectedGovStates : undefined,
-            processType: selectedProcessTypes.length ? selectedProcessTypes : undefined,
-            search: search || undefined,
-            page: idx + 2,
-            pageSize: exportPageSize,
-          }),
-        ),
-      );
-      exportRows = exportRows.concat(remainingPages.flatMap((pageData) => pageData.rows ?? []));
+    for (let p = 2; p <= (firstPage.totalPages ?? 1); p++) {
+      const next = await client.tools.getOpenPRBoard({ ...query, page: p, pageSize: exportPageSize });
+      exportRows = exportRows.concat(next.rows ?? []);
     }
-
     return exportRows;
   };
 
@@ -258,37 +351,35 @@ export default function BoardPage() {
       const exportRows = await getAllFilteredRows();
       if (!exportRows.length) return;
 
-    const headers = ["Month", "Repo", "Process", "Participants", "PRNumber", "PRLink", "Title", "Author", "CreatedAt", "Labels"];
-    const lines = [headers.join(",")];
-    exportRows.forEach((row) => {
-      const repoName = row.repo.split("/")[1] ?? row.repo;
-      const prLink = `https://github.com/${row.repo}/pull/${row.prNumber}`;
-      const values = [
-        monthLabel,
-        repoName,
-        row.processType,
-        row.govState,
-        row.prNumber,
-        prLink,
-        row.title ?? "",
-        row.author ?? "",
-        row.createdAt ? new Date(`${row.createdAt}T00:00:00`).toISOString() : "",
-        (row.labels ?? []).join("|"),
-      ];
-      lines.push(values.map(csvEscape).join(","));
-    });
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `board_${(repo || "all").toLowerCase()}_${monthLabel.replace(/\s+/g, "-")}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    toast.success("CSV downloaded", {
-      description: `${exportRows.length} PR rows exported.`,
-    });
+      const headers = ["Month", "Repo", "Process", "Participants", "PRNumber", "PRLink", "Title", "Author", "CreatedAt", "WaitDays", "Labels"];
+      const lines = [headers.join(",")];
+      exportRows.forEach((row) => {
+        const repoName = row.repo.split("/")[1] ?? row.repo;
+        const values = [
+          monthLabel,
+          repoName,
+          row.processType,
+          row.govState,
+          row.prNumber,
+          `https://github.com/${row.repo}/pull/${row.prNumber}`,
+          row.title ?? "",
+          row.author ?? "",
+          row.createdAt ? new Date(`${row.createdAt}T00:00:00`).toISOString() : "",
+          row.waitDays,
+          (row.labels ?? []).join("|"),
+        ];
+        lines.push(values.map(csvEscape).join(","));
+      });
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `board_${(repo || "all").toLowerCase()}_${monthLabel.replace(/\s+/g, "-")}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("CSV downloaded", { description: `${exportRows.length} PR rows exported.` });
     } catch (err) {
       console.error("CSV export failed:", err);
       toast.error("Failed to export CSV");
@@ -319,15 +410,13 @@ export default function BoardPage() {
         sectionRows.forEach((row) => {
           const title = (row.title ?? "Untitled").replace(/\]/g, "\\]");
           const url = `https://github.com/${row.repo}/pull/${row.prNumber}`;
-          markdown += `- [${title} #${row.prNumber}](${url}) — ${row.govState}\n`;
+          markdown += `- [${title} #${row.prNumber}](${url}) — ${row.govState} · waiting ${fmtWait(row.waitDays)}\n`;
         });
         markdown += "\n";
       }
 
       await navigator.clipboard.writeText(markdown.trim());
-      toast.success("Copied as markdown", {
-        description: `${exportRows.length} PRs copied to clipboard.`,
-      });
+      toast.success("Copied as markdown", { description: `${exportRows.length} PRs copied to clipboard.` });
     } catch {
       toast.error("Failed to copy markdown");
     } finally {
@@ -335,26 +424,11 @@ export default function BoardPage() {
     }
   };
 
+  // The URL is already in sync with the filters, so sharing is just the current href.
   const copyFilterLink = async () => {
-    const url = new URL(window.location.href);
-    if (repo) url.searchParams.set("repo", repo);
-    else url.searchParams.delete("repo");
-
-    if (selectedGovStates.length) url.searchParams.set("status", selectedGovStates.join(","));
-    else url.searchParams.delete("status");
-
-    if (selectedProcessTypes.length) url.searchParams.set("process", selectedProcessTypes.join(","));
-    else url.searchParams.delete("process");
-
-    if (search) url.searchParams.set("q", search);
-    else url.searchParams.delete("q");
-
-    url.searchParams.set("page", String(page));
     try {
-      await navigator.clipboard.writeText(url.toString());
-      toast.success("Filter link copied", {
-        description: "Shareable board URL copied to clipboard.",
-      });
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Filter link copied", { description: "Opens this board with the same filters and sort." });
     } catch {
       toast.error("Failed to copy link");
     }
@@ -364,20 +438,26 @@ export default function BoardPage() {
     <div className="min-h-screen bg-background">
       <div className="border-b border-border bg-background/85 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
-          <Link href="/tools" className="mb-2 inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground">
+          <Link
+            href="/tools"
+            className="mb-2 inline-flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to Tools
           </Link>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="dec-title persona-title text-balance text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl">EIP / ERC / RIP Board</h1>
+              <h1 className="dec-title persona-title text-balance text-3xl font-semibold leading-[1.1] tracking-tight sm:text-4xl">
+                EIP / ERC / RIP Board
+              </h1>
               <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Open pull requests by type and status for {monthLabel}. Filter by repo, process type, and participant status.
+                Open pull requests by type and status for {monthLabel}. Sorted by longest wait first — the editorial queue,
+                oldest at the top.
               </p>
             </div>
             <button
               onClick={() => setShowInfo((v) => !v)}
-              className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-muted/60 px-2.5 text-xs text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10"
+              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-2.5 text-xs text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10"
             >
               <Info className="h-3.5 w-3.5" />
               Info
@@ -387,10 +467,22 @@ export default function BoardPage() {
 
           {showInfo && (
             <div className="mt-3 grid gap-3 rounded-lg border border-border bg-card/60 p-3 sm:grid-cols-2">
-              <InfoItem title="What does this page show?" body="Open PRs by process and participant status. You can select multiple statuses and process types together." />
-              <InfoItem title="How can I filter?" body="Use top filters for repo, status chips, process chips, and search. Filters combine together." />
-              <InfoItem title="How can I export/share?" body="Download CSV, Copy as MD, and Copy link all reflect current filters." />
-              <InfoItem title="Default focus" body="Awaiting Editor is selected by default so pending editorial work is front-and-center." />
+              <InfoItem
+                title="What does this page show?"
+                body="Open PRs by process and participant status. You can select multiple statuses and process types together."
+              />
+              <InfoItem
+                title="How do I triage?"
+                body="Click any column header with arrows to sort. Wait descending (the default) puts the most-neglected PRs first."
+              />
+              <InfoItem
+                title="How can I export/share?"
+                body="Download CSV, Copy as MD, and Copy link all reflect the current filters and sort. The link restores them exactly."
+              />
+              <InfoItem
+                title="Default focus"
+                body="Waiting on Editor is selected by default so pending editorial work is front-and-center."
+              />
             </div>
           )}
         </div>
@@ -409,6 +501,7 @@ export default function BoardPage() {
                   setPage(1);
                 }}
                 placeholder="Search title, author, PR #"
+                aria-label="Search pull requests"
                 className="h-9 w-full rounded-md border border-border bg-muted/60 pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
               {search && (
@@ -417,6 +510,7 @@ export default function BoardPage() {
                     setSearch("");
                     setPage(1);
                   }}
+                  aria-label="Clear search"
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -425,12 +519,14 @@ export default function BoardPage() {
             </div>
 
             <div className="flex items-center gap-2 lg:col-span-4">
-              {([
-                { key: "", label: "All" },
-                { key: "eips", label: "EIPs" },
-                { key: "ercs", label: "ERCs" },
-                { key: "rips", label: "RIPs" },
-              ] as const).map((r) => (
+              {(
+                [
+                  { key: "", label: "All" },
+                  { key: "eips", label: "EIPs" },
+                  { key: "ercs", label: "ERCs" },
+                  { key: "rips", label: "RIPs" },
+                ] as const
+              ).map((r) => (
                 <button
                   key={r.key || "all"}
                   onClick={() => {
@@ -439,7 +535,9 @@ export default function BoardPage() {
                   }}
                   className={cn(
                     "h-9 rounded-md border px-3 text-xs transition-colors",
-                    repo === r.key ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                    repo === r.key
+                      ? "border-primary/30 bg-primary/10 text-primary"
+                      : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
                   {r.label}
@@ -448,7 +546,9 @@ export default function BoardPage() {
             </div>
 
             <div className="flex items-center justify-end gap-2 lg:col-span-3">
-              <span className="text-xs text-muted-foreground"><span className="font-semibold text-primary">{totalMatching.toLocaleString()}</span> matching</span>
+              <span className="text-xs text-muted-foreground">
+                <span className="font-semibold text-primary">{totalMatching.toLocaleString()}</span> matching
+              </span>
               <button
                 onClick={resetFilters}
                 disabled={!hasActiveFilters}
@@ -460,7 +560,9 @@ export default function BoardPage() {
           </div>
 
           <div className="mt-3 border-t border-border pt-3">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Status (multi-select)</p>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Status (multi-select)
+            </p>
             <div className="flex flex-wrap gap-2">
               {GOV_STATES.map((gs) => {
                 const active = selectedGovStates.includes(gs.state);
@@ -469,12 +571,18 @@ export default function BoardPage() {
                   <button
                     key={gs.state}
                     onClick={() => toggleGovState(gs.state)}
+                    aria-pressed={active}
                     className={cn(
                       "rounded-md border px-3 py-1.5 text-xs transition-colors",
-                      active ? `${gs.bg} ${gs.border} ${gs.text}` : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                      active
+                        ? `${gs.bg} ${gs.border} ${gs.text}`
+                        : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
-                    {gs.icon} {gs.label} <span className="opacity-70">({count})</span>
+                    {gs.icon} {gs.label}{" "}
+                    <span className={cn("opacity-70 transition-opacity", statsLoading && "animate-pulse opacity-40")}>
+                      ({count})
+                    </span>
                   </button>
                 );
               })}
@@ -482,7 +590,9 @@ export default function BoardPage() {
           </div>
 
           <div className="mt-3 border-t border-border pt-3">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Process (multi-select)</p>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Process (multi-select)
+            </p>
             <div className="flex flex-wrap gap-2">
               {orderedProcessTypes.map((type) => {
                 const count = stats?.processTypes.find((p) => p.type === type)?.count ?? 0;
@@ -491,24 +601,34 @@ export default function BoardPage() {
                   <button
                     key={type}
                     onClick={() => toggleProcessType(type)}
+                    aria-pressed={active}
                     className={cn(
                       "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
-                      active ? PT_COLORS[type] ?? PT_COLORS.Other : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                      active
+                        ? ptColor(type)
+                        : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
-                    {type} <span className="opacity-70">({count})</span>
+                    {type}{" "}
+                    <span className={cn("opacity-70 transition-opacity", statsLoading && "animate-pulse opacity-40")}>
+                      ({count})
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {(selectedGovStates.length > 0 || selectedProcessTypes.length > 0 || search || repo) && (
+          {hasActiveFilters && (
             <div className="mt-3 border-t border-border pt-3">
               <div className="flex flex-wrap gap-2 text-[11px]">
                 {repo && <ActiveFilter label={`Repo: ${repo.toUpperCase()}`} onClear={() => setRepo("")} />}
                 {selectedGovStates.map((s) => (
-                  <ActiveFilter key={s} label={`Status: ${GOV_STATES.find((g) => g.state === s)?.label ?? s}`} onClear={() => toggleGovState(s)} />
+                  <ActiveFilter
+                    key={s}
+                    label={`Status: ${GOV_STATES.find((g) => g.state === s)?.label ?? s}`}
+                    onClear={() => toggleGovState(s)}
+                  />
                 ))}
                 {selectedProcessTypes.map((p) => (
                   <ActiveFilter key={p} label={`Process: ${p}`} onClear={() => toggleProcessType(p)} />
@@ -521,13 +641,54 @@ export default function BoardPage() {
 
         <section className="rounded-xl border border-border bg-card/60 p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">
-              Showing <span className="text-foreground">{startIdx}–{endIdx}</span> of <span className="text-foreground">{totalMatching.toLocaleString()}</span> PRs
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-xs text-muted-foreground">
+                Showing{" "}
+                <span className="text-foreground">
+                  {startIdx}–{endIdx}
+                </span>{" "}
+                of <span className="text-foreground">{totalMatching.toLocaleString()}</span> PRs
+              </p>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Rows
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="h-7 rounded-md border border-border bg-muted/60 px-1.5 text-xs text-foreground outline-none focus:border-primary/50"
+                  aria-label="Rows per page"
+                >
+                  {PAGE_SIZES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={downloadCSV} disabled={!rows.length || loading || csvExporting} className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50">{csvExporting ? "Exporting..." : "Download CSV"}</button>
-              <button onClick={copyAsMarkdown} disabled={!rows.length || loading || mdExporting} className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted/60 px-2.5 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">{mdExporting ? "Copying..." : "Copy as MD"}</button>
-              <button onClick={copyFilterLink} className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted/60 px-2.5 text-xs text-foreground transition-colors hover:bg-muted">Copy link</button>
+              <button
+                onClick={downloadCSV}
+                disabled={!rows.length || loading || csvExporting}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-xs text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {csvExporting ? "Exporting..." : "Download CSV"}
+              </button>
+              <button
+                onClick={copyAsMarkdown}
+                disabled={!rows.length || loading || mdExporting}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted/60 px-2.5 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {mdExporting ? "Copying..." : "Copy as MD"}
+              </button>
+              <button
+                onClick={copyFilterLink}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-muted/60 px-2.5 text-xs text-foreground transition-colors hover:bg-muted"
+              >
+                Copy link
+              </button>
             </div>
           </div>
 
@@ -535,22 +696,24 @@ export default function BoardPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border/70">
-                  <Th w="w-20">PR</Th>
+                  <SortableTh label="PR" col="pr" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} w="w-24" />
                   <Th>Title</Th>
                   <Th w="w-28">Author</Th>
-                  <Th w="w-20">Wait</Th>
+                  <SortableTh label="Opened" col="created" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} w="w-24" />
+                  <SortableTh label="Wait" col="wait" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} w="w-20" />
                   <Th w="w-28">Process</Th>
                   <Th w="w-36">Status</Th>
-                  <Th w="w-52">Labels</Th>
-                  <Th w="w-16" center>Open</Th>
+                  <Th w="w-44">Labels</Th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <SkeletonRows colCount={8} />
+                  <SkeletonRows colCount={8} rowCount={Math.min(pageSize, 10)} />
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">No PRs match the current filters.</td>
+                    <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
+                      No PRs match the current filters.
+                    </td>
                   </tr>
                 ) : (
                   rows.map((row) => {
@@ -559,27 +722,103 @@ export default function BoardPage() {
                     const labels = row.labels ?? [];
                     const showLabels = labels.slice(0, 2);
                     const extra = labels.length - showLabels.length;
+                    const prUrl = `https://github.com/${row.repo}/pull/${row.prNumber}`;
                     return (
-                      <tr key={`${row.repo}-${row.prNumber}`} className="border-b border-border/60 transition-colors hover:bg-muted/40">
-                        <td className="px-3 py-2 font-mono font-semibold text-primary">#{row.prNumber}</td>
+                      <tr
+                        key={`${row.repo}-${row.prNumber}`}
+                        className="group border-b border-border/60 transition-colors hover:bg-muted/40"
+                      >
+                        {/* The PR number is the primary link — no more hunting for an icon in the last column. */}
                         <td className="px-3 py-2">
-                          <p className="truncate leading-snug text-foreground">{row.title || "Untitled"}</p>
-                          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{fmtDate(row.createdAt)}</p>
+                          <a
+                            href={prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono font-semibold text-primary underline-offset-2 hover:underline"
+                          >
+                            #{row.prNumber}
+                          </a>
+                          <p className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{row.repoShort}</p>
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground">{row.author || "—"}</td>
-                        <td className="px-3 py-2"><span className={cn("inline-flex items-center gap-1 text-[11px] font-medium", p.color)}><p.Icon className="h-3 w-3" />{fmtWait(row.waitDays)}</span></td>
-                        <td className="px-3 py-2"><span className={cn("whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium", PT_COLORS[row.processType] ?? PT_COLORS.Other)}>{row.processType}</span></td>
-                        <td className="px-3 py-2"><span className={cn("whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium", gsConf.bg, gsConf.text, gsConf.border)}>{gsConf.label}</span></td>
+                        <td className="max-w-0 px-3 py-2">
+                          <a
+                            href={prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={row.title ?? "Untitled"}
+                            className="flex items-center gap-1.5 text-foreground transition-colors hover:text-primary"
+                          >
+                            <span className="truncate leading-snug">{row.title || "Untitled"}</span>
+                            <ExternalLink className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
+                          </a>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {row.author ? (
+                            <a
+                              href={`https://github.com/${row.author}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="truncate underline-offset-2 transition-colors hover:text-foreground hover:underline"
+                            >
+                              {row.author}
+                            </a>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-muted-foreground" title={fmtDate(row.createdAt)}>
+                          {fmtDateShort(row.createdAt)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={cn("inline-flex items-center gap-1 text-[11px] font-medium", p.color)}
+                            title={`${row.waitDays} days — ${p.note}`}
+                          >
+                            <p.Icon className="h-3 w-3" />
+                            {fmtWait(row.waitDays)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={cn(
+                              "whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                              ptColor(row.processType),
+                            )}
+                          >
+                            {row.processType}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={cn(
+                              "whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                              gsConf.bg,
+                              gsConf.text,
+                              gsConf.border,
+                            )}
+                          >
+                            {gsConf.label}
+                          </span>
+                        </td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap gap-1">
                             {showLabels.map((l) => (
-                              <span key={l} className={cn("whitespace-nowrap rounded px-1.5 py-0.5 text-[10px]", getLabelColor(l))}>{l}</span>
+                              <span
+                                key={l}
+                                className={cn("whitespace-nowrap rounded px-1.5 py-0.5 text-[10px]", getLabelColor(l))}
+                              >
+                                {l}
+                              </span>
                             ))}
-                            {extra > 0 && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">+{extra}</span>}
+                            {extra > 0 && (
+                              <span
+                                className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                title={labels.slice(2).join(", ")}
+                              >
+                                +{extra}
+                              </span>
+                            )}
                           </div>
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <a href={`https://github.com/${row.repo}/pull/${row.prNumber}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[10px] text-primary transition-colors hover:bg-primary/15"><ExternalLink className="h-2.5 w-2.5" /></a>
                         </td>
                       </tr>
                     );
@@ -592,13 +831,36 @@ export default function BoardPage() {
 
         {data && data.totalPages > 1 && (
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">Page <span className="text-foreground">{page}</span> of <span className="text-foreground">{data.totalPages}</span></p>
+            <p className="text-xs text-muted-foreground">
+              Page <span className="text-foreground">{page}</span> of{" "}
+              <span className="text-foreground">{data.totalPages}</span>
+            </p>
             <div className="flex items-center gap-1.5">
-              <PgBtn disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-3.5 w-3.5" /></PgBtn>
+              <PgBtn disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))} label="Previous page">
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </PgBtn>
               {pageRange(page, data.totalPages).map((n) => (
-                <button key={n} onClick={() => setPage(n)} className={cn("h-7 w-7 rounded-md border text-xs font-medium transition-colors", n === page ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground")}>{n}</button>
+                <button
+                  key={n}
+                  onClick={() => setPage(n)}
+                  aria-current={n === page ? "page" : undefined}
+                  className={cn(
+                    "h-7 w-7 rounded-md border text-xs font-medium transition-colors",
+                    n === page
+                      ? "border-primary/30 bg-primary/10 text-primary"
+                      : "border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {n}
+                </button>
               ))}
-              <PgBtn disabled={page === data.totalPages} onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}><ChevronRight className="h-3.5 w-3.5" /></PgBtn>
+              <PgBtn
+                disabled={page === data.totalPages}
+                onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
+                label="Next page"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </PgBtn>
             </div>
           </div>
         )}
@@ -629,24 +891,79 @@ function ActiveFilter({ label, onClear }: { label: string; onClear: () => void }
 
 function Th({ children, w, center }: { children: React.ReactNode; w?: string; center?: boolean }) {
   return (
-    <th className={cn("px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", center ? "text-center" : "text-left", w)}>
+    <th
+      className={cn(
+        "px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground",
+        center ? "text-center" : "text-left",
+        w,
+      )}
+    >
       {children}
     </th>
   );
 }
 
-function PgBtn({ children, disabled, onClick }: { children: React.ReactNode; disabled?: boolean; onClick: () => void }) {
+function SortableTh({
+  label,
+  col,
+  sortBy,
+  sortDir,
+  onSort,
+  w,
+}: {
+  label: string;
+  col: SortBy;
+  sortBy: SortBy;
+  sortDir: SortDir;
+  onSort: (col: SortBy) => void;
+  w?: string;
+}) {
+  const active = sortBy === col;
+  const Icon = !active ? ArrowUpDown : sortDir === "desc" ? ArrowDown : ArrowUp;
   return (
-    <button onClick={onClick} disabled={disabled} className="rounded-md border border-border bg-muted/50 p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30">
+    <th className={cn("px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider", w)}>
+      <button
+        onClick={() => onSort(col)}
+        aria-label={`Sort by ${label}${active ? (sortDir === "desc" ? ", descending" : ", ascending") : ""}`}
+        className={cn(
+          "inline-flex items-center gap-1 transition-colors hover:text-foreground",
+          active ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        {label}
+        <Icon className={cn("h-3 w-3", active ? "opacity-100" : "opacity-40")} />
+      </button>
+    </th>
+  );
+}
+
+function PgBtn({
+  children,
+  disabled,
+  onClick,
+  label,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="rounded-md border border-border bg-muted/50 p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+    >
       {children}
     </button>
   );
 }
 
-function SkeletonRows({ colCount }: { colCount: number }) {
+function SkeletonRows({ colCount, rowCount = 10 }: { colCount: number; rowCount?: number }) {
   return (
     <>
-      {Array.from({ length: 10 }).map((_, i) => (
+      {Array.from({ length: rowCount }).map((_, i) => (
         <tr key={i} className="border-b border-border/60">
           {Array.from({ length: colCount }).map((_, j) => (
             <td key={j} className="px-3 py-2.5">
