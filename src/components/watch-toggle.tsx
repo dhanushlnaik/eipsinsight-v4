@@ -61,13 +61,13 @@ export function WatchToggle({
       title={isWatched ? "Remove from watchlist" : "Add to watchlist"}
     >
       {isLoading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <Loader2 className={`h-4 w-4 animate-spin ${size !== "icon" ? "mr-2" : ""}`} />
       ) : isWatched ? (
-        <BellRing className="mr-2 h-4 w-4" />
+        <BellRing className={`h-4 w-4 ${size !== "icon" ? "mr-2" : ""}`} />
       ) : (
-        <Bell className="mr-2 h-4 w-4" />
+        <Bell className={`h-4 w-4 ${size !== "icon" ? "mr-2" : ""}`} />
       )}
-      {isWatched ? "Watching" : "Watch"}
+      {size !== "icon" && (isWatched ? "Watching" : "Watch")}
     </Button>
   );
 }
