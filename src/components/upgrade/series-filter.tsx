@@ -3,15 +3,15 @@
 import { cn } from '@/lib/utils';
 import { callSeriesShort } from '@/data/call-series';
 
-/** AllCoreDevs series — everything else is treated as a "Breakout". */
-export const ACD_SERIES = ['acdc', 'acde', 'acdt'] as const;
+/** AllCoreDevs series (incl. the ACDT-CL breakout) — everything else is a "Breakout". */
+export const ACD_SERIES = ['acdc', 'acde', 'acdt', 'acdtcl'] as const;
 export const isAcdSeries = (series: string) => (ACD_SERIES as readonly string[]).includes(series);
 
 export type SeriesGroup = 'all' | 'acd' | 'breakouts';
 
 export interface SeriesFilterValue {
   group: SeriesGroup;
-  /** Only meaningful when group === 'acd': 'all' | 'acdc' | 'acde' | 'acdt'. */
+  /** Only meaningful when group === 'acd': 'all' | 'acdc' | 'acde' | 'acdt' | 'acdtcl'. */
   acd: string;
 }
 

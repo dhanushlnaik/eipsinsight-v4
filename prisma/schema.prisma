@@ -9,36 +9,37 @@ datasource db {
 }
 
 model User {
-  id                     String               @id @default(cuid())
-  name                   String
-  email                  String
-  emailVerified          Boolean              @default(false)
-  image                  String?
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-  avatarUrl              String?
-  membershipExpiresAt    DateTime?
-  membershipTier         String?
-  role                   String               @default("user")
-  stripeCurrentPeriodEnd DateTime?
-  stripeCustomerId       String?              @unique
-  stripePriceId          String?
-  stripeSubscriptionId   String?              @unique
-  accounts               Account[]
-  apiTokens              ApiToken[]
-  apiUsage               ApiUsage[]
-  blogs                  Blog[]
-  blog_comments          blog_comment[]
-  blog_internal_comments blog_internal_comment[]
-  blog_editor_profile    blog_editor_profile?
-  feedbacks              Feedback[]
-  notification_outbox    NotificationOutbox[]
-  page_comments          PageComment[]
-  proposal_subscriptions ProposalSubscription[]
+  id                       String                   @id @default(cuid())
+  name                     String
+  email                    String
+  emailVerified            Boolean                  @default(false)
+  image                    String?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  avatarUrl                String?
+  membershipExpiresAt      DateTime?
+  membershipTier           String?
+  role                     String                   @default("user")
+  stripeCurrentPeriodEnd   DateTime?
+  stripeCustomerId         String?                  @unique
+  stripePriceId            String?
+  stripeSubscriptionId     String?                  @unique
+  accounts                 Account[]
+  apiTokens                ApiToken[]
+  apiUsage                 ApiUsage[]
+  blogs                    Blog[]
+  blog_comments            blog_comment[]
+  blog_internal_comments   blog_internal_comment[]
+  blog_editor_profile      blog_editor_profile?
+  feedbacks                Feedback[]
+  notification_outbox      NotificationOutbox[]
+  page_comments            PageComment[]
+  proposal_subscriptions   ProposalSubscription[]
   repository_subscriptions RepositorySubscription[]
-  sessions               Session[]
-  upgrade_subscriptions  UpgradeSubscription[]
-  preferences            user_preferences?
+  sessions                 Session[]
+  upgrade_subscriptions    UpgradeSubscription[]
+  author_subscriptions     AuthorSubscription[]
+  preferences              user_preferences?
 
   @@map("user")
 }
@@ -156,26 +157,26 @@ model ApiToken {
 }
 
 model Blog {
-  id                 String         @id @default(cuid())
-  slug               String         @unique
+  id                 String                  @id @default(cuid())
+  slug               String                  @unique
   title              String
   excerpt            String?
   content            String
   coverImage         String?
-  published          Boolean        @default(false)
+  published          Boolean                 @default(false)
   authorId           String
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
   categoryId         String?
   readingTimeMinutes Int?
-  tags               String[]       @default([])
-  featured           Boolean        @default(false)
-  author             User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  category           blog_category? @relation(fields: [categoryId], references: [id])
+  tags               String[]                @default([])
+  featured           Boolean                 @default(false)
+  author             User                    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category           blog_category?          @relation(fields: [categoryId], references: [id])
   blog_comments      blog_comment[]
   blog_likes         blog_like[]
   upgradeId          Int?
-  upgrade            upgrades?      @relation(fields: [upgradeId], references: [id])
+  upgrade            upgrades?               @relation(fields: [upgradeId], references: [id])
   internal_comments  blog_internal_comment[]
   events             blog_event[]
 
@@ -279,6 +280,8 @@ model eip_snapshots {
   category        String?
   deadline        DateTime?     @db.Date
   last_commit_sha String?
+  /// Int[] — EIP numbers this proposal requires (parsed from frontmatter). Scheduler-managed.
+  requires        Int[]
   updated_at      DateTime      @db.Timestamp(6)
   eips            eips          @relation(fields: [eip_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   repositories    repositories? @relation(fields: [repository_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -289,6 +292,21 @@ model eip_snapshots {
   @@index([repository_id], map: "idx_eip_snapshots_repository_id")
   @@index([status, repository_id], map: "idx_eip_snapshots_status_repo")
   @@index([updated_at], map: "idx_eip_snapshots_updated_at")
+}
+
+/// Scheduler-managed log of EIP content changes (commit-level). Not written by the app.
+model eip_content_events {
+  id            BigInt        @id @default(autoincrement())
+  eip_id        Int?
+  repository_id Int?
+  commit_sha    String
+  changed_at    DateTime      @db.Timestamp(6)
+  eips          eips?         @relation(fields: [eip_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  repositories  repositories? @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([eip_id, commit_sha], map: "eip_content_events_unique")
+  @@index([repository_id, changed_at], map: "idx_eip_content_events_repo_changed")
+  @@index([eip_id, changed_at], map: "idx_eip_content_events_eip_changed")
 }
 
 model eip_status_events {
@@ -325,17 +343,18 @@ model eip_type_events {
 }
 
 model eips {
-  id                  Int                   @id @default(autoincrement())
-  eip_number          Int                   @unique
-  created_at          DateTime?             @db.Date
-  title               String?
-  author              String?
-  eip_category_events eip_category_events[]
-  eip_deadline_events eip_deadline_events[]
-  eip_files           eip_files[]
-  eip_snapshots       eip_snapshots?
-  eip_status_events   eip_status_events[]
-  eip_type_events     eip_type_events[]
+  id                     Int                    @id @default(autoincrement())
+  eip_number             Int                    @unique
+  created_at             DateTime?              @db.Date
+  title                  String?
+  author                 String?
+  eip_category_events    eip_category_events[]
+  eip_content_events     eip_content_events[]
+  eip_deadline_events    eip_deadline_events[]
+  eip_files              eip_files[]
+  eip_snapshots          eip_snapshots?
+  eip_status_events      eip_status_events[]
+  eip_type_events        eip_type_events[]
   proposal_subscriptions ProposalSubscription[]
 
   @@index([created_at], map: "idx_eips_created_at")
@@ -362,6 +381,8 @@ model eip_curations {
   headliner_note      String?
   /// "EL" | "CL" — which layer the EIP primarily impacts (curated)
   layer               String?
+  /// [{ question: string, answer: string }] — AI-generated FAQ
+  faq                 Json?
   updated_by          String?
   created_at          DateTime @default(now())
   updated_at          DateTime @default(now()) @updatedAt
@@ -496,46 +517,47 @@ model pull_requests {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model repositories {
-  id                   Int                    @id @default(autoincrement())
-  name                 String                 @unique
-  type                 String?
-  active               Boolean?               @default(true)
-  contributor_activity contributor_activity[]
-  contributor_scores   contributor_scores[]
-  eip_category_events  eip_category_events[]
-  eip_deadline_events  eip_deadline_events[]
-  eip_files            eip_files[]
-  eip_snapshots        eip_snapshots[]
-  eip_status_events    eip_status_events[]
-  eip_type_events      eip_type_events[]
-  issue_custom_tags    issue_custom_tags[]
-  issue_eips           issue_eips[]
-  issue_events         issue_events[]
-  issues               issues[]
-  pr_custom_tags       pr_custom_tags[]
-  pr_events            pr_events[]
-  pr_governance_state  pr_governance_state[]
-  pr_label_snapshot    pr_label_snapshot[]
-  pr_monthly_snapshot  pr_monthly_snapshot[]
-  pr_reviews           pr_reviews[]
-  proposal_subscriptions ProposalSubscription[]
+  id                       Int                      @id @default(autoincrement())
+  name                     String                   @unique
+  type                     String?
+  active                   Boolean?                 @default(true)
+  contributor_activity     contributor_activity[]
+  contributor_scores       contributor_scores[]
+  eip_category_events      eip_category_events[]
+  eip_content_events       eip_content_events[]
+  eip_deadline_events      eip_deadline_events[]
+  eip_files                eip_files[]
+  eip_snapshots            eip_snapshots[]
+  eip_status_events        eip_status_events[]
+  eip_type_events          eip_type_events[]
+  issue_custom_tags        issue_custom_tags[]
+  issue_eips               issue_eips[]
+  issue_events             issue_events[]
+  issues                   issues[]
+  pr_custom_tags           pr_custom_tags[]
+  pr_events                pr_events[]
+  pr_governance_state      pr_governance_state[]
+  pr_label_snapshot        pr_label_snapshot[]
+  pr_monthly_snapshot      pr_monthly_snapshot[]
+  pr_reviews               pr_reviews[]
+  proposal_subscriptions   ProposalSubscription[]
   repository_subscriptions RepositorySubscription[]
-  pull_request_eips    pull_request_eips[]
-  pull_requests        pull_requests[]
+  pull_request_eips        pull_request_eips[]
+  pull_requests            pull_requests[]
 }
 
 model ProposalSubscription {
-  id                String               @id @default(cuid())
-  user_id           String
-  eip_id            Int
-  repository_id     Int
-  filter            String               @default("all")
-  created_at        DateTime             @default(now())
-  updated_at        DateTime             @updatedAt
+  id                  String               @id @default(cuid())
+  user_id             String
+  eip_id              Int
+  repository_id       Int
+  filter              String               @default("all")
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
   notification_outbox NotificationOutbox[]
-  eips              eips                 @relation(fields: [eip_id], references: [id], onDelete: Cascade)
-  repositories      repositories         @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  user              User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  eips                eips                 @relation(fields: [eip_id], references: [id], onDelete: Cascade)
+  repositories        repositories         @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user                User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, eip_id, repository_id], map: "proposal_subscription_unique")
   @@index([user_id], map: "idx_proposal_subscription_user")
@@ -545,15 +567,15 @@ model ProposalSubscription {
 }
 
 model RepositorySubscription {
-  id                   String                @id @default(cuid())
-  user_id              String
-  repository_id        Int
-  filter               String                @default("status")
-  created_at           DateTime              @default(now())
-  updated_at           DateTime              @updatedAt
-  notification_outbox  NotificationOutbox[]
-  repositories         repositories          @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  user                 User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                  String               @id @default(cuid())
+  user_id             String
+  repository_id       Int
+  filter              String               @default("status")
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  notification_outbox NotificationOutbox[]
+  repositories        repositories         @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user                User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, repository_id], map: "repository_subscription_unique")
   @@index([user_id], map: "idx_repository_subscription_user")
@@ -563,15 +585,15 @@ model RepositorySubscription {
 }
 
 model UpgradeSubscription {
-  id                   String                @id @default(cuid())
-  user_id              String
-  upgrade_id           Int
-  filter               String                @default("stage")
-  created_at           DateTime              @default(now())
-  updated_at           DateTime              @updatedAt
-  notification_outbox  NotificationOutbox[]
-  upgrades             upgrades              @relation(fields: [upgrade_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  user                 User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                  String               @id @default(cuid())
+  user_id             String
+  upgrade_id          Int
+  filter              String               @default("stage")
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  notification_outbox NotificationOutbox[]
+  upgrades            upgrades             @relation(fields: [upgrade_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user                User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, upgrade_id], map: "upgrade_subscription_unique")
   @@index([user_id], map: "idx_upgrade_subscription_user")
@@ -580,29 +602,46 @@ model UpgradeSubscription {
   @@map("upgrade_subscription")
 }
 
-model NotificationOutbox {
-  id                  String                @id @default(cuid())
+model AuthorSubscription {
+  id                  String               @id @default(cuid())
   user_id             String
-  proposal_subscription_id String?
+  author_name         String
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  notification_outbox NotificationOutbox[]
+  user                User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, author_name], map: "author_subscription_unique")
+  @@index([user_id], map: "idx_author_subscription_user")
+  @@index([author_name], map: "idx_author_subscription_author")
+  @@map("author_subscription")
+}
+
+model NotificationOutbox {
+  id                         String                  @id @default(cuid())
+  user_id                    String
+  proposal_subscription_id   String?
   repository_subscription_id String?
-  upgrade_subscription_id String?
-  dedupe_key          String                @unique
-  channel             String                @default("email")
-  template            String
-  subject             String
-  payload             Json
-  status              String                @default("queued")
-  attempts            Int                   @default(0)
-  last_attempt_at     DateTime?
-  sent_at             DateTime?
-  failed_at           DateTime?
-  error               String?
-  created_at          DateTime              @default(now())
-  updated_at          DateTime              @updatedAt
-  proposal_subscription ProposalSubscription? @relation(fields: [proposal_subscription_id], references: [id], onDelete: SetNull)
-  repository_subscription RepositorySubscription? @relation(fields: [repository_subscription_id], references: [id], onDelete: SetNull)
-  upgrade_subscription UpgradeSubscription? @relation(fields: [upgrade_subscription_id], references: [id], onDelete: SetNull)
-  user                User                  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  upgrade_subscription_id    String?
+  author_subscription_id     String?
+  dedupe_key                 String                  @unique
+  channel                    String                  @default("email")
+  template                   String
+  subject                    String
+  payload                    Json
+  status                     String                  @default("queued")
+  attempts                   Int                     @default(0)
+  last_attempt_at            DateTime?
+  sent_at                    DateTime?
+  failed_at                  DateTime?
+  error                      String?
+  created_at                 DateTime                @default(now())
+  updated_at                 DateTime                @updatedAt
+  proposal_subscription      ProposalSubscription?   @relation(fields: [proposal_subscription_id], references: [id], onDelete: SetNull)
+  repository_subscription    RepositorySubscription? @relation(fields: [repository_subscription_id], references: [id], onDelete: SetNull)
+  upgrade_subscription       UpgradeSubscription?    @relation(fields: [upgrade_subscription_id], references: [id], onDelete: SetNull)
+  author_subscription        AuthorSubscription?     @relation(fields: [author_subscription_id], references: [id], onDelete: SetNull)
+  user                       User                    @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([status, created_at], map: "idx_notification_outbox_status_created")
   @@index([user_id], map: "idx_notification_outbox_user")
@@ -686,16 +725,24 @@ model pr_events {
 }
 
 model pr_governance_state {
-  pr_number       Int
-  repository_id   Int
-  current_state   String
-  waiting_since   DateTime?    @db.Timestamp(6)
-  last_actor      String?
-  last_event_type String?
-  updated_at      DateTime?    @default(now()) @db.Timestamp(6)
-  category        String?
-  subcategory     String?
-  repositories    repositories @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  pr_number                    Int
+  repository_id                Int
+  current_state                String
+  waiting_since                DateTime?    @db.Timestamp(6)
+  last_actor                   String?
+  last_event_type              String?
+  updated_at                   DateTime?    @default(now()) @db.Timestamp(6)
+  category                     String?
+  subcategory                  String?
+  // Scheduler-derived editorial governance flags.
+  needs_editor_attention       Boolean?
+  reason                       String?
+  has_other_participants       Boolean?     @default(false)
+  ethbot_needs_editor_review   Boolean?
+  has_merge_conflicts          Boolean?     @default(false)
+  has_stagnant_preamble_status Boolean?     @default(false)
+  opened_by_preamble_author    Boolean?
+  repositories                 repositories @relation(fields: [repository_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@id([repository_id, pr_number])
 }
@@ -1004,13 +1051,13 @@ model blog_internal_comment {
 model blog_event {
   id        String   @id @default(cuid())
   blogId    String
-  type      String   // 'view', 'scroll_depth', 'click_eip', 'conversion'
-  value     String?  // e.g., '50' for 50% scroll, 'EIP-1559' for click
+  type      String // 'view', 'scroll_depth', 'click_eip', 'conversion'
+  value     String? // e.g., '50' for 50% scroll, 'EIP-1559' for click
   userId    String?
   sessionId String?
   createdAt DateTime @default(now())
 
-  blog      Blog     @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  blog Blog @relation(fields: [blogId], references: [id], onDelete: Cascade)
 
   @@index([blogId, type])
   @@map("blog_event")

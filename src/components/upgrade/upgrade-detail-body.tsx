@@ -24,6 +24,7 @@ import type {
   UpgradeCompositionEvent,
   UpgradeTimelinePoint,
 } from '@/components/upgrade/types';
+import { CopyLinkButton } from '@/components/header';
 
 interface TocItem {
   id: string;
@@ -309,9 +310,12 @@ export function UpgradeDetailBody({
           {entry && (
             <section id="about" className="scroll-mt-28">
               <div className="rounded-xl border border-border bg-card/60 p-4 sm:p-5">
-                <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                  About {name}
-                </h2>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                    About {name}
+                  </h2>
+                  <CopyLinkButton sectionId="about" className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
+                </div>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {entry.description}
                 </p>
@@ -328,11 +332,14 @@ export function UpgradeDetailBody({
           {headliners.length > 0 && (
             <section id="headliners" className="scroll-mt-28">
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 sm:p-5">
-                <div className="flex items-center gap-2">
-                  <Star className="h-4 w-4 fill-current text-primary" />
-                  <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                    Headliner{headliners.length > 1 ? 's' : ''}
-                  </h2>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Star className="h-4 w-4 fill-current text-primary" />
+                    <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                      Headliner{headliners.length > 1 ? 's' : ''}
+                    </h2>
+                  </div>
+                  <CopyLinkButton sectionId="headliners" className="h-7 w-7 rounded-md border border-border/40 bg-card/60 hover:border-primary/40 hover:bg-primary/10" />
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   The defining feature{headliners.length > 1 ? 's' : ''} this upgrade is built
@@ -384,6 +391,11 @@ export function UpgradeDetailBody({
                   >
                     {allEips.length}
                   </span>
+                  <CopyLinkButton
+                    sectionId={bucket === 'declined' ? 'DFI' : bucket === 'proposed' ? 'PFI' : bucket === 'considered' ? 'CFI' : bucket === 'scheduled' ? 'SFI' : 'INCLUDED'}
+                    className="h-6 w-6 rounded-md border border-border/40 bg-muted/40 hover:border-primary/40 hover:bg-primary/10"
+                    tooltipLabel="Copy stage link"
+                  />
                   {isDeclined && !isFiltering && (
                     <button
                       onClick={() => setIsDeclinedExpanded((current) => !current)}
@@ -434,13 +446,16 @@ export function UpgradeDetailBody({
           {/* Recent changes */}
           {showActivity && (
             <section id="activity" className="scroll-mt-28">
-              <div className="mb-3">
-                <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                  Recent changes
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Every time an EIP entered, left, or moved stages in this upgrade.
-                </p>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                    Recent changes
+                  </h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Every time an EIP entered, left, or moved stages in this upgrade.
+                  </p>
+                </div>
+                <CopyLinkButton sectionId="activity" className="h-7 w-7 rounded-md border border-border bg-muted/65 hover:border-primary/45 hover:bg-primary/10" />
               </div>
               <div className="overflow-hidden rounded-xl border border-border bg-card/60">
                 <ul className="divide-y divide-border/60">
