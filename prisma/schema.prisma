@@ -636,7 +636,9 @@ model NotificationOutbox {
   failed_at                  DateTime?
   error                      String?
   created_at                 DateTime                @default(now())
-  updated_at                 DateTime                @updatedAt
+  // @default(now()) is required on top of @updatedAt: the scheduler inserts here with raw
+  // SQL (not Prisma), and @updatedAt alone emits no DB default -> NOT NULL violation.
+  updated_at                 DateTime                @default(now()) @updatedAt
   proposal_subscription      ProposalSubscription?   @relation(fields: [proposal_subscription_id], references: [id], onDelete: SetNull)
   repository_subscription    RepositorySubscription? @relation(fields: [repository_subscription_id], references: [id], onDelete: SetNull)
   upgrade_subscription       UpgradeSubscription?    @relation(fields: [upgrade_subscription_id], references: [id], onDelete: SetNull)
@@ -651,7 +653,8 @@ model NotificationOutbox {
 model NotifierCheckpoint {
   key        String   @id
   cursor     String?
-  updated_at DateTime @updatedAt
+  // Same reason as notification_outbox: written by the scheduler via raw SQL.
+  updated_at DateTime @default(now()) @updatedAt
 
   @@map("notifier_checkpoint")
 }
