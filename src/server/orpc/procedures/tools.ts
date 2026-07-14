@@ -363,12 +363,19 @@ const repoIds = await getRepoIds(input.repo);
       search: z.string().optional(),
       page: z.number().default(1),
       pageSize: z.number().default(10),
+      sortBy: z.enum(['wait', 'pr', 'created']).default('wait'),
+      sortDir: z.enum(['asc', 'desc']).default('desc'),
     }))
     .handler(async ({ context, input }) => {
-const { repo, govState, processType, search, page, pageSize } = input;
+const { repo, govState, processType, search, page, pageSize, sortBy, sortDir } = input;
       const offset = (page - 1) * pageSize;
       const govStates = typeof govState === 'string' ? [govState] : (govState ?? []);
       const processTypes = typeof processType === 'string' ? [processType] : (processType ?? []);
+
+      // Whitelisted so the raw query can never take user-controlled SQL.
+      const ORDER_COLUMNS = { wait: 'f.wait_days', pr: 'f.pr_number', created: 'f.created_at' } as const;
+      const orderColumn = ORDER_COLUMNS[sortBy];
+      const orderDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
 
       const results = await prisma.$queryRawUnsafe<Array<{
         pr_number: number;
@@ -425,7 +432,7 @@ const { repo, govState, processType, search, page, pageSize } = input;
         )
         SELECT f.*, (SELECT COUNT(*) FROM filtered)::bigint AS total_count
         FROM filtered f
-        ORDER BY f.wait_days DESC
+        ORDER BY ${orderColumn} ${orderDirection}, f.pr_number DESC
         LIMIT $5 OFFSET $6
       `, repo || null, govStates.length ? govStates : null, processTypes.length ? processTypes : null, search || null, pageSize, offset);
 
