@@ -498,4 +498,171 @@ export const dashboardProcedures = {
         throw err;
       }
     }),
+
+  getWeeklyRecap: os
+    .$context<Ctx>()
+    .input(z.object({}))
+    .handler(async ({ context }) => {
+      await checkAPIToken(context.headers);
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const [newProposals, statusChanges, mergedPRs, devnets, recentCalls, upcomingCalls, lastCallEIPs] = await Promise.all([
+        prisma.eips.findMany({
+          where: {
+            created_at: { gte: sevenDaysAgo },
+          },
+          select: {
+            eip_number: true,
+            title: true,
+            created_at: true,
+            eip_snapshots: {
+              select: {
+                status: true,
+                category: true,
+              }
+            }
+          },
+          orderBy: { created_at: "desc" },
+        }),
+
+        prisma.$queryRawUnsafe<Array<{ eip_number: number; title: string; from_status: string; to_status: string; changed_at: Date; category: string | null }>>(
+          `SELECT e.eip_number, e.title, se.from_status, se.to_status, se.changed_at, s.category
+           FROM eip_status_events se
+           JOIN eips e ON se.eip_id = e.id
+           LEFT JOIN eip_snapshots s ON s.eip_id = e.id
+           WHERE se.changed_at >= $1
+           ORDER BY se.changed_at DESC`,
+          sevenDaysAgo
+        ),
+
+        prisma.pull_requests.findMany({
+          where: {
+            merged_at: { gte: sevenDaysAgo },
+          },
+          select: {
+            pr_number: true,
+            title: true,
+            author: true,
+            merged_at: true,
+            repositories: {
+              select: {
+                name: true,
+              }
+            }
+          },
+          orderBy: { merged_at: "desc" },
+        }),
+
+        prisma.devnet_specs.findMany({
+          orderBy: [{ series: "asc" }, { devnet_number: "desc" }],
+          take: 6,
+          select: {
+            id: true,
+            series: true,
+            devnet_number: true,
+            title: true,
+            active: true,
+            genesis_time: true,
+            scraped_at: true,
+          }
+        }),
+
+        prisma.protocol_calls.findMany({
+          orderBy: { occurred_on: "desc" },
+          take: 3,
+          select: {
+            series: true,
+            call_number: true,
+            occurred_on: true,
+            display_name: true,
+            tldr: true,
+            key_decisions: true,
+          }
+        }),
+
+        prisma.protocol_calls_upcoming.findMany({
+          where: {
+            OR: [
+              { occurs_on: null },
+              { occurs_on: { gte: new Date() } },
+            ]
+          },
+          orderBy: [{ occurs_on: "asc" }, { occurs_at: "asc" }],
+          take: 5,
+        }),
+
+        prisma.eip_snapshots.findMany({
+          where: {
+            status: "Last Call",
+          },
+          select: {
+            deadline: true,
+            eips: {
+              select: {
+                eip_number: true,
+                title: true,
+              }
+            }
+          },
+          orderBy: { deadline: "asc" },
+        }),
+      ]);
+
+      return {
+        newProposals: newProposals.map(p => ({
+          number: p.eip_number,
+          title: p.title || "",
+          category: p.eip_snapshots?.category || null,
+          status: p.eip_snapshots?.status || "Draft",
+          createdAt: p.created_at?.toISOString() || null,
+        })),
+        statusChanges: statusChanges.map(sc => ({
+          number: sc.eip_number,
+          title: sc.title || "",
+          from: sc.from_status,
+          to: sc.to_status,
+          changedAt: sc.changed_at.toISOString(),
+          category: sc.category,
+        })),
+        mergedPRs: mergedPRs.map(pr => ({
+          number: pr.pr_number,
+          title: pr.title || "",
+          author: pr.author || "",
+          mergedAt: pr.merged_at ? pr.merged_at.toISOString() : null,
+          repoName: pr.repositories?.name || "",
+        })),
+        devnets: devnets.map(d => ({
+          id: d.id,
+          series: d.series,
+          number: d.devnet_number,
+          title: d.title || "",
+          active: d.active,
+          genesisTime: d.genesis_time ? Number(d.genesis_time) : null,
+          scrapedAt: d.scraped_at ? d.scraped_at.toISOString() : null,
+        })),
+        recentCalls: recentCalls.map(c => ({
+          series: c.series,
+          number: c.call_number,
+          occurredOn: c.occurred_on.toISOString().slice(0, 10),
+          displayName: c.display_name,
+          tldr: c.tldr || null,
+          keyDecisions: c.key_decisions || null,
+        })),
+        upcomingCalls: upcomingCalls.map(c => ({
+          series: c.series,
+          title: c.title || "",
+          occursOn: c.occurs_on ? c.occurs_on.toISOString().slice(0, 10) : null,
+          callNumber: c.call_number,
+          issueNumber: c.issue_number,
+          issueUrl: c.issue_url,
+        })),
+        lastCallEIPs: lastCallEIPs.map(lc => ({
+          number: lc.eips?.eip_number || 0,
+          title: lc.eips?.title || "",
+          deadline: lc.deadline ? lc.deadline.toISOString().slice(0, 10) : null,
+        })),
+      };
+    }),
 }
