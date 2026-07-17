@@ -149,7 +149,7 @@ export function MonthlyDrilldown({ initialMonth, basePath = "/insights" }: Month
   const [changeFilter, setChangeFilter] = useState<"all" | "status-change" | "content-change" | "metadata-change">("status-change");
   const [sortFilter, setSortFilter] = useState<"updated_desc" | "status_first" | "prs_desc" | "impact_desc">("updated_desc");
   const [globalSearch, setGlobalSearch] = useState("");
-  const [weekFilter, setWeekFilter] = useState<number | null>(null);
+  const [rangeDays, setRangeDays] = useState<number | null>(null); // null = all time
   const tableSectionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -229,7 +229,7 @@ export function MonthlyDrilldown({ initialMonth, basePath = "/insights" }: Month
     setTableStatusFilter(null);
     setTableRepoFilter(null);
     setColumnSearch({});
-    setWeekFilter(null);
+    setRangeDays(null);
   }, [repo, month]);
 
   const setParams = (updates: Record<string, string | null>) => {
@@ -284,28 +284,27 @@ export function MonthlyDrilldown({ initialMonth, basePath = "/insights" }: Month
     );
   }, [rows, columnSearch]);
 
-  // Split the month into weeks so the newsletter can zoom into "this week's" changes.
-  const weekOptions = useMemo(() => {
-    const [y, m] = month.split("-").map(Number);
-    if (!y || !m) return [] as Array<{ index: number; label: string; range: string }>;
-    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    return Array.from({ length: Math.ceil(daysInMonth / 7) }, (_, i) => ({
-      index: i,
-      label: `W${i + 1}`,
-      range: `${i * 7 + 1}–${Math.min((i + 1) * 7, daysInMonth)}`,
-    }));
-  }, [month]);
-
-  const weekFilteredRows = useMemo(() => {
-    if (weekFilter == null) return filteredRows;
-    return filteredRows.filter((r) => {
+  // Rolling "last N days" window for the newsletter — anchored to the most recent change in view,
+  // so it works whether you're looking at the current month or a past one.
+  const rangeFilteredRows = useMemo(() => {
+    if (rangeDays == null) return filteredRows;
+    const rowTime = (r: { statusTransition: { changedAt: string } | null; latestChangedAt: string }) => {
       const at = r.statusTransition?.changedAt || r.latestChangedAt;
-      if (!at) return false;
-      const d = new Date(at);
-      if (Number.isNaN(d.getTime())) return false;
-      return Math.floor((d.getUTCDate() - 1) / 7) === weekFilter;
+      const t = at ? new Date(at).getTime() : NaN;
+      return Number.isNaN(t) ? null : t;
+    };
+    let ref = 0;
+    for (const r of filteredRows) {
+      const t = rowTime(r);
+      if (t != null && t > ref) ref = t;
+    }
+    if (!ref) ref = Date.now();
+    const cutoff = ref - rangeDays * 86_400_000;
+    return filteredRows.filter((r) => {
+      const t = rowTime(r);
+      return t != null && t >= cutoff;
     });
-  }, [filteredRows, weekFilter]);
+  }, [filteredRows, rangeDays]);
 
   const statusRepoMatrix = useMemo(() => {
     const initRow = () => ({ eips: 0, ercs: 0, rips: 0 });
@@ -711,7 +710,7 @@ export function MonthlyDrilldown({ initialMonth, basePath = "/insights" }: Month
     setChangeFilter("status-change");
     setSortFilter("updated_desc");
     setGlobalSearch("");
-    setWeekFilter(null);
+    setRangeDays(null);
     setParams({ page: "1" });
   };
 
@@ -1052,13 +1051,13 @@ export function MonthlyDrilldown({ initialMonth, basePath = "/insights" }: Month
                 </div>
               </div>
 
-              <div ref={tableSectionRef} className="order-first scroll-mt-24 overflow-hidden rounded-xl border border-border bg-card">
+              <div ref={tableSectionRef} className="scroll-mt-24 overflow-hidden rounded-xl border border-border bg-card">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2.5">
                   <h3 className="text-sm font-semibold text-foreground">
                     Proposal Changes — {monthLabel(month)}
-                    {weekFilter != null && weekOptions[weekFilter] ? ` · Week ${weekFilter + 1} (${weekOptions[weekFilter].range})` : ""}
+                    {rangeDays != null ? ` · last ${rangeDays} days` : ""}
                   </h3>
-                  <span className="text-xs text-muted-foreground">{weekFilteredRows.length} shown</span>
+                  <span className="text-xs text-muted-foreground">{rangeFilteredRows.length} shown</span>
                 </div>
                 {/* Filter bar — defaults to status changes, most recent first. */}
                 <div className="space-y-2.5 border-b border-border bg-muted/20 px-3 py-3">
@@ -1112,27 +1111,23 @@ export function MonthlyDrilldown({ initialMonth, basePath = "/insights" }: Month
                       Reset
                     </button>
                   </div>
-                  {weekOptions.length > 1 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Week</span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Show</span>
+                    {[
+                      { days: null as number | null, label: "All this month" },
+                      { days: 7, label: "Last 7 days" },
+                      { days: 14, label: "Last 14 days" },
+                      { days: 30, label: "Last 30 days" },
+                    ].map((opt) => (
                       <button
-                        onClick={() => setWeekFilter(null)}
-                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${weekFilter == null ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                        key={opt.label}
+                        onClick={() => setRangeDays(opt.days)}
+                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${rangeDays === opt.days ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
                       >
-                        Whole month
+                        {opt.label}
                       </button>
-                      {weekOptions.map((w) => (
-                        <button
-                          key={w.index}
-                          onClick={() => setWeekFilter(w.index)}
-                          title={`${monthLabel(month)}, days ${w.range}`}
-                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${weekFilter === w.index ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
-                        >
-                          {w.label} <span className="opacity-60">{w.range}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1162,13 +1157,13 @@ export function MonthlyDrilldown({ initialMonth, basePath = "/insights" }: Month
                       </tr>
                     </thead>
                     <tbody>
-                      {weekFilteredRows.length === 0 ? (
+                      {rangeFilteredRows.length === 0 ? (
                         <tr>
                           <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
-                            No {changeFilter === "all" ? "changed" : changeTabs.find((t) => t.key === changeFilter)?.label.toLowerCase()} proposals found for {monthLabel(month)}{weekFilter != null ? `, week ${weekFilter + 1}` : ""}.
+                            No {changeFilter === "all" ? "changed" : changeTabs.find((t) => t.key === changeFilter)?.label.toLowerCase()} proposals found for {monthLabel(month)}{rangeDays != null ? ` in the last ${rangeDays} days` : ""}.
                           </td>
                         </tr>
-                      ) : weekFilteredRows.map((r) => (
+                      ) : rangeFilteredRows.map((r) => (
                         <tr key={`${r.repo}-${r.number}`} className="border-b border-border/60 hover:bg-muted/20">
                           <td className="px-3 py-2 align-top">
                             <Link href={r.proposalUrl} className="font-mono text-xs font-semibold text-primary hover:underline">
