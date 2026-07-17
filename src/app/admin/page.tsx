@@ -382,6 +382,13 @@ export default function AdminPage() {
               <Users className="h-4 w-4" />
               Client Priority
             </Link>
+            <Link
+              href="/admin/weekly-recap"
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            >
+              <Send className="h-4 w-4" />
+              Weekly Recap
+            </Link>
           </div>
         </div>
       </section>

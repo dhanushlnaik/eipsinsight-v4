@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { client } from "@/lib/orpc";
 import { toast } from "sonner";
 import {
@@ -9,20 +9,17 @@ import {
   Calendar,
   Check,
   CheckSquare,
+  ChevronLeft,
   Clock,
   Copy,
   FileText,
   Flame,
-  GitMerge,
-  GitPullRequest,
   Layers,
   Loader2,
   RefreshCw,
   Search,
-  Send,
-  Sparkles,
+  Shield,
   Square,
-  Terminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,22 +27,16 @@ import { Badge } from "@/components/ui/badge";
 
 type WeeklyData = Awaited<ReturnType<typeof client.dashboard.getWeeklyRecap>>;
 
-const labelClass = "mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
-const inputClass = "w-full rounded-md border border-border bg-muted/40 px-3 py-1.5 text-sm text-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all outline-none";
+const labelClass = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
+const inputClass = "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all outline-none";
 
 export default function WeeklyRecapPage() {
-  const router = useRouter();
-  
   // App States
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [data, setData] = useState<WeeklyData | null>(null);
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   
-  // Blog Post Fields
-  const [title, setTitle] = useState(`Ethereum Standards Weekly - ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`);
-  const [slug, setSlug] = useState(`ethereum-standards-weekly-${new Date().toISOString().slice(0, 10)}`);
-  const [selectedCategory, setSelectedCategory] = useState("");
+  // Parameter State
+  const [recapDate, setRecapDate] = useState(new Date().toISOString().slice(0, 10));
   
   // Selection States (IDs of items to include in report)
   const [selectedProposals, setSelectedProposals] = useState<Record<number, boolean>>({});
@@ -73,25 +64,13 @@ export default function WeeklyRecapPage() {
   const [ecosystemAdoption, setEcosystemAdoption] = useState("");
   const [watchNextWeek, setWatchNextWeek] = useState("");
   const [spotlightInfo, setSpotlightInfo] = useState("");
-  
-  // Live Compiled Markdown
-  const [markdown, setMarkdown] = useState("");
 
   // Load Data
   const loadData = async () => {
     setLoading(true);
     try {
-      const [recapData, blogCats] = await Promise.all([
-        client.dashboard.getWeeklyRecap({}),
-        client.blog.listCategories(),
-      ]);
+      const recapData = await client.dashboard.getWeeklyRecap({});
       setData(recapData);
-      setCategories(blogCats);
-      if (blogCats.length > 0) {
-        // Pre-select Newsletter or News if present
-        const newsCat = blogCats.find(c => c.name.toLowerCase().includes("newsletter") || c.name.toLowerCase().includes("news"));
-        setSelectedCategory(newsCat?.id || blogCats[0].id);
-      }
 
       // Pre-fill selection objects to true
       const proposalsSel: Record<number, boolean> = {};
@@ -123,7 +102,7 @@ export default function WeeklyRecapPage() {
       setSelectedLastCalls(lastCallSel);
 
     } catch (error) {
-      toast.error("Failed to load recap data");
+      toast.error("Failed to load weekly recap data");
       console.error(error);
     } finally {
       setLoading(false);
@@ -153,9 +132,9 @@ export default function WeeklyRecapPage() {
           benefits: cur.benefits || [],
           tradeoffs: cur.tradeoffs || [],
         });
-        toast.success("Layman curation loaded successfully!");
+        toast.success(`Curation loaded for EIP-${num}!`);
       } else {
-        // Fallback info from generic EIP meta
+        // Fallback info
         setFeaturedDetails({
           number: num,
           title: `EIP-${num}`,
@@ -163,7 +142,7 @@ export default function WeeklyRecapPage() {
           benefits: [],
           tradeoffs: [],
         });
-        toast.info("No customized layman curation found; using default placeholders.");
+        toast.info(`No customized layman curation found; using default placeholders.`);
       }
     } catch {
       toast.error("Failed to query EIP curation details");
@@ -172,15 +151,21 @@ export default function WeeklyRecapPage() {
     }
   };
 
-  // Compile Live Markdown whenever fields or selections change
-  useEffect(() => {
-    if (!data) return;
+  // Compile Markdown Content on demand
+  const generateMarkdown = () => {
+    if (!data) return "";
 
-    let md = `# ${title}\n\n`;
-    md += `Ethereum protocol upgrades, governance decisions, and EIP analysis — delivered to your inbox every week.\n\n---\n\n`;
+    const formattedDate = new Date(recapDate).toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    let md = `# Ethereum Standards Weekly Recap - ${formattedDate}\n\n`;
+    md += `Ethereum protocol upgrades, governance decisions, and EIP analysis — compiled directly from EIPsInsight.\n\n---\n\n`;
 
     // 1. STANDARDS IN MOTION
-    md += `## 1. Standards in Motion\n\n`;
+    md += `## 3.1 Standards in Motion\n\n`;
     
     // New EIPs/ERCs
     const selectedNew = data.newProposals.filter(p => selectedProposals[p.number]);
@@ -219,7 +204,7 @@ export default function WeeklyRecapPage() {
     }
 
     // 2. GOVERNANCE & UPGRADE WATCH
-    md += `## 2. Governance & Upgrade Watch\n\n`;
+    md += `## 3.2 Governance & Upgrade Watch\n\n`;
     
     // Call Decisions
     const selectedCallData = data.recentCalls.filter(c => selectedCalls[`${c.series}-${c.number}`]);
@@ -256,7 +241,7 @@ export default function WeeklyRecapPage() {
 
     // 3. FEATURED PROPOSAL
     if (featuredDetails) {
-      md += `## 3. Featured Proposal: EIP-${featuredDetails.number}\n\n`;
+      md += `## 3.3 Featured Proposal: EIP-${featuredDetails.number}\n\n`;
       md += `### 🔍 ${featuredDetails.title}\n\n`;
       if (featuredDetails.summary) {
         md += `**Problem and Technical Approach:**\n${featuredDetails.summary}\n\n`;
@@ -275,7 +260,7 @@ export default function WeeklyRecapPage() {
     }
 
     // 4. CONTRIBUTOR CORNER
-    md += `## 4. Contributor Corner\n\n`;
+    md += `## 3.4 Contributor Corner\n\n`;
     
     // Last Calls seeking review
     const selectedLast = data.lastCallEIPs.filter(lc => selectedLastCalls[lc.number]);
@@ -290,7 +275,7 @@ export default function WeeklyRecapPage() {
     md += `* Check editor activities and contributions on the [Editors Leaderboard](https://eipsinsight.com/analytics/editors).\n\n`;
 
     // 5. WHAT TO WATCH NEXT WEEK
-    md += `## 5. What to Watch Next Week\n\n`;
+    md += `## 3.5 What to Watch Next Week\n\n`;
     const selectedUpcomingData = data.upcomingCalls.filter(c => selectedUpcoming[`${c.series}-${c.callNumber || c.issueNumber}`]);
     if (selectedUpcomingData.length > 0) {
       md += `### 🗓️ Scheduled Core Meetings & Office Hours\n`;
@@ -307,429 +292,406 @@ export default function WeeklyRecapPage() {
 
     // ROTATING SECTIONS
     if (spotlightInfo.trim()) {
-      md += `## 🎙️ Standards Spotlight\n\n${spotlightInfo}\n\n`;
+      md += `## 4.1 Standards Spotlight\n\n${spotlightInfo}\n\n`;
     }
     if (enterpriseBrief.trim()) {
-      md += `## 🏢 Enterprise Brief: Why This Matters to Businesses\n\n${enterpriseBrief}\n\n`;
+      md += `## 4.2 Enterprise Brief: Why This Matters to Businesses\n\n${enterpriseBrief}\n\n`;
     }
     if (ecosystemAdoption.trim()) {
-      md += `## 🚀 Ecosystem Adoption & Implementations\n\n${ecosystemAdoption}\n\n`;
+      md += `## 4.3 Ecosystem Adoption & Implementations\n\n${ecosystemAdoption}\n\n`;
     }
 
-    setMarkdown(md);
-  }, [
-    title, data, selectedProposals, selectedChanges, selectedPRs, selectedDevnets,
-    selectedCalls, selectedUpcoming, selectedLastCalls, featuredDetails,
-    manualAcdHighlights, enterpriseBrief, ecosystemAdoption, watchNextWeek, spotlightInfo
-  ]);
-
-  // Actions
-  const handleCopy = () => {
-    navigator.clipboard.writeText(markdown);
-    toast.success("Markdown copied to clipboard!");
+    return md;
   };
 
-  const handleCreateDraft = async () => {
-    if (!title.trim() || !slug.trim()) {
-      toast.error("Please provide a Title and Slug for the draft");
+  const handleCopyMarkdown = () => {
+    const md = generateMarkdown();
+    if (!md) {
+      toast.error("No data available to compile");
       return;
     }
-    setSaving(true);
-    try {
-      await client.blog.create({
-        title,
-        slug,
-        content: markdown,
-        published: false,
-        categoryId: selectedCategory || null,
-        excerpt: `Weekly Ethereum Standards & Governance updates for ${new Date().toLocaleDateString("en", { month: "short", day: "numeric" })}.`,
-      });
-      toast.success("Blog draft created successfully!");
-      router.push("/admin/blogs");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create blog draft");
-    } finally {
-      setSaving(false);
-    }
+    navigator.clipboard.writeText(md);
+    toast.success("Markdown compiled and copied to clipboard!");
   };
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background text-foreground">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Gathering weekly metrics...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 text-slate-100 font-sans">
-      <div className="mx-auto max-w-[1600px] space-y-6">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
-              <Sparkles className="h-4 w-4" /> Admin Tools
+    <div className="min-h-screen bg-background">
+      
+      {/* ── Subheader ── */}
+      <section className="border-b border-border bg-card/60">
+        <div className="page-shell py-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs uppercase tracking-wide text-primary">
+                <Shield className="h-3.5 w-3.5" />
+                Admin Console
+              </div>
+              <h1 className="dec-title persona-title mt-3 text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
+                Weekly Recap Generator
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Evaluate standards, ACD calls, and devnets, then compile and copy the recap markdown.
+              </p>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white mt-1">Weekly Recap Generator</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={loadData} className="border-slate-800 hover:bg-slate-900 text-slate-300">
-              <RefreshCw className="mr-2 h-4 w-4" /> Reload Data
-            </Button>
-            <Button onClick={handleCopy} className="bg-slate-800 hover:bg-slate-700 text-white">
-              <Copy className="mr-2 h-4 w-4" /> Copy Markdown
-            </Button>
-            <Button onClick={handleCreateDraft} disabled={saving} className="bg-primary hover:bg-primary/95 text-black font-semibold">
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              Publish Blog Draft
-            </Button>
-          </div>
-        </div>
-
-        {/* Two-Column Workspace */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          
-          {/* LEFT: Controls, Toggles, & Inputs */}
-          <div className="space-y-6 max-h-[85vh] overflow-y-auto pr-2 custom-scrollbar">
             
-            {/* Metadata Card */}
-            <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-md">
-              <CardHeader className="py-4">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-300">Post Metadata</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelClass}>Post Title</label>
-                    <input value={title} onChange={e => setTitle(e.target.value)} className={inputClass} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>URL Slug</label>
-                    <input value={slug} onChange={e => setSlug(e.target.value)} className={inputClass} />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClass}>Blog Category</label>
-                  <select 
-                    value={selectedCategory} 
-                    onChange={e => setSelectedCategory(e.target.value)} 
-                    className="w-full rounded-md border border-border bg-slate-900 px-3 py-1.5 text-sm text-foreground focus:border-primary/50 outline-none"
-                  >
-                    <option value="">No Category</option>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-center gap-3 self-start sm:self-auto">
+              <Link href="/admin">
+                <Button variant="outline" className="border-border hover:bg-muted">
+                  <ChevronLeft className="mr-1.5 h-4 w-4" /> Back to Dashboard
+                </Button>
+              </Link>
+              <Button onClick={handleCopyMarkdown} className="bg-primary hover:bg-primary/95 text-black font-semibold shadow-md">
+                <Copy className="mr-1.5 h-4 w-4" /> Copy Recap Markdown
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            {/* Standards in Motion Toggles */}
-            <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-md">
-              <CardHeader className="py-4 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-orange-500" /> 1. Standards in Motion
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* New proposals */}
-                <div>
-                  <h4 className="text-xs font-bold text-slate-400 mb-2">New Proposals (Last 7 Days)</h4>
-                  {data?.newProposals.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic">No new proposals found.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {data?.newProposals.map(p => (
-                        <div key={p.number} className="flex items-start gap-2.5 text-sm">
-                          <button onClick={() => setSelectedProposals(prev => ({ ...prev, [p.number]: !prev[p.number] }))} className="text-slate-400 hover:text-white mt-0.5">
-                            {selectedProposals[p.number] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
-                          </button>
-                          <span className="text-slate-300">
-                            <Badge variant="outline" className="mr-1 bg-slate-950 text-[10px] py-0">{p.status}</Badge>
-                            EIP-{p.number}: {p.title}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Status Transitions */}
-                <div className="border-t border-slate-800 pt-4">
-                  <h4 className="text-xs font-bold text-slate-400 mb-2">Status Transitions (Last 7 Days)</h4>
-                  {data?.statusChanges.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic">No status transitions found.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {data?.statusChanges.map(sc => {
-                        const key = `${sc.number}-${sc.to}`;
-                        return (
-                          <div key={key} className="flex items-start gap-2.5 text-sm">
-                            <button onClick={() => setSelectedChanges(prev => ({ ...prev, [key]: !prev[key] }))} className="text-slate-400 hover:text-white mt-0.5">
-                              {selectedChanges[key] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
-                            </button>
-                            <span className="text-slate-300">
-                              EIP-{sc.number} ➔ <span className="text-primary font-semibold">{sc.to}</span> ({sc.title})
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Merged PRs */}
-                <div className="border-t border-slate-800 pt-4">
-                  <h4 className="text-xs font-bold text-slate-400 mb-2">Merged Pull Requests</h4>
-                  {data?.mergedPRs.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic">No merged PRs found.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {data?.mergedPRs.map(pr => (
-                        <div key={pr.number} className="flex items-start gap-2.5 text-sm">
-                          <button onClick={() => setSelectedPRs(prev => ({ ...prev, [pr.number]: !prev[pr.number] }))} className="text-slate-400 hover:text-white mt-0.5">
-                            {selectedPRs[pr.number] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
-                          </button>
-                          <span className="text-slate-300">
-                            PR #{pr.number}: {pr.title} (by @{pr.author})
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Governance & Upgrade watch Toggles */}
-            <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-md">
-              <CardHeader className="py-4">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-indigo-500" /> 2. Governance & Upgrade Watch
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Recent calls decisions */}
-                <div>
-                  <h4 className="text-xs font-bold text-slate-400 mb-2">Recent ACD Calls & Decisions</h4>
-                  {data?.recentCalls.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic">No recent calls found.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {data?.recentCalls.map(c => {
-                        const key = `${c.series}-${c.number}`;
-                        return (
-                          <div key={key} className="flex items-start gap-2.5 text-sm">
-                            <button onClick={() => setSelectedCalls(prev => ({ ...prev, [key]: !prev[key] }))} className="text-slate-400 hover:text-white mt-0.5">
-                              {selectedCalls[key] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
-                            </button>
-                            <div className="text-slate-300 flex-1">
-                              <p className="font-semibold text-white">{c.displayName || `${c.series} #${c.number}`}</p>
-                              {c.tldr && <p className="text-xs text-slate-400 mt-0.5">{String(c.tldr)}</p>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Manual governance notes */}
-                <div className="border-t border-slate-800 pt-4">
-                  <label className={labelClass}>Manual Call Highlights & Governance Notes</label>
-                  <textarea 
-                    value={manualAcdHighlights} 
-                    onChange={e => setManualAcdHighlights(e.target.value)} 
-                    placeholder="Enter manual bullet points or decisions from Core Dev calls..." 
-                    className="w-full h-20 rounded-md border border-border bg-slate-900 px-3 py-1.5 text-sm text-foreground outline-none resize-y"
-                  />
-                </div>
-
-                {/* Active Devnets */}
-                <div className="border-t border-slate-800 pt-4">
-                  <h4 className="text-xs font-bold text-slate-400 mb-2">Devnets Progression</h4>
-                  {data?.devnets.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic">No devnets specs found.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {data?.devnets.map(d => (
-                        <div key={d.id} className="flex items-start gap-2.5 text-sm">
-                          <button onClick={() => setSelectedDevnets(prev => ({ ...prev, [d.id]: !prev[d.id] }))} className="text-slate-400 hover:text-white mt-0.5">
-                            {selectedDevnets[d.id] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
-                          </button>
-                          <span className="text-slate-300">
-                            {d.series.toUpperCase()} Devnet {d.number}: {d.title} ({d.active ? "Active" : "Closed"})
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Featured Proposal Selector */}
-            <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-md">
-              <CardHeader className="py-4">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-emerald-500" /> 3. Featured Proposal
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input 
-                      placeholder="EIP or ERC Number (e.g. 7702)" 
-                      value={featuredEipNumber} 
-                      onChange={e => setFeaturedEipNumber(e.target.value)} 
-                      className="w-full rounded-md border border-border bg-muted/40 pl-8 pr-3 py-1.5 text-sm outline-none"
-                    />
-                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  </div>
-                  <Button onClick={handleLoadCuration} disabled={loadingCuration} className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium">
-                    {loadingCuration ? <Loader2 className="h-4 w-4 animate-spin" /> : "Load Curation"}
-                  </Button>
-                </div>
-
-                {featuredDetails && (
-                  <div className="rounded-lg border border-emerald-950 bg-emerald-950/20 p-4 space-y-2">
-                    <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Loaded Proposal</p>
-                    <p className="text-sm font-bold text-white">EIP-{featuredDetails.number}: {featuredDetails.title}</p>
-                    {featuredDetails.summary ? (
-                      <p className="text-xs text-slate-300 line-clamp-3 leading-relaxed">{featuredDetails.summary}</p>
-                    ) : (
-                      <p className="text-xs text-slate-500 italic">No summary found in database.</p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Contributor corner & upcoming schedules */}
-            <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-md">
-              <CardHeader className="py-4">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-yellow-500" /> 4 & 5. Corner & Next Week
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Last Calls */}
-                <div>
-                  <h4 className="text-xs font-bold text-slate-400 mb-2">EIPs in Last Call</h4>
-                  {data?.lastCallEIPs.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic">No EIPs currently in Last Call.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {data?.lastCallEIPs.map(lc => (
-                        <div key={lc.number} className="flex items-start gap-2.5 text-sm">
-                          <button onClick={() => setSelectedLastCalls(prev => ({ ...prev, [lc.number]: !prev[lc.number] }))} className="text-slate-400 hover:text-white mt-0.5">
-                            {selectedLastCalls[lc.number] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
-                          </button>
-                          <span className="text-slate-300">
-                            EIP-{lc.number}: {lc.title} (Deadline: {lc.deadline || "None"})
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Upcoming meetings */}
-                <div className="border-t border-slate-800 pt-4">
-                  <h4 className="text-xs font-bold text-slate-400 mb-2">Upcoming ACD & Coordination Calls</h4>
-                  {data?.upcomingCalls.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic">No upcoming calls found.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {data?.upcomingCalls.map(c => {
-                        const key = `${c.series}-${c.callNumber || c.issueNumber}`;
-                        return (
-                          <div key={key} className="flex items-start gap-2.5 text-sm">
-                            <button onClick={() => setSelectedUpcoming(prev => ({ ...prev, [key]: !prev[key] }))} className="text-slate-400 hover:text-white mt-0.5">
-                              {selectedUpcoming[key] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
-                            </button>
-                            <span className="text-slate-300">
-                              {c.title} {c.occursOn ? `(${c.occursOn})` : ""}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Manual watchlist/schedules */}
-                <div className="border-t border-slate-800 pt-4">
-                  <label className={labelClass}>Manual Schedule / What to Watch Next Week</label>
-                  <textarea 
-                    value={watchNextWeek} 
-                    onChange={e => setWatchNextWeek(e.target.value)} 
-                    placeholder="Enter deadlines, office hours details, or specific PRs to watch next week..." 
-                    className="w-full h-20 rounded-md border border-border bg-slate-900 px-3 py-1.5 text-sm text-foreground outline-none resize-y"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Optional rotating sections */}
-            <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-md">
-              <CardHeader className="py-4">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-300">Rotating Editorial Sections</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className={labelClass}>Standards Spotlight (Author/Editor Feature)</label>
-                  <textarea 
-                    value={spotlightInfo} 
-                    onChange={e => setSpotlightInfo(e.target.value)} 
-                    placeholder="Feature a contributor, editor, or project this week..." 
-                    className="w-full h-20 rounded-md border border-border bg-slate-900 px-3 py-1.5 text-sm text-foreground outline-none resize-y"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Enterprise Brief</label>
-                  <textarea 
-                    value={enterpriseBrief} 
-                    onChange={e => setEnterpriseBrief(e.target.value)} 
-                    placeholder="Translate protocol changes into enterprise or business impacts..." 
-                    className="w-full h-20 rounded-md border border-border bg-slate-900 px-3 py-1.5 text-sm text-foreground outline-none resize-y"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Ecosystem Adoption</label>
-                  <textarea 
-                    value={ecosystemAdoption} 
-                    onChange={e => setEcosystemAdoption(e.target.value)} 
-                    placeholder="Highlight projects implementing recently finalized EIPs/ERCs..." 
-                    className="w-full h-20 rounded-md border border-border bg-slate-900 px-3 py-1.5 text-sm text-foreground outline-none resize-y"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
+      {/* ── Main Content ── */}
+      <div className="page-shell py-10">
+        <div className="max-w-4xl mx-auto space-y-8">
+          
+          {/* Metadata */}
+          <div className="rounded-xl border border-border bg-card/40 p-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Recap Date</label>
+                <input 
+                  type="date" 
+                  value={recapDate} 
+                  onChange={e => setRecapDate(e.target.value)} 
+                  className={inputClass} 
+                />
+              </div>
+              <div className="flex items-end">
+                <Button onClick={loadData} variant="outline" className="w-full border-border hover:bg-muted">
+                  <RefreshCw className="mr-2 h-4 w-4" /> Refresh Database Signals
+                </Button>
+              </div>
+            </div>
           </div>
 
-          {/* RIGHT: Live Compiled Preview */}
-          <div className="space-y-6">
-            <Card className="border-slate-800 bg-slate-900/40 backdrop-blur-md h-full flex flex-col">
-              <CardHeader className="py-4 flex flex-row items-center justify-between border-b border-slate-800">
-                <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-primary" /> Live Markdown Output
-                </CardTitle>
-                <div className="text-[10px] text-slate-500 font-mono">Real-time compilation</div>
-              </CardHeader>
-              <CardContent className="p-0 flex-1 flex flex-col min-h-[60vh]">
-                <textarea 
-                  value={markdown} 
-                  onChange={e => setMarkdown(e.target.value)} 
-                  className="w-full flex-1 bg-slate-950/60 p-6 text-sm text-slate-300 font-mono focus:outline-none resize-none leading-relaxed border-0"
+          {/* 3.1 Standards in Motion */}
+          <div className="rounded-xl border border-border bg-card/40 p-6 space-y-6">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
+              <Flame className="h-5 w-5 text-orange-500" /> 3.1 Standards in Motion
+            </h2>
+            
+            {/* New proposals */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">New Proposals Introductions (Last 7 Days)</h3>
+              {data?.newProposals.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No new proposals introduced in this window.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {data?.newProposals.map(p => (
+                    <label key={p.number} className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 hover:bg-muted/40 transition-colors cursor-pointer">
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedProposals(prev => ({ ...prev, [p.number]: !prev[p.number] }))} 
+                        className="text-muted-foreground hover:text-foreground mt-0.5"
+                      >
+                        {selectedProposals[p.number] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                      </button>
+                      <div className="text-sm">
+                        <Badge variant="outline" className="mr-2 bg-background/80 text-[10px] py-0">{p.status}</Badge>
+                        <span className="font-semibold text-foreground">EIP-{p.number}:</span> {p.title}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Status Transitions */}
+            <div className="space-y-3 pt-4 border-t border-border/60">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Lifecycle & Status Changes</h3>
+              {data?.statusChanges.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No status transitions found.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {data?.statusChanges.map(sc => {
+                    const key = `${sc.number}-${sc.to}`;
+                    return (
+                      <label key={key} className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 hover:bg-muted/40 transition-colors cursor-pointer">
+                        <button 
+                          type="button"
+                          onClick={() => setSelectedChanges(prev => ({ ...prev, [key]: !prev[key] }))} 
+                          className="text-muted-foreground hover:text-foreground mt-0.5"
+                        >
+                          {selectedChanges[key] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                        </button>
+                        <div className="text-sm">
+                          <span className="font-semibold text-foreground">EIP-{sc.number}</span> transitioned from <Badge variant="outline" className="bg-background">{sc.from}</Badge> ➔ <Badge className="bg-primary/25 text-primary">{sc.to}</Badge> ({sc.title})
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Merged PRs */}
+            <div className="space-y-3 pt-4 border-t border-border/60">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Recently Merged PRs</h3>
+              {data?.mergedPRs.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No recently merged pull requests.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {data?.mergedPRs.map(pr => (
+                    <label key={pr.number} className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 hover:bg-muted/40 transition-colors cursor-pointer">
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedPRs(prev => ({ ...prev, [pr.number]: !prev[pr.number] }))} 
+                        className="text-muted-foreground hover:text-foreground mt-0.5"
+                      >
+                        {selectedPRs[pr.number] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                      </button>
+                      <div className="text-sm">
+                        <span className="font-semibold text-foreground">PR #{pr.number}:</span> {pr.title} <span className="text-xs text-muted-foreground">by @{pr.author}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 3.2 Governance & Upgrade Watch */}
+          <div className="rounded-xl border border-border bg-card/40 p-6 space-y-6">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
+              <Layers className="h-5 w-5 text-indigo-500" /> 3.2 Governance & Upgrade Watch
+            </h2>
+
+            {/* Recent calls decisions */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Recent ACD Meetings & Decisions</h3>
+              {data?.recentCalls.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No recent core developer calls recorded.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {data?.recentCalls.map(c => {
+                    const key = `${c.series}-${c.number}`;
+                    return (
+                      <label key={key} className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 hover:bg-muted/40 transition-colors cursor-pointer">
+                        <button 
+                          type="button"
+                          onClick={() => setSelectedCalls(prev => ({ ...prev, [key]: !prev[key] }))} 
+                          className="text-muted-foreground hover:text-foreground mt-0.5"
+                        >
+                          {selectedCalls[key] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                        </button>
+                        <div className="text-sm flex-1">
+                          <p className="font-semibold text-foreground">{c.displayName || `${c.series} #${c.number}`}</p>
+                          {c.tldr && <p className="text-xs text-muted-foreground mt-0.5">{String(c.tldr)}</p>}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Manual highlights */}
+            <div className="space-y-1.5 pt-4 border-t border-border/60">
+              <label className={labelClass}>Manual Call Highlights / Decisions</label>
+              <textarea 
+                value={manualAcdHighlights} 
+                onChange={e => setManualAcdHighlights(e.target.value)} 
+                placeholder="Include custom bullet points, notes, or specific decisions discussed during AllCoreDevs..." 
+                className="w-full h-24 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:border-primary/50 outline-none resize-y"
+              />
+            </div>
+
+            {/* Devnets */}
+            <div className="space-y-3 pt-4 border-t border-border/60">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Devnets Progression</h3>
+              {data?.devnets.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No active devnet updates found.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {data?.devnets.map(d => (
+                    <label key={d.id} className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 hover:bg-muted/40 transition-colors cursor-pointer">
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedDevnets(prev => ({ ...prev, [d.id]: !prev[d.id] }))} 
+                        className="text-muted-foreground hover:text-foreground mt-0.5"
+                      >
+                        {selectedDevnets[d.id] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                      </button>
+                      <div className="text-sm">
+                        <span className="font-semibold text-foreground">{d.series.toUpperCase()} Devnet {d.number}:</span> {d.title} <Badge className={d.active ? "bg-emerald-500/20 text-emerald-400" : "bg-slate-500/20 text-slate-400"}>{d.active ? "Active" : "Closed"}</Badge>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 3.3 Featured Proposal */}
+          <div className="rounded-xl border border-border bg-card/40 p-6 space-y-6">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
+              <BookOpen className="h-5 w-5 text-emerald-500" /> 3.3 Featured Proposal
+            </h2>
+            
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input 
+                  placeholder="Enter EIP or ERC number (e.g. 7702)" 
+                  value={featuredEipNumber} 
+                  onChange={e => setFeaturedEipNumber(e.target.value)} 
+                  className="w-full rounded-lg border border-border bg-muted/40 pl-9 pr-3 py-2 text-sm outline-none"
                 />
-              </CardContent>
-            </Card>
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
+              <Button onClick={handleLoadCuration} disabled={loadingCuration} className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium">
+                {loadingCuration ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fetch Curation"}
+              </Button>
+            </div>
+
+            {featuredDetails && (
+              <div className="rounded-lg border border-emerald-900 bg-emerald-950/20 p-4 space-y-2">
+                <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Featured EIP details loaded</p>
+                <h4 className="text-sm font-bold text-white">EIP-{featuredDetails.number}: {featuredDetails.title}</h4>
+                {featuredDetails.summary ? (
+                  <p className="text-xs text-slate-300 leading-relaxed mt-1">{featuredDetails.summary}</p>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">No summary found in database curations.</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 3.4 Contributor Corner & 3.5 Watch Next Week */}
+          <div className="rounded-xl border border-border bg-card/40 p-6 space-y-6">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
+              <Calendar className="h-5 w-5 text-yellow-500" /> 3.4 Contributor Corner & 3.5 What to Watch
+            </h2>
+            
+            {/* Last Calls */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">EIPs Currently in Last Call</h3>
+              {data?.lastCallEIPs.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No EIPs in Last Call this week.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {data?.lastCallEIPs.map(lc => (
+                    <label key={lc.number} className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 hover:bg-muted/40 transition-colors cursor-pointer">
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedLastCalls(prev => ({ ...prev, [lc.number]: !prev[lc.number] }))} 
+                        className="text-muted-foreground hover:text-foreground mt-0.5"
+                      >
+                        {selectedLastCalls[lc.number] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                      </button>
+                      <div className="text-sm">
+                        <span className="font-semibold text-foreground">EIP-{lc.number}:</span> {lc.title} <span className="text-xs text-orange-400">(Deadline: {lc.deadline || "Immediate"})</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Upcoming calls schedule */}
+            <div className="space-y-3 pt-4 border-t border-border/60">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Scheduled Meetings & Calls</h3>
+              {data?.upcomingCalls.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No scheduled calls found.</p>
+              ) : (
+                <div className="grid gap-2">
+                  {data?.upcomingCalls.map(c => {
+                    const key = `${c.series}-${c.callNumber || c.issueNumber}`;
+                    return (
+                      <label key={key} className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 p-3 hover:bg-muted/40 transition-colors cursor-pointer">
+                        <button 
+                          type="button"
+                          onClick={() => setSelectedUpcoming(prev => ({ ...prev, [key]: !prev[key] }))} 
+                          className="text-muted-foreground hover:text-foreground mt-0.5"
+                        >
+                          {selectedUpcoming[key] ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                        </button>
+                        <div className="text-sm">
+                          <span className="font-semibold text-foreground">{c.title}</span> {c.occursOn ? `on ${c.occursOn}` : ""}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Manual watch notes */}
+            <div className="space-y-1.5 pt-4 border-t border-border/60">
+              <label className={labelClass}>Manual Schedule / What to Watch Next Week</label>
+              <textarea 
+                value={watchNextWeek} 
+                onChange={e => setWatchNextWeek(e.target.value)} 
+                placeholder="Include custom deadlines, upcoming AMAs, specific PRs to watch..." 
+                className="w-full h-24 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:border-primary/50 outline-none resize-y"
+              />
+            </div>
+          </div>
+
+          {/* Optional Rotating Sections */}
+          <div className="rounded-xl border border-border bg-card/40 p-6 space-y-6">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2 border-b border-border pb-3">
+              <FileText className="h-5 w-5 text-sky-500" /> 4. Optional Rotating Sections
+            </h2>
+
+            <div className="space-y-1.5">
+              <label className={labelClass}>4.1 Standards Spotlight (Author/Editor Feature)</label>
+              <textarea 
+                value={spotlightInfo} 
+                onChange={e => setSpotlightInfo(e.target.value)} 
+                placeholder="Spotlight an author, editor, active reviewer or ecosystem contributor..." 
+                className="w-full h-20 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:border-primary/50 outline-none resize-y"
+              />
+            </div>
+            <div className="space-y-1.5 pt-2">
+              <label className={labelClass}>4.2 Enterprise Brief</label>
+              <textarea 
+                value={enterpriseBrief} 
+                onChange={e => setEnterpriseBrief(e.target.value)} 
+                placeholder="Explain the business or enterprise impact of this week's upgrades..." 
+                className="w-full h-20 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:border-primary/50 outline-none resize-y"
+              />
+            </div>
+            <div className="space-y-1.5 pt-2">
+              <label className={labelClass}>4.3 Ecosystem Adoption</label>
+              <textarea 
+                value={ecosystemAdoption} 
+                onChange={e => setEcosystemAdoption(e.target.value)} 
+                placeholder="Highlight projects adopting or implementing recently finalized standards..." 
+                className="w-full h-20 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:border-primary/50 outline-none resize-y"
+              />
+            </div>
+          </div>
+
+          {/* Action Row */}
+          <div className="flex items-center justify-between border-t border-border pt-6">
+            <p className="text-xs text-muted-foreground">Select and input items, then click compile to copy.</p>
+            <Button onClick={handleCopyMarkdown} className="bg-primary hover:bg-primary/95 text-black font-semibold px-6 shadow-md">
+              <Copy className="mr-1.5 h-4 w-4" /> Copy Recap Markdown
+            </Button>
           </div>
 
         </div>
-
       </div>
+
     </div>
   );
 }
