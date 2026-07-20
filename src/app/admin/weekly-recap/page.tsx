@@ -24,11 +24,30 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { callSeriesShort } from "@/data/call-series";
 
 type WeeklyData = Awaited<ReturnType<typeof client.dashboard.getWeeklyRecap>>;
 
 const labelClass = "mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
 const inputClass = "w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all outline-none";
+
+function extractTldrSummary(tldr: unknown): string {
+  if (!tldr) return '';
+  if (typeof tldr === 'string') return tldr;
+  if (typeof tldr === 'object' && tldr !== null) {
+    const obj = tldr as Record<string, unknown>;
+    if (typeof obj.summary === 'string') return obj.summary;
+    if (typeof obj.overview === 'string') return obj.overview;
+    if (typeof obj.tldr === 'string') return obj.tldr;
+    if (typeof obj.description === 'string') return obj.description;
+    if (typeof obj.text === 'string') return obj.text;
+    for (const val of Object.values(obj)) {
+      if (typeof val === 'string' && val.length > 5) return val;
+      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string') return val[0];
+    }
+  }
+  return '';
+}
 
 // Helper Helpers
 const formatDate = (isoString?: string | null) => {
@@ -237,9 +256,12 @@ export default function WeeklyRecapPage() {
     if (selectedCallData.length > 0) {
       md += `### 🗣️ Core Dev Calls Highlights\n`;
       selectedCallData.forEach(c => {
-        md += `#### ${c.displayName || `${c.series} #${c.number}`} *(Occurred ${formatDate(c.occurredOn)})*\n`;
-        if (c.tldr) {
-          md += `* **Summary:** ${c.tldr}\n`;
+        const shortName = callSeriesShort(c.series);
+        const title = c.displayName || `${shortName} #${c.number ?? ''}`;
+        const summary = extractTldrSummary(c.tldr);
+        md += `#### ${title} *(Occurred ${formatDate(c.occurredOn)})*\n`;
+        if (summary) {
+          md += `* **Summary:** ${summary}\n`;
         }
         if (c.keyDecisions && Array.isArray(c.keyDecisions)) {
           md += `* **Key Decisions:**\n`;
@@ -533,8 +555,8 @@ export default function WeeklyRecapPage() {
                         </button>
                         <div className="text-sm flex-1 flex items-start justify-between">
                           <div className="flex-1">
-                            <p className="font-semibold text-foreground">{c.displayName || `${c.series} #${c.number}`}</p>
-                            {c.tldr && <p className="text-xs text-muted-foreground mt-0.5">{String(c.tldr)}</p>}
+                            <p className="font-semibold text-foreground">{c.displayName || `${callSeriesShort(c.series)} #${c.number ?? ''}`}</p>
+                            {extractTldrSummary(c.tldr) && <p className="text-xs text-muted-foreground mt-0.5">{extractTldrSummary(c.tldr)}</p>}
                             <p className="text-[10px] text-muted-foreground mt-1">Happened: {formatDate(c.occurredOn)}</p>
                           </div>
                           <a href={getCallLink({ series: c.series, number: c.number || "" })} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline font-semibold ml-2">[Check]</a>

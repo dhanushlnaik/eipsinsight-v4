@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { client } from '@/lib/orpc';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { callSeriesShort } from '@/data/call-series';
 
 type WeeklyData = Awaited<ReturnType<typeof client.dashboard.getWeeklyRecap>>;
 
@@ -60,6 +61,24 @@ function getAvatarUrl(actor?: string | null) {
   if (!actor || actor === 'system') return 'https://github.com/ethereum.png';
   const clean = actor.replace(/^@/, '').trim();
   return `https://github.com/${clean}.png`;
+}
+
+function extractTldrSummary(tldr: unknown): string {
+  if (!tldr) return '';
+  if (typeof tldr === 'string') return tldr;
+  if (typeof tldr === 'object' && tldr !== null) {
+    const obj = tldr as Record<string, unknown>;
+    if (typeof obj.summary === 'string') return obj.summary;
+    if (typeof obj.overview === 'string') return obj.overview;
+    if (typeof obj.tldr === 'string') return obj.tldr;
+    if (typeof obj.description === 'string') return obj.description;
+    if (typeof obj.text === 'string') return obj.text;
+    for (const val of Object.values(obj)) {
+      if (typeof val === 'string' && val.length > 5) return val;
+      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'string') return val[0];
+    }
+  }
+  return '';
 }
 
 export function WeeklyRecapSection() {
@@ -130,8 +149,11 @@ export function WeeklyRecapSection() {
     if (data.recentCalls.length > 0) {
       md += `### 🗣️ Core Dev Calls Highlights\n`;
       data.recentCalls.forEach((c) => {
-        md += `#### ${c.displayName || `${c.series} #${c.number}`} *(Occurred ${formatDate(c.occurredOn)})\*\n`;
-        if (c.tldr) md += `* **Summary:** ${String(c.tldr)}\n`;
+        const shortName = callSeriesShort(c.series);
+        const title = c.displayName || `${shortName} #${c.number ?? ''}`;
+        const summary = extractTldrSummary(c.tldr);
+        md += `#### ${title} *(Occurred ${formatDate(c.occurredOn)})\*\n`;
+        if (summary) md += `* **Summary:** ${summary}\n`;
         md += `\n`;
       });
     }
@@ -219,12 +241,15 @@ export function WeeklyRecapSection() {
 
     // Recent calls
     data.recentCalls.forEach((c) => {
+      const shortName = callSeriesShort(c.series);
+      const callTitle = c.displayName || `${shortName} #${c.number ?? ''}`;
+      const summaryText = extractTldrSummary(c.tldr);
       list.push({
         id: `call-${c.series}-${c.number}`,
         kind: 'call',
-        title: c.displayName || `${c.series.toUpperCase()} #${c.number}`,
-        subtitle: c.tldr ? String(c.tldr) : 'Core Developer Meeting',
-        badgeText: `${c.series.toUpperCase()} Call`,
+        title: callTitle,
+        subtitle: summaryText || 'Core Developer Meeting',
+        badgeText: `${shortName} Call`,
         badgeVariant: 'purple',
         dateIso: c.occurredOn,
         href: `/upgrade/calls/${c.series.toLowerCase()}/${c.number || ''}`,
