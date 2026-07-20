@@ -501,17 +501,17 @@ export const dashboardProcedures = {
 
   getWeeklyRecap: os
     .$context<Ctx>()
-    .input(z.object({}))
-    .handler(async ({ context }) => {
-      await checkAPIToken(context.headers);
-
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    .input(z.object({
+      days: z.number().int().min(1).max(90).optional().default(7),
+    }))
+    .handler(async ({ input }) => {
+      const daysAgo = new Date();
+      daysAgo.setDate(daysAgo.getDate() - (input?.days ?? 7));
 
       const [newProposals, statusChanges, mergedPRs, devnets, recentCalls, upcomingCalls, lastCallEIPs] = await Promise.all([
         prisma.eips.findMany({
           where: {
-            created_at: { gte: sevenDaysAgo },
+            created_at: { gte: daysAgo },
           },
           select: {
             eip_number: true,
@@ -534,12 +534,12 @@ export const dashboardProcedures = {
            LEFT JOIN eip_snapshots s ON s.eip_id = e.id
            WHERE se.changed_at >= $1
            ORDER BY se.changed_at DESC`,
-          sevenDaysAgo
+          daysAgo
         ),
 
         prisma.pull_requests.findMany({
           where: {
-            merged_at: { gte: sevenDaysAgo },
+            merged_at: { gte: daysAgo },
           },
           select: {
             pr_number: true,
