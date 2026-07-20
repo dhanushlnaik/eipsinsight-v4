@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
   ArrowRight,
+  ArrowUpRight,
   BookOpen,
   Calendar,
   Check,
@@ -29,6 +30,7 @@ import { toast } from 'sonner';
 import { client } from '@/lib/orpc';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { CopyLinkButton } from '@/components/header';
 import { callSeriesShort } from '@/data/call-series';
 
 type WeeklyData = Awaited<ReturnType<typeof client.dashboard.getWeeklyRecap>>;
@@ -55,6 +57,18 @@ function getProposalPath(category: string | null, number: number) {
   const cat = category?.toLowerCase();
   const folder = cat === 'erc' ? 'erc' : cat === 'rip' ? 'rip' : 'eip';
   return `/${folder}/${number}`;
+}
+
+function normalizeRepoSegment(repoName?: string | null): string {
+  if (!repoName) return 'eips';
+  let x = repoName.toLowerCase();
+  if (x.includes('/')) {
+    const parts = x.split('/');
+    x = parts[parts.length - 1];
+  }
+  if (x === 'erc' || x === 'ercs') return 'ercs';
+  if (x === 'rip' || x === 'rips') return 'rips';
+  return 'eips';
 }
 
 function getAvatarUrl(actor?: string | null) {
@@ -107,77 +121,6 @@ export function WeeklyRecapSection() {
     fetchRecap(days);
   }, [days]);
 
-  // Generate copyable markdown
-  const handleCopyMarkdown = () => {
-    if (!data) return;
-
-    const formattedDate = new Date().toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-
-    let md = `# Ethereum Standards Recap (${days} Days) - ${formattedDate}\n\n`;
-    md += `Source: [EIPsInsight Verifiable Recap Feed](https://eipsinsight.com/recap)\n\n---\n\n`;
-
-    if (data.newProposals.length > 0) {
-      md += `### 🆕 New Proposals Introduced\n`;
-      data.newProposals.forEach((p) => {
-        const typeStr = p.category ? `${p.category} ` : '';
-        md += `- **[${p.status}] [${typeStr}EIP-${p.number}](https://eipsinsight.com/${p.category?.toLowerCase() === 'erc' ? 'erc' : 'eip'}s/${p.number})**: ${p.title} *(Created ${formatDate(p.createdAt)})*\n`;
-      });
-      md += `\n`;
-    }
-
-    if (data.statusChanges.length > 0) {
-      md += `### 🔄 Lifecycle & Status Changes\n`;
-      data.statusChanges.forEach((sc) => {
-        const typeStr = sc.category ? `${sc.category} ` : '';
-        md += `- **[${typeStr}EIP-${sc.number}](https://eipsinsight.com/${sc.category?.toLowerCase() === 'erc' ? 'erc' : 'eip'}s/${sc.number})**: \`${sc.from}\` ➔ \`${sc.to}\` *(Changed ${formatDate(sc.changedAt)})*\n`;
-      });
-      md += `\n`;
-    }
-
-    if (data.mergedPRs.length > 0) {
-      md += `### 🪵 Recently Merged Pull Requests\n`;
-      data.mergedPRs.forEach((pr) => {
-        md += `- **[PR #${pr.number}](https://eipsinsight.com/pr/${pr.repoName}/${pr.number})**: ${pr.title} *(Merged ${formatDate(pr.mergedAt)} by @${pr.author})*\n`;
-      });
-      md += `\n`;
-    }
-
-    if (data.recentCalls.length > 0) {
-      md += `### 🗣️ Core Dev Calls Highlights\n`;
-      data.recentCalls.forEach((c) => {
-        const shortName = callSeriesShort(c.series);
-        const title = c.displayName || `${shortName} #${c.number ?? ''}`;
-        const summary = extractTldrSummary(c.tldr);
-        md += `#### ${title} *(Occurred ${formatDate(c.occurredOn)})\*\n`;
-        if (summary) md += `* **Summary:** ${summary}\n`;
-        md += `\n`;
-      });
-    }
-
-    if (data.devnets.length > 0) {
-      md += `### 🧪 Devnets Progression\n`;
-      data.devnets.forEach((d) => {
-        md += `- **[${d.active ? 'Active' : 'Closed'}] [${d.series.toUpperCase()} Devnet ${d.number}](https://eipsinsight.com/upgrade/devnets/${d.id})**: ${d.title}\n`;
-      });
-      md += `\n`;
-    }
-
-    if (data.lastCallEIPs.length > 0) {
-      md += `### 📢 Last Call Deadlines\n`;
-      data.lastCallEIPs.forEach((lc) => {
-        md += `- **[EIP-${lc.number}](https://eipsinsight.com/eips/${lc.number})**: ${lc.title} *(Deadline: ${lc.deadline || 'Immediate'})*\n`;
-      });
-      md += `\n`;
-    }
-
-    navigator.clipboard.writeText(md);
-    toast.success(`Copied ${days}-day verifiable recap markdown!`);
-  };
-
   // Combine items for rendering
   const items = React.useMemo(() => {
     if (!data) return [];
@@ -225,6 +168,7 @@ export function WeeklyRecapSection() {
 
     // Merged PRs
     data.mergedPRs.forEach((pr) => {
+      const repoPath = normalizeRepoSegment(pr.repoName);
       list.push({
         id: `pr-${pr.repoName}-${pr.number}`,
         kind: 'merged_pr',
@@ -234,7 +178,7 @@ export function WeeklyRecapSection() {
         badgeText: 'Merged PR',
         badgeVariant: 'sky',
         dateIso: pr.mergedAt,
-        href: `/pr/${pr.repoName}/${pr.number}`,
+        href: `/pr/${repoPath}/${pr.number}`,
         externalHref: pr.repoName ? `https://github.com/${pr.repoName}/pull/${pr.number}` : undefined,
       });
     });
@@ -329,55 +273,37 @@ export function WeeklyRecapSection() {
       <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="inline-flex items-center gap-2">
-            <Flame className="h-5 w-5 text-orange-500" />
-            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+            <Flame className="h-5 w-5 text-primary" />
+            <Link
+              href="/recap"
+              className="group inline-flex items-center gap-1 text-xl font-semibold tracking-tight text-foreground sm:text-2xl transition-colors hover:text-primary"
+            >
               Weekly Standards Recap & Audit Feed
-            </h2>
-            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
-              Verifiable Feed
-            </Badge>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary" />
+            </Link>
+            <CopyLinkButton sectionId="weekly-recap-digest" tooltipLabel="Copy link" />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Verifiable, real-time audit feed of new EIP proposals, status transitions, merged PRs, devnets, and ACD call decisions.
           </p>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          {/* Link to dedicated recap page */}
-          <Link href="/recap">
-            <Button variant="outline" size="sm" className="border-border bg-card/60 hover:bg-muted text-xs gap-1">
-              Full Dedicated Page <ArrowRight className="h-3.5 w-3.5 text-primary" />
-            </Button>
-          </Link>
-
-          {/* Timeframe selector */}
-          <div className="inline-flex items-center rounded-lg border border-border bg-card/60 p-0.5">
-            {[7, 14, 30].map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setDays(d)}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  days === d
-                    ? 'bg-primary/20 text-primary font-semibold'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {d}d
-              </button>
-            ))}
-          </div>
-
-          <Button
-            onClick={handleCopyMarkdown}
-            variant="outline"
-            size="sm"
-            className="border-border bg-card/60 hover:bg-muted text-xs gap-1.5"
-          >
-            <Copy className="h-3.5 w-3.5 text-primary" />
-            Copy Recap
-          </Button>
+        {/* Timeframe selector in top right corner */}
+        <div className="inline-flex items-center rounded-lg border border-border bg-card/60 p-0.5 shrink-0 self-start sm:self-auto">
+          {[7, 14, 30].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDays(d)}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                days === d
+                  ? 'bg-primary/20 text-primary font-semibold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {d}d
+            </button>
+          ))}
         </div>
       </div>
 

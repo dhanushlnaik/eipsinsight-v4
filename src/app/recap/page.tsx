@@ -60,6 +60,18 @@ function getProposalPath(category: string | null, number: number) {
   return `/${folder}/${number}`;
 }
 
+function normalizeRepoSegment(repoName?: string | null): string {
+  if (!repoName) return 'eips';
+  let x = repoName.toLowerCase();
+  if (x.includes('/')) {
+    const parts = x.split('/');
+    x = parts[parts.length - 1];
+  }
+  if (x === 'erc' || x === 'ercs') return 'ercs';
+  if (x === 'rip' || x === 'rips') return 'rips';
+  return 'eips';
+}
+
 function getAvatarUrl(actor?: string | null) {
   if (!actor || actor === 'system') return 'https://github.com/ethereum.png';
   const clean = actor.replace(/^@/, '').trim();
@@ -144,7 +156,8 @@ export default function DedicatedRecapPage() {
     if (data.mergedPRs.length > 0) {
       md += `### 🪵 Recently Merged Pull Requests\n`;
       data.mergedPRs.forEach((pr) => {
-        md += `- **[PR #${pr.number}](https://eipsinsight.com/pr/${pr.repoName}/${pr.number})**: ${pr.title} *(Merged ${formatDate(pr.mergedAt)} by @${pr.author})*\n`;
+        const repoPath = normalizeRepoSegment(pr.repoName);
+        md += `- **[PR #${pr.number}](https://eipsinsight.com/pr/${repoPath}/${pr.number})**: ${pr.title} *(Merged ${formatDate(pr.mergedAt)} by @${pr.author})*\n`;
       });
       md += `\n`;
     }
@@ -254,6 +267,7 @@ export default function DedicatedRecapPage() {
     // Merged PRs
     data.mergedPRs.forEach((pr) => {
       const cat = pr.repoName?.includes('erc') ? 'erc' : pr.repoName?.includes('rip') ? 'rip' : 'eip';
+      const repoPath = normalizeRepoSegment(pr.repoName);
       list.push({
         id: `pr-${pr.repoName}-${pr.number}`,
         kind: 'merged_pr',
@@ -264,7 +278,7 @@ export default function DedicatedRecapPage() {
         badgeText: 'Merged PR',
         badgeVariant: 'sky',
         dateIso: pr.mergedAt,
-        href: `/pr/${pr.repoName}/${pr.number}`,
+        href: `/pr/${repoPath}/${pr.number}`,
         externalHref: pr.repoName ? `https://github.com/${pr.repoName}/pull/${pr.number}` : undefined,
       });
     });
