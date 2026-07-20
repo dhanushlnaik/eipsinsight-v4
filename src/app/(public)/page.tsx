@@ -3892,59 +3892,7 @@ export default function EIPsHomePage() {
       {activePersona !== 'editor' && visibleSections.governance && <hr className="my-6 border-border" />}
 
       <section className="mb-6 w-full" id="recent-governance-activity">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-          <div>
-            <WeeklyRecapSection />
-          </div>
-
-        <aside className="self-start rounded-xl border border-border bg-card/60 p-3 shadow-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Latest Editor Activity</h3>
-              <span className="rounded-md border border-border bg-muted/60 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                {recentEditorActivities.length}
-              </span>
-            </div>
-            <p className="mb-2.5 text-[11px] text-muted-foreground">Recent actions by editors this month.</p>
-            <div className="space-y-1.5">
-              {widgetsLoading && recentEditorActivities.length === 0 ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={`review-skeleton-${i}`} className="h-[62px] animate-pulse rounded-lg border border-border bg-muted/40" />
-                ))
-              ) : recentEditorActivities.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No editor activities found for this month.</p>
-              ) : (
-                recentEditorActivities.slice(0, 5).map((item, idx) => (
-                  <a
-                    key={`${item.editor}-${item.prNumber}-${idx}`}
-                    href={item.eventUrl || `/pr/${githubRepoFromShort(item.repoShort)}/${item.prNumber}`}
-                    target={item.eventUrl ? '_blank' : undefined}
-                    rel={item.eventUrl ? 'noopener noreferrer' : undefined}
-                    className="block rounded-lg border border-border bg-card/60 p-2.5 transition-colors hover:border-primary/40 hover:bg-muted/40"
-                  >
-                    <div className="mb-1 flex items-center gap-2">
-                      <div className="h-6 w-6 flex-shrink-0 overflow-hidden rounded-full ring-1 ring-border">
-                        <Image src={editorAvatar(item.editor)} alt={item.editor} width={24} height={24} className="h-full w-full object-cover" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[11px] font-semibold text-foreground">#{idx + 1} {item.editor}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {formatEditorAction(item.eventType)} · {new Date(item.actedAt).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="line-clamp-1 text-[11px] text-muted-foreground">
-                      {item.title || `PR #${item.prNumber}`}
-                    </p>
-                    <div className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-px text-[10px] text-muted-foreground">
-                      <GitPullRequest className="h-3 w-3" />
-                      {item.repoShort.toUpperCase()} #{item.prNumber}
-                    </div>
-                  </a>
-                ))
-              )}
-            </div>
-          </aside>
-        </div>
+        <WeeklyRecapSection />
       </section>
 
       </div>

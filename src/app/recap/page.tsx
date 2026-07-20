@@ -1,44 +1,47 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
+  ArrowLeft,
   ArrowRight,
-  BookOpen,
   Calendar,
   Check,
   ChevronDown,
   ChevronUp,
-  Clock,
   Copy,
+  Download,
   ExternalLink,
   FileText,
+  Filter,
   Flame,
-  GitCommit,
   GitMerge,
   Layers,
   Loader2,
   RefreshCw,
+  Search,
   Sparkles,
   User,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { client } from '@/lib/orpc';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 type WeeklyData = Awaited<ReturnType<typeof client.dashboard.getWeeklyRecap>>;
 
 type RecapFilter = 'all' | 'new_proposals' | 'status_changes' | 'merged_prs' | 'calls_devnets' | 'last_call';
+type RepoFilter = 'all' | 'eip' | 'erc' | 'rip';
 
 function formatDate(isoString?: string | null) {
   if (!isoString) return '';
   const d = new Date(isoString);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function timeAgo(isoString?: string | null) {
@@ -62,15 +65,14 @@ function getAvatarUrl(actor?: string | null) {
   return `https://github.com/${clean}.png`;
 }
 
-export function WeeklyRecapSection() {
+export default function DedicatedRecapPage() {
   const [days, setDays] = useState<number>(7);
   const [data, setData] = useState<WeeklyData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [filter, setFilter] = useState<RecapFilter>('all');
+  const [repoFilter, setRepoFilter] = useState<RepoFilter>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState<boolean>(false);
-
-  const INITIAL_LIMIT = 6;
 
   const fetchRecap = async (daysRange: number) => {
     setLoading(true);
@@ -79,6 +81,7 @@ export function WeeklyRecapSection() {
       setData(res);
     } catch (err) {
       console.error('Failed to load public weekly recap:', err);
+      toast.error('Failed to load recap data.');
     } finally {
       setLoading(false);
     }
@@ -88,9 +91,9 @@ export function WeeklyRecapSection() {
     fetchRecap(days);
   }, [days]);
 
-  // Generate copyable markdown
-  const handleCopyMarkdown = () => {
-    if (!data) return;
+  // Generate copyable / downloadable markdown
+  const buildMarkdownReport = () => {
+    if (!data) return '';
 
     const formattedDate = new Date().toLocaleDateString('en-US', {
       month: 'long',
@@ -98,8 +101,8 @@ export function WeeklyRecapSection() {
       year: 'numeric',
     });
 
-    let md = `# Ethereum Standards Recap (${days} Days) - ${formattedDate}\n\n`;
-    md += `Source: [EIPsInsight Verifiable Recap Feed](https://eipsinsight.com/recap)\n\n---\n\n`;
+    let md = `# Ethereum Standards Weekly Recap (${days} Days) - ${formattedDate}\n\n`;
+    md += `Source: [EIPsInsight Verifiable Audit Feed](https://eipsinsight.com/recap)\n\n---\n\n`;
 
     if (data.newProposals.length > 0) {
       md += `### 🆕 New Proposals Introduced\n`;
@@ -152,16 +155,37 @@ export function WeeklyRecapSection() {
       md += `\n`;
     }
 
+    return md;
+  };
+
+  const handleCopyMarkdown = () => {
+    const md = buildMarkdownReport();
+    if (!md) return;
     navigator.clipboard.writeText(md);
     toast.success(`Copied ${days}-day verifiable recap markdown!`);
   };
 
+  const handleDownloadMarkdown = () => {
+    const md = buildMarkdownReport();
+    if (!md) return;
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `eipsinsight-recap-${days}d-${new Date().toISOString().slice(0, 10)}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Downloaded recap markdown file!');
+  };
+
   // Combine items for rendering
-  const items = React.useMemo(() => {
+  const items = useMemo(() => {
     if (!data) return [];
     const list: Array<{
       id: string;
       kind: 'new_proposal' | 'status_change' | 'merged_pr' | 'call' | 'devnet' | 'last_call';
+      repoCategory: 'eip' | 'erc' | 'rip';
       title: string;
       subtitle?: string;
       actor?: string | null;
@@ -175,9 +199,11 @@ export function WeeklyRecapSection() {
 
     // New proposals
     data.newProposals.forEach((p) => {
+      const cat = (p.category?.toLowerCase() || 'eip') as 'eip' | 'erc' | 'rip';
       list.push({
         id: `new-${p.number}`,
         kind: 'new_proposal',
+        repoCategory: cat,
         title: `${p.category || 'EIP'}-${p.number}: ${p.title}`,
         subtitle: `Newly proposed ${p.category || 'EIP'} standard`,
         badgeText: p.status,
@@ -189,9 +215,11 @@ export function WeeklyRecapSection() {
 
     // Status changes
     data.statusChanges.forEach((sc) => {
+      const cat = (sc.category?.toLowerCase() || 'eip') as 'eip' | 'erc' | 'rip';
       list.push({
         id: `sc-${sc.number}-${sc.to}`,
         kind: 'status_change',
+        repoCategory: cat,
         title: `${sc.category || 'EIP'}-${sc.number}: ${sc.title}`,
         subtitle: `Status transition from ${sc.from || 'Draft'} to ${sc.to}`,
         badgeText: `${sc.from || 'Draft'} ➔ ${sc.to}`,
@@ -203,9 +231,11 @@ export function WeeklyRecapSection() {
 
     // Merged PRs
     data.mergedPRs.forEach((pr) => {
+      const cat = pr.repoName?.includes('erc') ? 'erc' : pr.repoName?.includes('rip') ? 'rip' : 'eip';
       list.push({
         id: `pr-${pr.repoName}-${pr.number}`,
         kind: 'merged_pr',
+        repoCategory: cat,
         title: `PR #${pr.number}: ${pr.title}`,
         subtitle: `Merged by @${pr.author} in ${pr.repoName}`,
         actor: pr.author,
@@ -222,6 +252,7 @@ export function WeeklyRecapSection() {
       list.push({
         id: `call-${c.series}-${c.number}`,
         kind: 'call',
+        repoCategory: 'eip',
         title: c.displayName || `${c.series.toUpperCase()} #${c.number}`,
         subtitle: c.tldr ? String(c.tldr) : 'Core Developer Meeting',
         badgeText: `${c.series.toUpperCase()} Call`,
@@ -246,6 +277,7 @@ export function WeeklyRecapSection() {
       list.push({
         id: `devnet-${d.id}`,
         kind: 'devnet',
+        repoCategory: 'eip',
         title: `${d.series.toUpperCase()} Devnet ${d.number}: ${d.title}`,
         subtitle: d.active ? 'Active Devnet progression' : 'Closed Devnet',
         badgeText: d.active ? 'Active Devnet' : 'Closed Devnet',
@@ -260,6 +292,7 @@ export function WeeklyRecapSection() {
       list.push({
         id: `lastcall-${lc.number}`,
         kind: 'last_call',
+        repoCategory: 'eip',
         title: `EIP-${lc.number}: ${lc.title}`,
         subtitle: `Review Deadline: ${lc.deadline || 'Immediate'}`,
         badgeText: 'Last Call',
@@ -279,19 +312,31 @@ export function WeeklyRecapSection() {
     return list;
   }, [data]);
 
-  // Filter items
-  const filteredItems = React.useMemo(() => {
-    if (filter === 'all') return items;
-    if (filter === 'new_proposals') return items.filter((i) => i.kind === 'new_proposal');
-    if (filter === 'status_changes') return items.filter((i) => i.kind === 'status_change');
-    if (filter === 'merged_prs') return items.filter((i) => i.kind === 'merged_pr');
-    if (filter === 'calls_devnets') return items.filter((i) => i.kind === 'call' || i.kind === 'devnet');
-    if (filter === 'last_call') return items.filter((i) => i.kind === 'last_call');
-    return items;
-  }, [items, filter]);
+  // Filter items by type, repo, and search query
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      // Type filter
+      if (filter === 'new_proposals' && item.kind !== 'new_proposal') return false;
+      if (filter === 'status_changes' && item.kind !== 'status_change') return false;
+      if (filter === 'merged_prs' && item.kind !== 'merged_pr') return false;
+      if (filter === 'calls_devnets' && item.kind !== 'call' && item.kind !== 'devnet') return false;
+      if (filter === 'last_call' && item.kind !== 'last_call') return false;
 
-  const visibleItems = showAll ? filteredItems : filteredItems.slice(0, INITIAL_LIMIT);
-  const hasMore = filteredItems.length > INITIAL_LIMIT;
+      // Repo filter
+      if (repoFilter !== 'all' && item.repoCategory !== repoFilter) return false;
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const titleMatch = item.title.toLowerCase().includes(q);
+        const subMatch = item.subtitle?.toLowerCase().includes(q);
+        const actorMatch = item.actor?.toLowerCase().includes(q);
+        if (!titleMatch && !subMatch && !actorMatch) return false;
+      }
+
+      return true;
+    });
+  }, [items, filter, repoFilter, searchQuery]);
 
   const totalNew = data?.newProposals.length ?? 0;
   const totalChanges = data?.statusChanges.length ?? 0;
@@ -299,141 +344,214 @@ export function WeeklyRecapSection() {
   const totalCalls = (data?.recentCalls.length ?? 0) + (data?.devnets.length ?? 0);
 
   return (
-    <section className="mb-8 w-full" id="weekly-recap-digest">
-      {/* Section Header */}
-      <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="inline-flex items-center gap-2">
-            <Flame className="h-5 w-5 text-orange-500" />
-            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-              Weekly Standards Recap & Audit Feed
-            </h2>
-            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
-              Verifiable Feed
-            </Badge>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* Back to Homepage */}
+      <div className="mb-6">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to Homepage
+        </Link>
+      </div>
+
+      {/* Main Page Header */}
+      <div className="mb-8 border-b border-border/60 pb-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2">
+              <Flame className="h-6 w-6 text-orange-500" />
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                Weekly Standards Recap & Audit Feed
+              </h1>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
+                Verifiable Feed
+              </Badge>
+            </div>
+            <p className="mt-1.5 text-sm text-muted-foreground max-w-3xl">
+              Comprehensive, real-time audit log tracking all new EIP/ERC/RIP proposals, status transitions, merged pull requests, devnet progressions, and core developer meeting decisions across Ethereum standards.
+            </p>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Verifiable, real-time audit feed of new EIP proposals, status transitions, merged PRs, devnets, and ACD call decisions.
-          </p>
+
+          {/* Action buttons */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button
+              onClick={handleCopyMarkdown}
+              variant="outline"
+              size="sm"
+              className="border-border bg-card/60 hover:bg-muted text-xs gap-1.5"
+            >
+              <Copy className="h-3.5 w-3.5 text-primary" />
+              Copy Markdown
+            </Button>
+            <Button
+              onClick={handleDownloadMarkdown}
+              variant="outline"
+              size="sm"
+              className="border-border bg-card/60 hover:bg-muted text-xs gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5 text-primary" />
+              Download .md
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Stats Overview Cards */}
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-xs">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">New Proposals</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">{totalNew}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">In last {days} days</p>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          {/* Link to dedicated recap page */}
-          <Link href="/recap">
-            <Button variant="outline" size="sm" className="border-border bg-card/60 hover:bg-muted text-xs gap-1">
-              Full Dedicated Page <ArrowRight className="h-3.5 w-3.5 text-primary" />
-            </Button>
-          </Link>
+        <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-xs">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status Transitions</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">{totalChanges}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">In last {days} days</p>
+        </div>
+
+        <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-xs">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Merged PRs</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">{totalPRs}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">In last {days} days</p>
+        </div>
+
+        <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-xs">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">ACD & Devnets</p>
+          <p className="mt-1 text-2xl font-bold text-foreground">{totalCalls}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">In last {days} days</p>
+        </div>
+      </div>
+
+      {/* Interactive Controls Bar */}
+      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-border bg-card/60 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search by title, EIP number, or author handle..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-8 text-xs bg-background/80 h-9"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
           {/* Timeframe selector */}
-          <div className="inline-flex items-center rounded-lg border border-border bg-card/60 p-0.5">
-            {[7, 14, 30].map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setDays(d)}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                  days === d
-                    ? 'bg-primary/20 text-primary font-semibold'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {d}d
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground shrink-0">Timeframe:</span>
+            <div className="inline-flex items-center rounded-lg border border-border bg-background/80 p-0.5">
+              {[7, 14, 30, 60, 90].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDays(d)}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                    days === d
+                      ? 'bg-primary/20 text-primary font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {d}d
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Repository & Type Filters */}
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border/40">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Type:</span>
+            <div className="flex flex-wrap items-center gap-1">
+              {(
+                [
+                  { id: 'all', label: 'All Updates' },
+                  { id: 'new_proposals', label: `New (${totalNew})` },
+                  { id: 'status_changes', label: `Status Changes (${totalChanges})` },
+                  { id: 'merged_prs', label: `Merged PRs (${totalPRs})` },
+                  { id: 'calls_devnets', label: `ACD & Devnets (${totalCalls})` },
+                  { id: 'last_call', label: `Last Call (${data?.lastCallEIPs.length ?? 0})` },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setFilter(tab.id as RecapFilter)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
+                    filter === tab.id
+                      ? 'bg-primary/15 border border-primary/40 text-primary font-semibold'
+                      : 'border border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <Button
-            onClick={handleCopyMarkdown}
-            variant="outline"
-            size="sm"
-            className="border-border bg-card/60 hover:bg-muted text-xs gap-1.5"
-          >
-            <Copy className="h-3.5 w-3.5 text-primary" />
-            Copy Recap
-          </Button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Repo:</span>
+            <div className="inline-flex items-center rounded-lg border border-border bg-background/80 p-0.5">
+              {(['all', 'eip', 'erc', 'rip'] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRepoFilter(r as RepoFilter)}
+                  className={`px-2 py-0.5 text-xs font-medium rounded-md uppercase transition-colors ${
+                    repoFilter === r
+                      ? 'bg-primary/20 text-primary font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Summary Pills Bar */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="rounded-lg border border-border/80 bg-card/40 px-3 py-1 text-xs">
-          <span className="font-semibold text-foreground">{totalNew}</span>{' '}
-          <span className="text-muted-foreground">New Proposals</span>
-        </div>
-        <div className="rounded-lg border border-border/80 bg-card/40 px-3 py-1 text-xs">
-          <span className="font-semibold text-foreground">{totalChanges}</span>{' '}
-          <span className="text-muted-foreground">Status Transitions</span>
-        </div>
-        <div className="rounded-lg border border-border/80 bg-card/40 px-3 py-1 text-xs">
-          <span className="font-semibold text-foreground">{totalPRs}</span>{' '}
-          <span className="text-muted-foreground">Merged PRs</span>
-        </div>
-        <div className="rounded-lg border border-border/80 bg-card/40 px-3 py-1 text-xs">
-          <span className="font-semibold text-foreground">{totalCalls}</span>{' '}
-          <span className="text-muted-foreground">ACD & Devnet Milestones</span>
-        </div>
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-border/60 pb-3">
-        {(
-          [
-            { id: 'all', label: 'All Updates' },
-            { id: 'new_proposals', label: `New (${totalNew})` },
-            { id: 'status_changes', label: `Status Changes (${totalChanges})` },
-            { id: 'merged_prs', label: `Merged PRs (${totalPRs})` },
-            { id: 'calls_devnets', label: `ACD & Devnets (${totalCalls})` },
-            { id: 'last_call', label: `Last Call (${data?.lastCallEIPs.length ?? 0})` },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setFilter(tab.id as RecapFilter)}
-            className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
-              filter === tab.id
-                ? 'bg-primary/15 border border-primary/40 text-primary font-semibold shadow-xs'
-                : 'border border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Feed List */}
+      {/* Main Feed List */}
       {loading ? (
-        <div className="space-y-2 py-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-xl bg-card/40 border border-border" />
+        <div className="space-y-3 py-6">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-card/40 border border-border" />
           ))}
         </div>
-      ) : visibleItems.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card/60 px-4 py-8 text-center">
-          <p className="text-sm text-muted-foreground">No standards activity found in the selected timeframe.</p>
+      ) : filteredItems.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card/60 px-4 py-12 text-center">
+          <p className="text-sm text-muted-foreground">No recap entries match your filter criteria.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {visibleItems.map((item) => {
+        <div className="space-y-2.5">
+          {filteredItems.map((item) => {
             const isExpanded = expandedId === item.id;
             return (
               <div
                 key={item.id}
-                className="overflow-hidden rounded-xl border border-border/70 bg-card/60 backdrop-blur-xs transition-all hover:border-primary/30"
+                className="overflow-hidden rounded-xl border border-border/70 bg-card/60 backdrop-blur-xs transition-all hover:border-primary/40"
               >
-                <div className="flex items-center justify-between px-4 py-3 gap-3">
+                <div className="flex items-center justify-between px-4 py-3.5 gap-3">
                   <div
                     onClick={() => setExpandedId(isExpanded ? null : item.id)}
                     className="flex flex-1 items-center gap-3 cursor-pointer min-w-0"
                   >
                     {item.actor ? (
-                      <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-full ring-1 ring-border" title={`@${item.actor}`}>
+                      <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full ring-1 ring-border" title={`@${item.actor}`}>
                         <img src={getAvatarUrl(item.actor)} alt={item.actor} className="h-full w-full object-cover" />
                       </div>
                     ) : (
-                      <Badge variant="outline" className="shrink-0 text-[10px] bg-background/80 font-medium">
+                      <Badge variant="outline" className="shrink-0 text-xs bg-background/80 font-medium">
                         {item.badgeText}
                       </Badge>
                     )}
@@ -441,7 +559,7 @@ export function WeeklyRecapSection() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         {item.actor && (
-                          <Badge variant="outline" className="shrink-0 text-[10px] bg-background/80 font-medium">
+                          <Badge variant="outline" className="shrink-0 text-xs bg-background/80 font-medium">
                             {item.badgeText}
                           </Badge>
                         )}
@@ -521,28 +639,6 @@ export function WeeklyRecapSection() {
           })}
         </div>
       )}
-
-      {/* Show More Button */}
-      {hasMore && (
-        <div className="mt-4 flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setShowAll(!showAll)}
-            className="border-border bg-card/60 hover:bg-muted text-xs gap-1.5 font-medium px-6"
-          >
-            {showAll ? (
-              <>
-                <ChevronUp className="h-4 w-4" /> Show Less
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-4 w-4" /> Show {filteredItems.length - INITIAL_LIMIT} More Updates
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-    </section>
+    </div>
   );
 }

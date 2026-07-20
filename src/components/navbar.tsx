@@ -21,6 +21,7 @@ import {
   Crown,
   Info,
   ArrowUpRight,
+  Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ const mobileNavSections = [
     label: "Standards",
     items: [
       { title: "All Standards", href: "/standards", icon: Layers },
+      { title: "Weekly Recap", href: "/recap", icon: Flame },
       { title: "EIPs", href: "/standards?repo=eips", icon: Layers },
       { title: "ERCs", href: "/standards?repo=ercs", icon: Layers },
       { title: "RIPs", href: "/standards?repo=rips", icon: Layers },
