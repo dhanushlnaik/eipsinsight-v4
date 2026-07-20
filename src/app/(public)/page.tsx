@@ -3892,7 +3892,7 @@ export default function EIPsHomePage() {
       {activePersona !== 'editor' && visibleSections.governance && <hr className="my-6 border-border" />}
 
       <section className="mb-6 w-full" id="recent-governance-activity">
-        <WeeklyRecapSection />
+        <WeeklyRecapSection sectionTitleClass={sectionTitleClass} sectionSubtitleClass={sectionSubtitleClass} />
       </section>
 
       </div>

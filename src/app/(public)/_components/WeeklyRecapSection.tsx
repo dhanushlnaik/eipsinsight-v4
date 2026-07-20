@@ -32,10 +32,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CopyLinkButton } from '@/components/header';
 import { callSeriesShort } from '@/data/call-series';
+import { cn } from '@/lib/utils';
 
 type WeeklyData = Awaited<ReturnType<typeof client.dashboard.getWeeklyRecap>>;
 
 type RecapFilter = 'all' | 'new_proposals' | 'status_changes' | 'merged_prs' | 'calls_devnets' | 'last_call';
+
+interface WeeklyRecapSectionProps {
+  sectionTitleClass?: string;
+  sectionSubtitleClass?: string;
+}
 
 function formatDate(isoString?: string | null) {
   if (!isoString) return '';
@@ -95,7 +101,7 @@ function extractTldrSummary(tldr: unknown): string {
   return '';
 }
 
-export function WeeklyRecapSection() {
+export function WeeklyRecapSection({ sectionTitleClass, sectionSubtitleClass }: WeeklyRecapSectionProps) {
   const [days, setDays] = useState<number>(7);
   const [data, setData] = useState<WeeklyData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -273,17 +279,20 @@ export function WeeklyRecapSection() {
       <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="inline-flex items-center gap-2">
-            <Flame className="h-5 w-5 text-primary" />
+            <Flame className="h-5 w-5 text-orange-500 shrink-0" />
             <Link
               href="/recap"
-              className="group inline-flex items-center gap-1 text-xl font-semibold tracking-tight text-foreground sm:text-2xl transition-colors hover:text-primary"
+              className={cn(
+                sectionTitleClass || 'dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl',
+                'group inline-flex items-center gap-1 transition-colors hover:text-primary'
+              )}
             >
               Weekly Standards Recap & Audit Feed
               <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-primary" />
             </Link>
             <CopyLinkButton sectionId="weekly-recap-digest" tooltipLabel="Copy link" />
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className={sectionSubtitleClass || 'mt-1 text-sm text-muted-foreground'}>
             Verifiable, real-time audit feed of new EIP proposals, status transitions, merged PRs, devnets, and ACD call decisions.
           </p>
         </div>
