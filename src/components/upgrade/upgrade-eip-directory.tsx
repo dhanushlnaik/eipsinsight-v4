@@ -46,12 +46,21 @@ const UPGRADE_YEARS: Record<string, number> = {
   fusaka: 2026, fulu: 2026, glamsterdam: 2026, hegota: 2027,
 };
 
-/** Consensus-layer forks — their EIPs are CL. Everything else defaults to EL (pre-Merge is all EL). */
-const CL_UPGRADES = new Set(['altair', 'bellatrix', 'capella', 'deneb', 'electra', 'fulu']);
-const deriveLayer = (layer: string | null, upgradeSlug: string): 'EL' | 'CL' => {
-  if (layer === 'EL' || layer === 'CL') return layer;
-  return CL_UPGRADES.has(upgradeSlug) ? 'CL' : 'EL';
-};
+/**
+ * Layer comes from the server: curated layer first, else the fork entry's own layer
+ * (execution vs consensus). We deliberately do NOT guess from the upgrade slug — the slug map
+ * folds CL forks into their EL pair (Deneb→cancun, Electra→pectra, Fulu→fusaka), so the slug
+ * says nothing about the layer. Anything still unknown stays unknown rather than being mislabelled.
+ */
+const deriveLayer = (layer: string | null): 'EL' | 'CL' | null =>
+  layer === 'EL' || layer === 'CL' ? layer : null;
+
+/**
+ * Combined EL/CL upgrades are stored with their full name — "Cancun/Deneb (Dencun)",
+ * "Fulu/Osaka (Fusaka)". In compact chips we want just the meta name ("Dencun", "Fusaka");
+ * single-layer upgrades ("London") are returned unchanged.
+ */
+const shortUpgradeName = (name: string) => name.match(/\(([^)]+)\)\s*$/)?.[1] ?? name;
 
 interface EipRow {
   eip_number: number;
@@ -206,7 +215,7 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
     () =>
       initialEips.map((e) => ({
         ...e,
-        layer: deriveLayer(e.layer, e.upgrade_slug),
+        layer: deriveLayer(e.layer),
         year: UPGRADE_YEARS[e.upgrade_slug] ?? null,
       })),
     [initialEips]
@@ -402,7 +411,7 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
                       highlighted && !selectedUpgrades.includes(up.slug) && 'ring-2 ring-primary/50 ring-offset-1 ring-offset-background',
                     )}
                   >
-                    {up.name}
+                    <span title={up.name}>{shortUpgradeName(up.name)}</span>
                     {UPGRADE_YEARS[up.slug] ? <span className="ml-1 opacity-60">’{String(UPGRADE_YEARS[up.slug]).slice(2)}</span> : null}
                   </button>
                 );
@@ -428,14 +437,14 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
 
           <FilterSection title="Layer">
             <div className="flex flex-wrap gap-1.5">
-              {['EL', 'CL'].map((lyr) => (
+              {['EL', 'CL', 'unset'].map((lyr) => (
                 <button
                   key={lyr}
                   type="button"
                   onClick={() => handleLayerToggle(lyr)}
                   className={pillClass(selectedLayers.includes(lyr))}
                 >
-                  {lyr === 'EL' ? 'Execution (EL)' : 'Consensus (CL)'}
+                  {lyr === 'EL' ? 'Execution (EL)' : lyr === 'CL' ? 'Consensus (CL)' : 'Unspecified'}
                 </button>
               ))}
             </div>
@@ -629,7 +638,7 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
                           href={`/upgrade/${eip.upgrade_slug}`}
                           className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
                         >
-                          {eip.upgrade_name}
+                          <span title={eip.upgrade_name}>{shortUpgradeName(eip.upgrade_name)}</span>
                           {eip.year ? <span className="opacity-60">· {eip.year}</span> : null}
                         </Link>
                       </td>
