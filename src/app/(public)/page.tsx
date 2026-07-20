@@ -2509,7 +2509,7 @@ export default function EIPsHomePage() {
                 <SectionTitleLink href="/explore/trending" className={sectionTitleClass}>Trending Proposals</SectionTitleLink>
                 <CopyLinkButton sectionId={activePersona === 'builder' ? 'builder-trending-proposals' : 'developer-trending-proposals'} tooltipLabel="Copy link" />
               </div>
-              <p className={sectionSubtitleClass}>Most impactful proposals shaping Ethereum today.</p>
+              <p className={sectionSubtitleClass}>Most discussed proposals shaping Ethereum today.</p>
             </div>
           </div>
           <TrendingProposals hideHeader />
