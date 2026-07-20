@@ -1,0 +1,491 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  Activity,
+  ArrowRight,
+  BookOpen,
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Copy,
+  ExternalLink,
+  FileText,
+  Flame,
+  GitCommit,
+  GitMerge,
+  Layers,
+  Loader2,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { client } from '@/lib/orpc';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+
+type WeeklyData = Awaited<ReturnType<typeof client.dashboard.getWeeklyRecap>>;
+
+type RecapFilter = 'all' | 'new_proposals' | 'status_changes' | 'merged_prs' | 'calls_devnets' | 'last_call';
+
+function formatDate(isoString?: string | null) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function timeAgo(isoString?: string | null) {
+  if (!isoString) return '';
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const hours = Math.floor(diffMs / 3_600_000);
+  if (hours < 1) return 'just now';
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function getProposalPath(category: string | null, number: number) {
+  const cat = category?.toLowerCase();
+  const folder = cat === 'erc' ? 'erc' : cat === 'rip' ? 'rip' : 'eip';
+  return `/${folder}/${number}`;
+}
+
+export function WeeklyRecapSection() {
+  const [days, setDays] = useState<number>(7);
+  const [data, setData] = useState<WeeklyData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [filter, setFilter] = useState<RecapFilter>('all');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const fetchRecap = async (daysRange: number) => {
+    setLoading(true);
+    try {
+      const res = await client.dashboard.getWeeklyRecap({ days: daysRange });
+      setData(res);
+    } catch (err) {
+      console.error('Failed to load public weekly recap:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecap(days);
+  }, [days]);
+
+  // Generate copyable markdown
+  const handleCopyMarkdown = () => {
+    if (!data) return;
+
+    const formattedDate = new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    let md = `# Ethereum Standards Recap (${days} Days) - ${formattedDate}\n\n`;
+    md += `Source: [EIPsInsight Verifiable Recap Feed](https://eipsinsight.com)\n\n---\n\n`;
+
+    if (data.newProposals.length > 0) {
+      md += `### 🆕 New Proposals Introduced\n`;
+      data.newProposals.forEach((p) => {
+        const typeStr = p.category ? `${p.category} ` : '';
+        md += `- **[${p.status}] [${typeStr}EIP-${p.number}](https://eipsinsight.com/${p.category?.toLowerCase() === 'erc' ? 'erc' : 'eip'}s/${p.number})**: ${p.title} *(Created ${formatDate(p.createdAt)})*\n`;
+      });
+      md += `\n`;
+    }
+
+    if (data.statusChanges.length > 0) {
+      md += `### 🔄 Lifecycle & Status Changes\n`;
+      data.statusChanges.forEach((sc) => {
+        const typeStr = sc.category ? `${sc.category} ` : '';
+        md += `- **[${typeStr}EIP-${sc.number}](https://eipsinsight.com/${sc.category?.toLowerCase() === 'erc' ? 'erc' : 'eip'}s/${sc.number})**: \`${sc.from}\` ➔ \`${sc.to}\` *(Changed ${formatDate(sc.changedAt)})*\n`;
+      });
+      md += `\n`;
+    }
+
+    if (data.mergedPRs.length > 0) {
+      md += `### 🪵 Recently Merged Pull Requests\n`;
+      data.mergedPRs.forEach((pr) => {
+        md += `- **[PR #${pr.number}](https://eipsinsight.com/pr/${pr.repoName}/${pr.number})**: ${pr.title} *(Merged ${formatDate(pr.mergedAt)} by @${pr.author})*\n`;
+      });
+      md += `\n`;
+    }
+
+    if (data.recentCalls.length > 0) {
+      md += `### 🗣️ Core Dev Calls Highlights\n`;
+      data.recentCalls.forEach((c) => {
+        md += `#### ${c.displayName || `${c.series} #${c.number}`} *(Occurred ${formatDate(c.occurredOn)})\*\n`;
+        if (c.tldr) md += `* **Summary:** ${String(c.tldr)}\n`;
+        md += `\n`;
+      });
+    }
+
+    if (data.devnets.length > 0) {
+      md += `### 🧪 Devnets Progression\n`;
+      data.devnets.forEach((d) => {
+        md += `- **[${d.active ? 'Active' : 'Closed'}] [${d.series.toUpperCase()} Devnet ${d.number}](https://eipsinsight.com/upgrade/devnets/${d.id})**: ${d.title}\n`;
+      });
+      md += `\n`;
+    }
+
+    if (data.lastCallEIPs.length > 0) {
+      md += `### 📢 Last Call Deadlines\n`;
+      data.lastCallEIPs.forEach((lc) => {
+        md += `- **[EIP-${lc.number}](https://eipsinsight.com/eips/${lc.number})**: ${lc.title} *(Deadline: ${lc.deadline || 'Immediate'})*\n`;
+      });
+      md += `\n`;
+    }
+
+    navigator.clipboard.writeText(md);
+    toast.success(`Copied ${days}-day verifiable recap markdown!`);
+  };
+
+  // Combine items for rendering
+  const items = React.useMemo(() => {
+    if (!data) return [];
+    const list: Array<{
+      id: string;
+      kind: 'new_proposal' | 'status_change' | 'merged_pr' | 'call' | 'devnet' | 'last_call';
+      title: string;
+      subtitle?: string;
+      badgeText: string;
+      badgeVariant?: string;
+      dateIso: string | null;
+      href: string;
+      externalHref?: string;
+      details?: React.ReactNode;
+    }> = [];
+
+    // New proposals
+    data.newProposals.forEach((p) => {
+      list.push({
+        id: `new-${p.number}`,
+        kind: 'new_proposal',
+        title: `${p.category || 'EIP'}-${p.number}: ${p.title}`,
+        subtitle: `Newly proposed ${p.category || 'EIP'} standard`,
+        badgeText: p.status,
+        badgeVariant: 'emerald',
+        dateIso: p.createdAt,
+        href: getProposalPath(p.category, p.number),
+      });
+    });
+
+    // Status changes
+    data.statusChanges.forEach((sc) => {
+      list.push({
+        id: `sc-${sc.number}-${sc.to}`,
+        kind: 'status_change',
+        title: `${sc.category || 'EIP'}-${sc.number}: ${sc.title}`,
+        subtitle: `Status transition from ${sc.from || 'Draft'} to ${sc.to}`,
+        badgeText: `${sc.from || 'Draft'} ➔ ${sc.to}`,
+        badgeVariant: 'amber',
+        dateIso: sc.changedAt,
+        href: getProposalPath(sc.category, sc.number),
+      });
+    });
+
+    // Merged PRs
+    data.mergedPRs.forEach((pr) => {
+      list.push({
+        id: `pr-${pr.repoName}-${pr.number}`,
+        kind: 'merged_pr',
+        title: `PR #${pr.number}: ${pr.title}`,
+        subtitle: `Merged by @${pr.author} in ${pr.repoName}`,
+        badgeText: 'Merged PR',
+        badgeVariant: 'sky',
+        dateIso: pr.mergedAt,
+        href: `/pr/${pr.repoName}/${pr.number}`,
+        externalHref: pr.repoName ? `https://github.com/${pr.repoName}/pull/${pr.number}` : undefined,
+      });
+    });
+
+    // Recent calls
+    data.recentCalls.forEach((c) => {
+      list.push({
+        id: `call-${c.series}-${c.number}`,
+        kind: 'call',
+        title: c.displayName || `${c.series.toUpperCase()} #${c.number}`,
+        subtitle: c.tldr ? String(c.tldr) : 'Core Developer Meeting',
+        badgeText: `${c.series.toUpperCase()} Call`,
+        badgeVariant: 'purple',
+        dateIso: c.occurredOn,
+        href: `/upgrade/calls/${c.series.toLowerCase()}/${c.number || ''}`,
+        details: c.keyDecisions && Array.isArray(c.keyDecisions) ? (
+          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Key Decisions:</span>
+            <ul className="list-disc pl-4 space-y-0.5">
+              {(c.keyDecisions as string[]).map((dec, i) => (
+                <li key={i}>{dec}</li>
+              ))}
+            </ul>
+          </div>
+        ) : undefined,
+      });
+    });
+
+    // Devnets
+    data.devnets.forEach((d) => {
+      list.push({
+        id: `devnet-${d.id}`,
+        kind: 'devnet',
+        title: `${d.series.toUpperCase()} Devnet ${d.number}: ${d.title}`,
+        subtitle: d.active ? 'Active Devnet progression' : 'Closed Devnet',
+        badgeText: d.active ? 'Active Devnet' : 'Closed Devnet',
+        badgeVariant: d.active ? 'emerald' : 'slate',
+        dateIso: d.scrapedAt,
+        href: `/upgrade/devnets/${d.id}`,
+      });
+    });
+
+    // Last Call EIPs
+    data.lastCallEIPs.forEach((lc) => {
+      list.push({
+        id: `lastcall-${lc.number}`,
+        kind: 'last_call',
+        title: `EIP-${lc.number}: ${lc.title}`,
+        subtitle: `Review Deadline: ${lc.deadline || 'Immediate'}`,
+        badgeText: 'Last Call',
+        badgeVariant: 'rose',
+        dateIso: null,
+        href: `/eip/${lc.number}`,
+      });
+    });
+
+    // Sort by date descending
+    list.sort((a, b) => {
+      if (!a.dateIso) return 1;
+      if (!b.dateIso) return -1;
+      return new Date(b.dateIso).getTime() - new Date(a.dateIso).getTime();
+    });
+
+    return list;
+  }, [data]);
+
+  // Filter items
+  const filteredItems = React.useMemo(() => {
+    if (filter === 'all') return items;
+    if (filter === 'new_proposals') return items.filter((i) => i.kind === 'new_proposal');
+    if (filter === 'status_changes') return items.filter((i) => i.kind === 'status_change');
+    if (filter === 'merged_prs') return items.filter((i) => i.kind === 'merged_pr');
+    if (filter === 'calls_devnets') return items.filter((i) => i.kind === 'call' || i.kind === 'devnet');
+    if (filter === 'last_call') return items.filter((i) => i.kind === 'last_call');
+    return items;
+  }, [items, filter]);
+
+  const totalNew = data?.newProposals.length ?? 0;
+  const totalChanges = data?.statusChanges.length ?? 0;
+  const totalPRs = data?.mergedPRs.length ?? 0;
+  const totalCalls = (data?.recentCalls.length ?? 0) + (data?.devnets.length ?? 0);
+
+  return (
+    <section className="mb-8 w-full" id="weekly-recap-digest">
+      {/* Section Header */}
+      <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="inline-flex items-center gap-2">
+            <Flame className="h-5 w-5 text-orange-500" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+              Weekly Standards Recap & Audit Feed
+            </h2>
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
+              Verifiable Feed
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Verifiable, real-time audit feed of new EIP proposals, status transitions, merged PRs, devnets, and ACD call decisions.
+          </p>
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Timeframe selector */}
+          <div className="inline-flex items-center rounded-lg border border-border bg-card/60 p-0.5">
+            {[7, 14, 30].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDays(d)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  days === d
+                    ? 'bg-primary/20 text-primary font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {d}d
+              </button>
+            ))}
+          </div>
+
+          <Button
+            onClick={handleCopyMarkdown}
+            variant="outline"
+            size="sm"
+            className="border-border bg-card/60 hover:bg-muted text-xs gap-1.5"
+          >
+            <Copy className="h-3.5 w-3.5 text-primary" />
+            Copy Recap Markdown
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary Pills Bar */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="rounded-lg border border-border/80 bg-card/40 px-3 py-1 text-xs">
+          <span className="font-semibold text-foreground">{totalNew}</span>{' '}
+          <span className="text-muted-foreground">New Proposals</span>
+        </div>
+        <div className="rounded-lg border border-border/80 bg-card/40 px-3 py-1 text-xs">
+          <span className="font-semibold text-foreground">{totalChanges}</span>{' '}
+          <span className="text-muted-foreground">Status Transitions</span>
+        </div>
+        <div className="rounded-lg border border-border/80 bg-card/40 px-3 py-1 text-xs">
+          <span className="font-semibold text-foreground">{totalPRs}</span>{' '}
+          <span className="text-muted-foreground">Merged PRs</span>
+        </div>
+        <div className="rounded-lg border border-border/80 bg-card/40 px-3 py-1 text-xs">
+          <span className="font-semibold text-foreground">{totalCalls}</span>{' '}
+          <span className="text-muted-foreground">ACD & Devnet Milestones</span>
+        </div>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-border/60 pb-3">
+        {(
+          [
+            { id: 'all', label: 'All Updates' },
+            { id: 'new_proposals', label: `New (${totalNew})` },
+            { id: 'status_changes', label: `Status Changes (${totalChanges})` },
+            { id: 'merged_prs', label: `Merged PRs (${totalPRs})` },
+            { id: 'calls_devnets', label: `ACD & Devnets (${totalCalls})` },
+            { id: 'last_call', label: `Last Call (${data?.lastCallEIPs.length ?? 0})` },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setFilter(tab.id as RecapFilter)}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+              filter === tab.id
+                ? 'bg-primary/15 border border-primary/40 text-primary font-semibold shadow-xs'
+                : 'border border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Feed List */}
+      {loading ? (
+        <div className="space-y-2 py-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-14 animate-pulse rounded-xl bg-card/40 border border-border" />
+          ))}
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card/60 px-4 py-8 text-center">
+          <p className="text-sm text-muted-foreground">No standards activity found in the selected timeframe.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredItems.map((item) => {
+            const isExpanded = expandedId === item.id;
+            return (
+              <div
+                key={item.id}
+                className="overflow-hidden rounded-xl border border-border/70 bg-card/60 backdrop-blur-xs transition-all hover:border-primary/30"
+              >
+                <div className="flex items-center justify-between px-4 py-3 gap-3">
+                  <div
+                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    className="flex flex-1 items-center gap-3 cursor-pointer min-w-0"
+                  >
+                    <Badge variant="outline" className="shrink-0 text-[10px] bg-background/80 font-medium">
+                      {item.badgeText}
+                    </Badge>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
+                      {item.subtitle && (
+                        <p className="truncate text-xs text-muted-foreground mt-0.5">{item.subtitle}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    {item.dateIso && (
+                      <span className="text-xs text-muted-foreground hidden sm:inline tabular-nums">
+                        {formatDate(item.dateIso)} ({timeAgo(item.dateIso)})
+                      </span>
+                    )}
+
+                    <Link
+                      href={item.href}
+                      className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      [Check]
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded details */}
+                <AnimatePresence initial={false}>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="border-t border-border/60 bg-muted/20 px-4 py-3"
+                    >
+                      <div className="space-y-2 text-xs text-muted-foreground">
+                        <p className="text-foreground font-medium">{item.title}</p>
+                        {item.subtitle && <p>{item.subtitle}</p>}
+                        {item.details}
+
+                        <div className="flex items-center gap-3 pt-2">
+                          <Link
+                            href={item.href}
+                            className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                          >
+                            View Observability Details
+                            <ArrowRight className="h-3 w-3" />
+                          </Link>
+                          {item.externalHref && (
+                            <a
+                              href={item.externalHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            >
+                              Verify on GitHub
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
