@@ -53,7 +53,7 @@ const getDevnetLink = (id: string) => {
 };
 
 const getCallLink = (c: { series: string; number: string }) => {
-  return `/upgrade/calls/${c.series.toLowerCase()}/${c.number}`;
+  return `/calls/${c.series.toLowerCase()}/${c.number}`;
 };
 
 export default function WeeklyRecapPage() {

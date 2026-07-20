@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { ArrowRight, Archive, BarChart2, GitCommit, Star } from 'lucide-react';
+import { ArrowRight, Archive, BarChart2, CalendarClock, GitCommit, Info, Package, Star, Zap } from 'lucide-react';
+import { CopyLinkButton } from '@/components/header';
 import '@/lib/orpc.server';
 import { cn } from '@/lib/utils';
 import {
@@ -179,9 +180,13 @@ export default async function UpgradeIndexPage() {
       {/* Network upgrades */}
       <section id="network-upgrades">
         <div className="mb-4">
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            Network upgrades
-          </h2>
+          <div className="inline-flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+              Network upgrades
+            </h2>
+            <CopyLinkButton sectionId="network-upgrades" tooltipLabel="Copy link" />
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Where each upgrade stands right now.
           </p>
@@ -202,9 +207,13 @@ export default async function UpgradeIndexPage() {
       {activity.length > 0 && (
         <section id="latest-changes">
           <div className="mb-4">
-            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-              Latest changes
-            </h2>
+            <div className="inline-flex items-center gap-2">
+              <GitCommit className="h-5 w-5 text-primary" />
+              <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                Latest changes
+              </h2>
+              <CopyLinkButton sectionId="latest-changes" tooltipLabel="Copy link" />
+            </div>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Every EIP movement across all upgrades, straight from the meta-EIP commit history.
             </p>
@@ -263,15 +272,19 @@ export default async function UpgradeIndexPage() {
         <section id="protocol-calls">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
             <div>
-              <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                Protocol calls
-              </h2>
+              <div className="inline-flex items-center gap-2">
+                <CalendarClock className="h-5 w-5 text-primary" />
+                <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                  Protocol calls
+                </h2>
+                <CopyLinkButton sectionId="protocol-calls" tooltipLabel="Copy link" />
+              </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Where upgrade decisions happen — agendas, recordings, and summaries.
               </p>
             </div>
             <Link
-              href="/upgrade/calls"
+              href="/calls"
               className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             >
               All calls
@@ -333,7 +346,7 @@ export default async function UpgradeIndexPage() {
                         {callSeriesShort(call.series)}
                       </span>
                       <Link
-                        href="/upgrade/calls"
+                        href="/calls"
                         className="min-w-0 flex-1 truncate text-sm text-foreground transition-colors hover:text-primary"
                       >
                         {callDisplayName(call)}
@@ -353,9 +366,13 @@ export default async function UpgradeIndexPage() {
       {/* How inclusion works */}
       <section id="how-inclusion-works">
         <div className="mb-4">
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            How EIPs get into an upgrade
-          </h2>
+          <div className="inline-flex items-center gap-2">
+            <Info className="h-5 w-5 text-primary" />
+            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+              How EIPs get into an upgrade
+            </h2>
+            <CopyLinkButton sectionId="how-inclusion-works" tooltipLabel="Copy link" />
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Proposals move through inclusion stages as client teams evaluate them.
           </p>
@@ -386,9 +403,13 @@ export default async function UpgradeIndexPage() {
       <section id="live">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-              Live on mainnet
-            </h2>
+            <div className="inline-flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                Live on mainnet
+              </h2>
+              <CopyLinkButton sectionId="live" tooltipLabel="Copy link" />
+            </div>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Activated network upgrades, newest first.
             </p>

@@ -125,7 +125,7 @@ export function CallsBrowser({ calls }: { calls: RecentCall[] }) {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <SeriesBadge series={call.series} />
                 <Link
-                  href={`/upgrade/calls/${call.series}/${call.call_number ?? call.call_id}`}
+                  href={`/calls/${call.series}/${call.call_number ?? call.call_id}`}
                   className="min-w-0 flex-1 text-sm font-medium text-foreground transition-colors hover:text-primary hover:underline"
                 >
                   {callDisplayName(call)}
@@ -158,7 +158,7 @@ export function CallsBrowser({ calls }: { calls: RecentCall[] }) {
                   )}
                   {call.has_transcript && (
                     <Link
-                      href={`/upgrade/calls/${call.series}/${call.call_number ?? call.call_id}`}
+                      href={`/calls/${call.series}/${call.call_number ?? call.call_id}`}
                       title="Transcript"
                       className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary"
                     >

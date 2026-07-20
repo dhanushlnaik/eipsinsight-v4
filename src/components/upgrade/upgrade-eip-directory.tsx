@@ -36,14 +36,36 @@ const upgradeRank = (slug: string) => {
   return i === -1 ? -1 : i; // unknown slugs sort last when descending
 };
 
-/** Activation year per upgrade (mainnet). Used to stamp each EIP card with its upgrade year. */
-const UPGRADE_YEARS: Record<string, number> = {
-  frontier: 2015, homestead: 2016, 'dao-fork': 2016, 'tangerine-whistle': 2016,
-  'spurious-dragon': 2016, byzantium: 2017, constantinople: 2019, istanbul: 2019,
-  'muir-glacier': 2020, berlin: 2021, london: 2021, altair: 2021, 'arrow-glacier': 2021,
-  'gray-glacier': 2022, bellatrix: 2022, paris: 2022, shanghai: 2023, capella: 2023,
-  cancun: 2024, deneb: 2024, prague: 2025, electra: 2025, pectra: 2025,
-  fusaka: 2026, fulu: 2026, glamsterdam: 2026, hegota: 2027,
+/**
+ * Mainnet activation date per upgrade slug (from src/data/network-upgrades.ts).
+ * Upgrades still in progress (Glamsterdam, Hegotá) have no date yet.
+ */
+const UPGRADE_DATES: Record<string, string> = {
+  frontier: '2015-07-30',
+  homestead: '2016-03-14',
+  'dao-fork': '2016-07-20',
+  'tangerine-whistle': '2016-10-18',
+  'spurious-dragon': '2016-11-22',
+  byzantium: '2017-10-16',
+  constantinople: '2019-02-28',
+  istanbul: '2019-12-07',
+  berlin: '2021-04-15',
+  london: '2021-08-05',
+  paris: '2022-09-15',
+  shanghai: '2023-04-12',
+  cancun: '2024-03-13',
+  pectra: '2025-05-07',
+  fusaka: '2025-12-03',
+};
+
+const upgradeYear = (slug: string) => UPGRADE_DATES[slug]?.slice(0, 4) ?? null;
+
+/** "2024-03-13" → "Mar 13, 2024" */
+const formatUpgradeDate = (iso: string | undefined) => {
+  if (!iso) return null;
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 };
 
 /**
@@ -216,7 +238,7 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
       initialEips.map((e) => ({
         ...e,
         layer: deriveLayer(e.layer),
-        year: UPGRADE_YEARS[e.upgrade_slug] ?? null,
+        upgradeDate: UPGRADE_DATES[e.upgrade_slug] ?? null,
       })),
     [initialEips]
   );
@@ -412,7 +434,7 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
                     )}
                   >
                     <span title={up.name}>{shortUpgradeName(up.name)}</span>
-                    {UPGRADE_YEARS[up.slug] ? <span className="ml-1 opacity-60">’{String(UPGRADE_YEARS[up.slug]).slice(2)}</span> : null}
+                    {upgradeYear(up.slug) ? <span className="ml-1 opacity-60">’{upgradeYear(up.slug)!.slice(2)}</span> : null}
                   </button>
                 );
               })}
@@ -556,6 +578,7 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
                     { field: 'eip_number', label: 'Proposal', width: '' },
                     { field: null, label: 'Title', width: 'w-full' },
                     { field: null, label: 'Upgrade', width: '' },
+                    { field: null, label: 'Upgrade Date', width: '' },
                     { field: 'bucket', label: 'Stage', width: '' },
                     { field: 'status', label: 'Status', width: '' },
                     { field: 'layer', label: 'Layer', width: '' },
@@ -639,8 +662,14 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
                           className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
                         >
                           <span title={eip.upgrade_name}>{shortUpgradeName(eip.upgrade_name)}</span>
-                          {eip.year ? <span className="opacity-60">· {eip.year}</span> : null}
                         </Link>
+                      </td>
+
+                      {/* Upgrade date — full mainnet activation date */}
+                      <td className="whitespace-nowrap px-4 py-3.5 align-middle text-sm text-muted-foreground">
+                        {formatUpgradeDate(eip.upgradeDate ?? undefined) ?? (
+                          <span className="text-muted-foreground/50" title="Not yet scheduled">—</span>
+                        )}
                       </td>
 
                       {/* Stage */}
@@ -696,7 +725,7 @@ export function UpgradeEipDirectory({ initialEips, upgrades }: UpgradeEipDirecto
 
                 {filteredEips.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-16 text-center">
+                    <td colSpan={7} className="px-4 py-16 text-center">
                       <div className="mx-auto flex max-w-xs flex-col items-center gap-2 text-muted-foreground">
                         <Search className="h-6 w-6 opacity-40" />
                         <p className="text-sm">No EIPs matched these filters.</p>

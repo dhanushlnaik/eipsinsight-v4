@@ -59,7 +59,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return buildMetadata({
     title: callDisplayName(call),
     description: `Recording, summary, decisions, and transcript for ${callDisplayName(call)}.`,
-    path: `/upgrade/calls/${resolvedParams.series}/${resolvedParams.number}`,
+    path: `/calls/${resolvedParams.series}/${resolvedParams.number}`,
   });
 }
 
@@ -107,7 +107,7 @@ export default async function CallDetailPage({ params }: Props) {
       {/* Back + prev/next */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
-          href="/upgrade/calls"
+          href="/calls"
           className="group inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
@@ -116,7 +116,7 @@ export default async function CallDetailPage({ params }: Props) {
         <div className="flex items-center gap-1.5">
           {neighbors.prev && (
             <Link
-              href={`/upgrade/calls/${neighbors.prev.series}/${neighbors.prev.number}`}
+              href={`/calls/${neighbors.prev.series}/${neighbors.prev.number}`}
               className="inline-flex items-center gap-1 rounded-md border border-border bg-card/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
               title={neighbors.prev.name ?? undefined}
             >
@@ -125,7 +125,7 @@ export default async function CallDetailPage({ params }: Props) {
           )}
           {neighbors.next && (
             <Link
-              href={`/upgrade/calls/${neighbors.next.series}/${neighbors.next.number}`}
+              href={`/calls/${neighbors.next.series}/${neighbors.next.number}`}
               className="inline-flex items-center gap-1 rounded-md border border-border bg-card/60 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
               title={neighbors.next.name ?? undefined}
             >

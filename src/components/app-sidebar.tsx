@@ -118,7 +118,7 @@ const sidebarSections: SidebarSection[] = [
           { title: "Overview", href: "/upgrade" },
           { title: "Upgrade EIP Directory", href: "/upgrade/eips" },
           {
-            title: "In progress",
+            title: "Current Upgrades",
             href: "/upgrade",
             items: [
               { title: "Hegotá", href: "/upgrade/hegota" },
@@ -135,27 +135,27 @@ const sidebarSections: SidebarSection[] = [
       {
         title: "Calls",
         icon: CalendarClock,
-        href: "/upgrade/calls",
+        href: "/calls",
         items: [
-          { title: "All Calls", href: "/upgrade/calls" },
+          { title: "All Calls", href: "/calls" },
           {
             title: "ACD Calls",
-            href: "/upgrade/calls?series=acd",
+            href: "/calls?series=acd",
             items: [
-              { title: "ACDE — Execution", href: "/upgrade/calls?series=acd&acd=acde" },
-              { title: "ACDC — Consensus", href: "/upgrade/calls?series=acd&acd=acdc" },
-              { title: "ACDT — Testing", href: "/upgrade/calls?series=acd&acd=acdt" },
-              { title: "ACDT-CL Breakout", href: "/upgrade/calls?series=acd&acd=acdtcl" },
+              { title: "ACDE — Execution", href: "/calls?series=acd&acd=acde" },
+              { title: "ACDC — Consensus", href: "/calls?series=acd&acd=acdc" },
+              { title: "ACDT — Testing", href: "/calls?series=acd&acd=acdt" },
+              { title: "ACDT-CL Breakout", href: "/calls?series=acd&acd=acdtcl" },
             ],
           },
-          { title: "Breakout Calls", href: "/upgrade/calls?series=breakouts" },
+          { title: "Breakout Calls", href: "/calls?series=breakouts" },
           {
             title: "Decisions",
-            href: "/upgrade/decisions",
+            href: "/decisions",
             items: [
-              { title: "All Decisions", href: "/upgrade/decisions" },
-              { title: "From ACD", href: "/upgrade/decisions?series=acd" },
-              { title: "From Breakouts", href: "/upgrade/decisions?series=breakouts" },
+              { title: "All Decisions", href: "/decisions" },
+              { title: "From ACD", href: "/decisions?series=acd" },
+              { title: "From Breakouts", href: "/decisions?series=breakouts" },
             ],
           },
         ],

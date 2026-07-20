@@ -411,7 +411,7 @@ const PERSONA_HOME_PLANS: Record<HomePersona, {
     goal: 'Quickly understand ongoing protocol changes and identify actionable items.',
     tools: [
       { key: 'upgrade-hub', title: 'Upgrade Hub', href: '/upgrade', cta: 'Open the hub', icon: Network, blurb: 'Upgrade timelines, headliner EIPs, and what ships next.', image: '/quick-access/upgrade-hub.png' },
-      { key: 'calls-decisions', title: 'Protocol Calls & Decisions', href: '/upgrade/decisions', cta: 'See the decisions', icon: Gavel, blurb: 'Key outcomes from All Core Devs and breakout calls.', image: '/quick-access/calls-decisions.png' },
+      { key: 'calls-decisions', title: 'Protocol Calls & Decisions', href: '/decisions', cta: 'See the decisions', icon: Gavel, blurb: 'Key outcomes from All Core Devs and breakout calls.', image: '/quick-access/calls-decisions.png' },
       { key: 'editor-insights', title: 'Editor Insights', href: '/analytics/editors', cta: 'View insights', icon: Trophy, blurb: 'Editorial workload, coverage, and the leaderboard.', image: '/quick-access/editor-insights.png' },
       { key: 'eip-analytics', title: 'EIP Analytics', href: '/analytics/eips', cta: 'Explore analytics', icon: FileText, blurb: 'Proposal activity and lifecycle, Draft to Final.', image: '/quick-access/eip-analytics.png' },
       { key: 'pr-board', title: 'Open PR Board', href: '/board', cta: 'Open the board', icon: GitPullRequest, blurb: "Open PRs, sorted by what's waiting on editors.", image: '/quick-access/pr-board.png' },
@@ -426,7 +426,7 @@ const PERSONA_HOME_PLANS: Record<HomePersona, {
       { key: 'editing-board', title: 'Editing Board', href: '/board?status=Waiting+on+Editor&page=1', cta: 'Open the board', icon: GitPullRequest, blurb: 'Direct waiting-on-editor view.', image: '/quick-access/pr-board.png' },
       { key: 'editor-leaderboard', title: 'Editor Leaderboard', href: '/analytics/editors', cta: 'View leaderboard', icon: Trophy, blurb: 'Monthly editorial activity snapshot.', image: '/quick-access/editor-insights.png' },
       { key: 'pr-analytics', title: 'PR Analytics', href: '/analytics/prs', cta: 'Explore analytics', icon: ArrowUpDown, blurb: 'PR flow, velocity, and waiting states.', image: '/quick-access/eip-analytics.png' },
-      { key: 'calls-decisions', title: 'Protocol Calls & Decisions', href: '/upgrade/decisions', cta: 'See the decisions', icon: Gavel, blurb: 'Outcomes from All Core Devs and breakout calls.', image: '/quick-access/calls-decisions.png' },
+      { key: 'calls-decisions', title: 'Protocol Calls & Decisions', href: '/decisions', cta: 'See the decisions', icon: Gavel, blurb: 'Outcomes from All Core Devs and breakout calls.', image: '/quick-access/calls-decisions.png' },
     ],
   },
   builder: {

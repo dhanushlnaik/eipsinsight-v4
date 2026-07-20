@@ -149,8 +149,8 @@ export function UpgradeShell({ children }: { children: React.ReactNode }) {
   const onUpgradePage = upgradeLinks.some((link) => pathname.startsWith(link.href));
 
   const trackLinks = [
-    { href: '/upgrade/calls', label: 'Calls', icon: PhoneCall },
-    { href: '/upgrade/decisions', label: 'Decisions', icon: CheckSquare },
+    { href: '/calls', label: 'Calls', icon: PhoneCall },
+    { href: '/decisions', label: 'Decisions', icon: CheckSquare },
   ];
   const exploreLinks = [
     { href: '/upgrade/schedule', label: 'Schedule', icon: Calendar },
@@ -244,8 +244,8 @@ export function UpgradeShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <NavPill href="/upgrade/eips" label="EIPs" active={pathname.startsWith('/upgrade/eips')} />
-            <NavPill href="/upgrade/calls" label="Calls" active={pathname.startsWith('/upgrade/calls')} />
-            <NavPill href="/upgrade/decisions" label="Decisions" active={pathname.startsWith('/upgrade/decisions')} />
+            <NavPill href="/calls" label="Calls" active={pathname.startsWith('/calls')} />
+            <NavPill href="/decisions" label="Decisions" active={pathname.startsWith('/decisions')} />
             <NavPill href="/upgrade/devnets" label="Devnets" active={pathname.startsWith('/upgrade/devnets')} />
             <NavPill href="/upgrade/schedule" label="Schedule" active={pathname.startsWith('/upgrade/schedule')} />
             <NavPill href="/upgrade/analytics" label="Analytics" active={pathname.startsWith('/upgrade/analytics')} />
@@ -390,8 +390,8 @@ export function UpgradeShell({ children }: { children: React.ReactNode }) {
 
               <div className="my-1 h-px bg-border/50" />
               <NavPill href="/upgrade/eips" label="EIPs" active={pathname.startsWith('/upgrade/eips')} onClick={closeMenus} />
-              <NavPill href="/upgrade/calls" label="Calls" active={pathname.startsWith('/upgrade/calls')} onClick={closeMenus} />
-              <NavPill href="/upgrade/decisions" label="Decisions" active={pathname.startsWith('/upgrade/decisions')} onClick={closeMenus} />
+              <NavPill href="/calls" label="Calls" active={pathname.startsWith('/calls')} onClick={closeMenus} />
+              <NavPill href="/decisions" label="Decisions" active={pathname.startsWith('/decisions')} onClick={closeMenus} />
               <NavPill href="/upgrade/devnets" label="Devnets" active={pathname.startsWith('/upgrade/devnets')} onClick={closeMenus} />
               <NavPill href="/upgrade/schedule" label="Schedule" active={pathname.startsWith('/upgrade/schedule')} onClick={closeMenus} />
               <NavPill href="/upgrade/analytics" label="Analytics" active={pathname.startsWith('/upgrade/analytics')} onClick={closeMenus} />
