@@ -3,6 +3,7 @@ import { Libre_Baskerville as LibreBaskervilleFont, Inter as InterFont } from "n
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "@/lib/orpc.server";
+import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import { ShellSwitcher } from "@/components/shell-switcher";
 import { SiteAssistant } from "@/components/site-assistant";
 import { Toaster } from "@/components/ui/sonner";
@@ -75,6 +76,7 @@ export default function RootLayout({
           <ShellSwitcher>{children}</ShellSwitcher>
           <SiteAssistant />
           <WhatsNewV4Dialog />
+          <CookieConsentBanner />
           <Toaster />
         </Providers>
       </body>
