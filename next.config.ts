@@ -38,15 +38,17 @@ const nextConfig: NextConfig = {
         destination: '/upgrade/schedule',
         permanent: false,
       },
+      // Calls moved out of the /upgrade tree to top-level /calls.
+      // Keep the old paths working for existing links/bookmarks.
       {
-        source: '/calls',
-        destination: '/upgrade/calls',
-        permanent: false,
+        source: '/upgrade/calls',
+        destination: '/calls',
+        permanent: true,
       },
       {
-        source: '/calls/:series/:number',
-        destination: '/upgrade/calls/:series/:number',
-        permanent: false,
+        source: '/upgrade/calls/:series/:number',
+        destination: '/calls/:series/:number',
+        permanent: true,
       },
       {
         source: '/devnets',
@@ -63,10 +65,11 @@ const nextConfig: NextConfig = {
         destination: '/upgrade/eips',
         permanent: false,
       },
+      // Decisions moved out of the /upgrade tree to top-level /decisions.
       {
-        source: '/decisions',
-        destination: '/upgrade/decisions',
-        permanent: false,
+        source: '/upgrade/decisions',
+        destination: '/decisions',
+        permanent: true,
       },
       // Per-upgrade shortcuts (current/in-progress forks only)
       {

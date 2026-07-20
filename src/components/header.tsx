@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { Copy, Check, Activity, Sparkles, TrendingUp, BarChart3 } from 'lucide-react';
+import { Copy, Check, Activity, Sparkles, TrendingUp, BarChart3, CalendarClock, Package, ClipboardList } from 'lucide-react';
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
@@ -52,7 +52,8 @@ export function CopyLinkButton({
 interface PageHeaderProps {
   eyebrow?: string;
   indicator?: {
-    icon?: 'activity' | 'sparkles' | 'trending' | 'chart';
+    icon?: keyof typeof iconMap;
+    /** Client components only — a component reference can't be serialised from a server page. */
     customIcon?: LucideIcon;
     label?: string;
     pulse?: boolean;
@@ -63,13 +64,34 @@ interface PageHeaderProps {
   sectionId?: string;
   showCopyLink?: boolean;
   titleAs?: 'h1' | 'h2';
+  /**
+   * Horizontal padding for the header's *content*. Defaults to the full-bleed page scale.
+   *
+   * Pages that render the header inside their own constrained container (e.g.
+   * `max-w-6xl px-4 sm:px-6`) must pass the same padding the container uses — otherwise
+   * the title and copy button sit further in than the sections below them. Passing
+   * `px-0` and placing the header inside the padded wrapper is the simplest way.
+   *
+   * The decorative gradient stays full-bleed regardless; only the text inset changes.
+   */
+  padding?: string;
+  /** Extra classes for the description — e.g. widen or narrow its measure. */
+  descriptionClassName?: string;
 }
 
+/**
+ * String-keyed icons so SERVER components can set an indicator. Passing a component
+ * (via `customIcon`) only works from client pages — it can't cross the server→client
+ * boundary. Prefer `icon: '<key>'` and add a key here when a page needs a new one.
+ */
 const iconMap = {
   activity: Activity,
   sparkles: Sparkles,
   trending: TrendingUp,
   chart: BarChart3,
+  calendar: CalendarClock,
+  package: Package,
+  clipboard: ClipboardList,
 };
 
 export function PageHeader({
@@ -81,6 +103,8 @@ export function PageHeader({
   sectionId,
   showCopyLink = true,
   titleAs = 'h1',
+  padding = 'px-4 sm:px-6 lg:px-8 xl:px-12',
+  descriptionClassName,
 }: PageHeaderProps) {
   const [copied, setCopied] = useState(false);
   const IconComponent = indicator?.customIcon || (indicator?.icon ? iconMap[indicator.icon] : null);
@@ -106,7 +130,7 @@ export function PageHeader({
         <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/10 via-primary/0 to-transparent" />
       </div>
 
-      <div className="w-full max-w-full px-4 pt-10 pb-5 sm:px-6 sm:pt-12 lg:px-8 xl:px-12">
+      <div className={cn('w-full max-w-full pt-10 pb-5 sm:pt-12', padding)}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1 space-y-2">
             {(indicator || eyebrow) && (
@@ -174,7 +198,12 @@ export function PageHeader({
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.1 }}
-                className="max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base"
+                // text-pretty avoids orphans/short trailing lines; 4xl lets the sentence
+                // breathe on wide screens instead of wrapping halfway across the page.
+                className={cn(
+                  'max-w-4xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base',
+                  descriptionClassName
+                )}
               >
                 {description}
               </motion.p>

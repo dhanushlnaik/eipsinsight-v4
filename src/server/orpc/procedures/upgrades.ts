@@ -720,7 +720,10 @@ export const upgradesProcedures = {
       const upgradeById = new Map(upgrades.map((u) => [u.id, u]));
       const upgradeBySlug = new Map(upgrades.map((u) => [u.slug, u]));
 
-      type Pairing = { eip_number: number; slug: string; bucket: string };
+      // sourceLayer comes from the fork entry itself (execution vs consensus fork). The slug map
+      // collapses CL forks into their paired EL slug (Deneb→cancun, Electra→pectra, Fulu→fusaka),
+      // so the slug alone can NOT tell you the layer — this preserves it.
+      type Pairing = { eip_number: number; slug: string; bucket: string; sourceLayer?: 'EL' | 'CL' };
       const pairings: Pairing[] = [];
       const seen = new Set<string>(); // `${eip}:${slug}` dedupe
 
@@ -746,7 +749,12 @@ export const upgradesProcedures = {
           const key = `${eip_number}:${slug}`;
           if (seen.has(key)) continue;
           seen.add(key);
-          pairings.push({ eip_number, slug, bucket: 'included' });
+          pairings.push({
+            eip_number,
+            slug,
+            bucket: 'included',
+            sourceLayer: item.layer === 'consensus' ? 'CL' : 'EL',
+          });
         }
       }
 
@@ -782,7 +790,8 @@ export const upgradesProcedures = {
           status,
           type: snapshot?.type ?? 'Standards Track',
           category: snapshot?.category ?? eipTitles[String(p.eip_number)]?.category ?? 'Core',
-          layer: curation?.layer ?? null,
+          // Curated layer wins; otherwise fall back to the fork entry's own layer.
+          layer: curation?.layer ?? p.sourceLayer ?? null,
           is_headliner: curation?.headliner_of === p.slug,
           upgrade_name: upgrade?.name ?? p.slug,
           upgrade_slug: p.slug,

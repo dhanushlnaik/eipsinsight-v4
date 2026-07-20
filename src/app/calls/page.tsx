@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
-import { CalendarClock } from 'lucide-react';
+import { Suspense } from 'react';
+import { CalendarClock, History } from 'lucide-react';
+import { PageHeader } from '@/components/header';
+import { UpgradeSection } from '@/components/upgrade/upgrade-section';
 import '@/lib/orpc.server';
 import { cn } from '@/lib/utils';
 import { buildMetadata } from '@/lib/seo';
@@ -16,7 +19,7 @@ export const metadata: Metadata = buildMetadata({
   title: 'Protocol Calls',
   description:
     'Upcoming and recent Ethereum protocol calls — AllCoreDevs, testing, and breakout series — with agendas, recordings, and summaries.',
-  path: '/upgrade/calls',
+  path: '/calls',
   keywords: ['AllCoreDevs', 'ACDE', 'ACDC', 'Ethereum protocol calls'],
 });
 
@@ -50,27 +53,24 @@ export default async function ProtocolCallsPage() {
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-10 px-4 pb-12 pt-8 sm:px-6">
-      <header>
-        <h1 className="dec-title persona-title text-balance text-3xl font-semibold tracking-tight leading-[1.1] sm:text-4xl">
-          Protocol calls
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-          AllCoreDevs and breakout calls where upgrade decisions happen — agendas from
-          ethereum/pm, recordings, and AI summaries, synced automatically.
-        </p>
-      </header>
+    // No space-y on this container: UpgradeSection owns its vertical rhythm (divider + pt/pb).
+    <div className="mx-auto w-full max-w-6xl px-4 pb-12 sm:px-6">
+      {/* padding="px-0": the wrapper already pads, so the header aligns with the sections. */}
+      <PageHeader
+        eyebrow="Governance"
+        indicator={{ icon: 'calendar', label: 'Protocol calls', pulse: upcoming.length > 0 }}
+        title="Protocol calls"
+        description="AllCoreDevs and breakout calls where upgrade decisions happen — agendas from ethereum/pm, recordings, and AI summaries, synced automatically."
+        sectionId="protocol-calls-overview"
+        padding="px-0"
+      />
 
-      {/* Upcoming */}
-      <section id="upcoming">
-        <div className="mb-4">
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            Upcoming
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Parsed from open agenda issues on ethereum/pm.
-          </p>
-        </div>
+      <UpgradeSection
+        id="upcoming"
+        icon={CalendarClock}
+        title="Upcoming"
+        description="Parsed from open agenda issues on ethereum/pm."
+      >
         {upcoming.length === 0 ? (
           <p className="rounded-xl border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
             No upcoming calls found right now — check back after the next scheduler sync.
@@ -103,28 +103,25 @@ export default async function ProtocolCallsPage() {
             </ul>
           </div>
         )}
-      </section>
+      </UpgradeSection>
 
-      {/* Recent */}
-      <section id="recent">
-        <div className="mb-4">
-          <h2 className="dec-title text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            Recent calls
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Latest calls with recordings and summaries from the ACDbot pipeline — filter by
-            series below.
-          </p>
-        </div>
+      <UpgradeSection
+        id="recent"
+        icon={History}
+        title="Recent calls"
+        description="Latest calls with recordings and summaries from the ACDbot pipeline — filter by series below."
+      >
         {recent.length === 0 ? (
           <p className="rounded-xl border border-border bg-card/60 px-4 py-6 text-sm text-muted-foreground">
             No calls synced yet — the scheduler populates this within a few minutes of its
             first run.
           </p>
         ) : (
-          <CallsBrowser calls={recent} />
+          <Suspense fallback={null}>
+            <CallsBrowser calls={recent} />
+          </Suspense>
         )}
-      </section>
+      </UpgradeSection>
     </div>
   );
 }

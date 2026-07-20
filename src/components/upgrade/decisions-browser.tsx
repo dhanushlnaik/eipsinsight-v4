@@ -205,14 +205,14 @@ export function DecisionsBrowser({ calls }: { calls: DecisionCall[] }) {
                   {callSeriesShort(call.series)}
                 </span>
                 <h2 className="text-sm font-semibold text-foreground hover:text-primary transition-colors">
-                  <Link href={`/upgrade/calls/${call.series}/${call.call_number ?? call.call_id}`} className="hover:underline">
+                  <Link href={`/calls/${call.series}/${call.call_number ?? call.call_id}`} className="hover:underline">
                     {callDisplayName(call)}
                   </Link>
                 </h2>
                 <span className="text-xs text-muted-foreground">{call.occurred_on}</span>
                 <span className="ml-auto flex items-center gap-3">
                   <Link
-                    href={`/upgrade/calls/${call.series}/${call.call_number ?? call.call_id}`}
+                    href={`/calls/${call.series}/${call.call_number ?? call.call_id}`}
                     className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                   >
                     <FileText className="h-3.5 w-3.5" />

@@ -72,23 +72,25 @@ async function seedUpgrades() {
       repo: null,
       file_path: null,
     },
+    // Combined EL/CL upgrades use the meta name, matching the scheduler's convention
+    // for Pectra ("Prague/Electra (Pectra)") and Fusaka ("Fulu/Osaka (Fusaka)").
     {
       slug: 'paris',
-      name: 'Merge',
+      name: 'Paris/Bellatrix (The Merge)',
       meta_eip: null,
       repo: null,
       file_path: null,
     },
     {
       slug: 'shanghai',
-      name: 'Shanghai',
+      name: 'Shanghai/Capella (Shapella)',
       meta_eip: null,
       repo: null,
       file_path: null,
     },
     {
       slug: 'cancun',
-      name: 'Cancun',
+      name: 'Cancun/Deneb (Dencun)',
       meta_eip: 4844,
       repo: null,
       file_path: null,

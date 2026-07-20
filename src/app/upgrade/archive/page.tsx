@@ -155,7 +155,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     relatedLinks: [{ title: 'EIP-1559 & London Fork', url: 'https://etherworld.co/tag/eip-1559/' }],
   },
   {
-    name: 'Merge',
+    name: 'Paris/Bellatrix (The Merge)',
     slug: 'paris',
     date: '2022-09-15',
     eipCount: 2,
@@ -168,7 +168,7 @@ const previousUpgrades: HistoricalUpgrade[] = [
     relatedLinks: [{ title: 'The Merge Explained', url: 'https://etherworld.co/tag/the-merge/' }],
   },
   {
-    name: 'Shanghai',
+    name: 'Shanghai/Capella (Shapella)',
     slug: 'shanghai',
     date: '2023-04-12',
     eipCount: 4,
@@ -181,17 +181,30 @@ const previousUpgrades: HistoricalUpgrade[] = [
     relatedLinks: [{ title: 'Shanghai Upgrade', url: 'https://etherworld.co/tag/shanghai/' }],
   },
   {
-    name: 'Cancun',
+    name: 'Cancun/Deneb (Dencun)',
     slug: 'cancun',
     date: '2024-03-13',
-    eipCount: 6,
+    eipCount: 9,
     type: 'Hard Fork',
     layer: 'execution',
     summary: 'Delivered proto-danksharding groundwork for L2 scaling.',
     description:
-      'Cancun introduced EIP-4844 (blobs), enabling Layer 2 solutions to post data more economically and reducing rollup costs by orders of magnitude.',
+      'Dencun introduced EIP-4844 (blobs), enabling Layer 2 solutions to post data more economically and reducing rollup costs by orders of magnitude. The Deneb consensus half shipped EIP-7044, EIP-7045 and EIP-7514.',
     impact: 'Enabled L2 scaling; reduced rollup costs; laid danksharding groundwork.',
     relatedLinks: [{ title: 'EIP-4844 & Cancun', url: 'https://etherworld.co/tag/eip-4844/' }],
+  },
+  {
+    name: 'Prague/Electra (Pectra)',
+    slug: 'pectra',
+    date: '2025-05-07',
+    eipCount: 11,
+    type: 'Hard Fork',
+    layer: 'execution',
+    summary: 'Account abstraction groundwork and a major staking overhaul.',
+    description:
+      'Pectra paired the Prague execution fork with the Electra consensus fork. It shipped EIP-7702 (set EOA account code), EIP-2537 (BLS precompiles) and EIP-2935 (historical block hashes) on the execution side, alongside EIP-7251 (raised MAX_EFFECTIVE_BALANCE), EIP-6110 (on-chain deposits) and EIP-7002 (execution-triggerable exits) for staking.',
+    impact: 'Smart-account UX for EOAs; validator consolidation; simpler staking operations.',
+    relatedLinks: [{ title: 'Pectra Upgrade', url: 'https://etherworld.co/tag/pectra/' }],
   },
 ];
 
@@ -223,17 +236,19 @@ export default function PreviousUpgradesPage() {
   );
 
   return (
-    <div className="bg-background mx-auto min-h-screen w-full max-w-6xl">
+    <div className="bg-background mx-auto min-h-screen w-full max-w-6xl px-4 sm:px-6">
+      {/* padding="px-0": the wrapper pads, so the header lines up with the sections. */}
       <PageHeader
         eyebrow="Archive"
         indicator={{ icon: 'chart', label: 'History', pulse: false }}
         title="Previous Upgrades (2015–2024)"
         description="Historical upgrade overview with timeline spacing, size comparison, and upgrade-level context."
         sectionId="previous-upgrades-overview"
-        className="bg-background [&>div:last-child]:px-5 sm:[&>div:last-child]:px-6 lg:[&>div:last-child]:px-7 xl:[&>div:last-child]:px-8"
+        className="bg-background"
+        padding="px-0"
       />
 
-      <div className="w-full px-3 pb-10 sm:px-4 lg:px-5 xl:px-6">
+      <div className="w-full pb-10">
         <div className="h-px w-full bg-border/60" />
 
         <section className="pt-6 pb-4">
