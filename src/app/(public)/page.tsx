@@ -59,6 +59,7 @@ import NewcomerHomeDashboard from './_components/persona-home/NewcomerHomeDashbo
 import DeveloperUpgradeWatchSection from './_components/persona-home/DeveloperUpgradeWatchSection';
 import EditorReviewQueueSection from './_components/persona-home/EditorReviewQueueSection';
 import EditorCategoryBreakdownSection from './_components/persona-home/EditorCategoryBreakdownSection';
+import { WeeklyRecapSection } from './_components/WeeklyRecapSection';
 import { useSession } from '@/hooks/useSession';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
@@ -2356,7 +2357,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-primary" />
+                <Trophy className="h-5 w-5 text-amber-400 shrink-0" />
                 <SectionTitleLink href="/analytics/editors" className={sectionTitleClass}>Editors - {editorContributionWindowLabel}</SectionTitleLink>
                 <CopyLinkButton sectionId="editor-contributions-overview" tooltipLabel="Copy link" />
               </div>
@@ -2464,7 +2465,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-primary" />
+                <BookOpen className="h-5 w-5 text-emerald-400 shrink-0" />
                 <SectionTitleLink href="/resources" className={sectionTitleClass}>Learning Resources</SectionTitleLink>
                 <CopyLinkButton sectionId="newcomer-learning-resources" tooltipLabel="Copy link" />
               </div>
@@ -2504,11 +2505,11 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Flame className="h-5 w-5 text-primary" />
+                <Flame className="h-5 w-5 text-rose-500 shrink-0" />
                 <SectionTitleLink href="/explore/trending" className={sectionTitleClass}>Trending Proposals</SectionTitleLink>
                 <CopyLinkButton sectionId={activePersona === 'builder' ? 'builder-trending-proposals' : 'developer-trending-proposals'} tooltipLabel="Copy link" />
               </div>
-              <p className={sectionSubtitleClass}>Most impactful proposals shaping Ethereum today.</p>
+              <p className={sectionSubtitleClass}>Most discussed proposals shaping Ethereum today.</p>
             </div>
           </div>
           <TrendingProposals hideHeader />
@@ -2527,7 +2528,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Flame className="h-5 w-5 text-primary" />
+                <Flame className="h-5 w-5 text-rose-500 shrink-0" />
                 <SectionTitleLink href="/explore/trending" className={sectionTitleClass}>Trending Proposals</SectionTitleLink>
                 <CopyLinkButton sectionId="newcomer-trending-proposals" tooltipLabel="Copy link" />
               </div>
@@ -2575,7 +2576,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Package className="h-5 w-5 text-primary" />
+                <Package className="h-5 w-5 text-sky-400 shrink-0" />
                 <SectionTitleLink href="/upgrade" className={sectionTitleClass}>Upgrade Hub</SectionTitleLink>
                 <CopyLinkButton sectionId="newcomer-upgrade-watch" tooltipLabel="Copy link" />
               </div>
@@ -2612,7 +2613,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Zap className="h-5 w-5 text-primary" />
+                <Zap className="h-5 w-5 text-yellow-400 shrink-0" />
                 <SectionTitleLink href="/dashboard" className={sectionTitleClass}>Governance Over Time</SectionTitleLink>
                 <CopyLinkButton sectionId="developer-governance-over-time" tooltipLabel="Copy link" />
               </div>
@@ -2631,7 +2632,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Code className="h-5 w-5 text-primary" />
+                <Code className="h-5 w-5 text-purple-400 shrink-0" />
                 <SectionTitleLink href="/eip-builder" className={sectionTitleClass}>EIP Builder</SectionTitleLink>
                 <CopyLinkButton sectionId="builder-eip-builder-focus" tooltipLabel="Copy link" />
               </div>
@@ -2658,7 +2659,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Activity className="h-5 w-5 text-primary" />
+                <Activity className="h-5 w-5 text-blue-400 shrink-0" />
                 <SectionTitleLink href="/board" className={sectionTitleClass}>Board</SectionTitleLink>
                 <CopyLinkButton sectionId="developer-board-snapshot" tooltipLabel="Copy link" />
               </div>
@@ -2814,7 +2815,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-primary" />
+                <Wrench className="h-5 w-5 text-indigo-400 shrink-0" />
                 <SectionTitleLink href="/tools" className={sectionTitleClass}>Tool Shortcuts</SectionTitleLink>
               </div>
               <div className="mt-1 flex items-center gap-2">
@@ -2858,7 +2859,7 @@ export default function EIPsHomePage() {
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-primary" />
+                <Wrench className="h-5 w-5 text-indigo-400 shrink-0" />
                 <SectionTitleLink href="/tools" className={sectionTitleClass}>Beginner-Friendly Tool Shortcuts</SectionTitleLink>
               </div>
               <div className="mt-1 flex items-center gap-2">
@@ -2942,7 +2943,7 @@ export default function EIPsHomePage() {
           <div className="flex min-w-0 items-start">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Eye className="h-5 w-5 text-primary" />
+                <Eye className="h-5 w-5 text-teal-400 shrink-0" />
                 <SectionTitleLink href="/explore" className={sectionTitleClass}>
                   Browse by Status, Category, Repository &amp; Stages
                 </SectionTitleLink>
@@ -3588,7 +3589,7 @@ export default function EIPsHomePage() {
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>
                 <div className="inline-flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
+                  <FileText className="h-5 w-5 text-cyan-400 shrink-0" />
                   <SectionTitleLink href="/resources/faq" className={sectionTitleClass}>Reference</SectionTitleLink>
                   <CopyLinkButton sectionId="home-reference" tooltipLabel="Copy link" />
                 </div>
@@ -3611,7 +3612,7 @@ export default function EIPsHomePage() {
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
             <div className="inline-flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-primary" />
+              <Trophy className="h-5 w-5 text-amber-400 shrink-0" />
               <SectionTitleLink href="/insights" className={sectionTitleClass}>Monthly Insight & Editor Leaderboard</SectionTitleLink>
               <CopyLinkButton sectionId="editor-monthly-insight" tooltipLabel="Copy link" />
             </div>
@@ -3891,313 +3892,7 @@ export default function EIPsHomePage() {
       {activePersona !== 'editor' && visibleSections.governance && <hr className="my-6 border-border" />}
 
       <section className="mb-6 w-full" id="recent-governance-activity">
-        <div className="mb-4 flex flex-col items-start gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2">
-              <Activity className="h-5 w-5 text-primary" />
-              <SectionTitleLink href="/analytics/prs" className={sectionTitleClass}>
-                {(activePersona === 'developer' || activePersona === 'builder') ? 'Recent Activity' : 'Recent Governance Activity'}
-              </SectionTitleLink>
-              <CopyLinkButton sectionId="recent-governance-activity" tooltipLabel="Copy link" />
-            </div>
-            <p className={sectionSubtitleClass}>
-              {(activePersona === 'developer' || activePersona === 'builder')
-                ? 'Latest governance and PR movement with actor context and proposal links.'
-                : 'Latest status transitions with actor context, proposal links, and lifecycle details.'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-          </div>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-          <div>
-            {/* Filter tabs */}
-            <div className="mb-3 flex items-center gap-1.5">
-              {(['all', 'status_changes'] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setActivityFilter(f)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                    activityFilter === f
-                      ? 'bg-primary/10 border border-primary/40 text-primary'
-                      : 'border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                >
-                  {f === 'all' ? 'All Activity' : 'Status Changes'}
-                </button>
-              ))}
-            </div>
-
-            {widgetsLoading && allRecentActivity.length === 0 ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-[52px] animate-pulse rounded-lg bg-muted" />
-                ))}
-              </div>
-            ) : (() => {
-              const filtered = activityFilter === 'status_changes'
-                ? allRecentActivity.filter((a) => a.kind === 'status_change')
-                : allRecentActivity;
-
-              if (filtered.length === 0) {
-                return (
-                  <div className="rounded-xl border border-border bg-card/60 px-4 py-6 text-center">
-                    <p className="text-sm text-muted-foreground">No recent activity in the last 7 days.</p>
-                  </div>
-                );
-              }
-
-              const PAGE_SIZE = 6;
-              const visible = openActivities['__showMore'] ? filtered : filtered.slice(0, PAGE_SIZE);
-              const hasMore = filtered.length > PAGE_SIZE;
-
-              return (
-                <div className="space-y-1.5">
-                  {visible.map((item) => {
-                    const id = `${item.kind}-${item.eipType}-${item.eip}-${String(item.occurredAt)}`;
-                    const isOpen = Boolean(openActivities[id]);
-
-                    if (item.kind === 'status_change') {
-                      const proposalPath = `/${item.eipType === 'RIP' ? 'rip' : item.eipType === 'ERC' ? 'erc' : 'eip'}/${item.eip}`;
-                      return (
-                        <div key={id} className="overflow-hidden rounded-xl border border-border bg-card/60">
-                          <button
-                            type="button"
-                            onClick={() => setOpenActivities((prev) => ({ ...prev, [id]: !prev[id] }))}
-                            className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
-                          >
-                            <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-full ring-1 ring-border">
-                              <Image src={activityAvatar(item.actor)} alt={item.actor || 'system'} width={28} height={28} className="h-full w-full object-cover" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-xs font-semibold text-foreground">{item.actor || 'system'}</span>
-                                <span className={`h-1.5 w-1.5 rounded-full ${STATUS_COLORS[item.toStatus ?? ''] || 'bg-muted-foreground'}`} />
-                                <span className="rounded-md border border-border bg-muted/60 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                                  {item.fromStatus ? `${item.fromStatus} → ${item.toStatus}` : `→ ${item.toStatus}`}
-                                </span>
-                              </div>
-                              <p className="truncate text-[11px] text-muted-foreground">
-                                {item.eipType}-{item.eip}: {item.title || 'Untitled proposal'}
-                              </p>
-                            </div>
-                            <div className="flex flex-shrink-0 items-center gap-1.5 text-[10px] tabular-nums text-muted-foreground">
-                              <span>{item.days === 0 ? 'today' : `${item.days}d ago`}</span>
-                              {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                            </div>
-                          </button>
-                          <AnimatePresence initial={false}>
-                            {isOpen && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.18 }}
-                                className="overflow-hidden border-t border-border/60"
-                              >
-                                <div className="px-3 py-3 space-y-2.5">
-                                  <p className="text-xs font-medium text-foreground leading-snug">
-                                    {item.title || 'Untitled proposal'}
-                                  </p>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Proposal</span>
-                                      <span className="font-medium text-foreground">{item.eipType}-{item.eip}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Status</span>
-                                      <span className="font-medium text-foreground">{item.fromStatus || '—'} → {item.toStatus}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Repository</span>
-                                      <span className="font-medium text-foreground">{item.repository || 'Unknown'}</span>
-                                    </div>
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Actor</span>
-                                      <span className="font-medium text-foreground">{item.actor || 'system'}</span>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 pt-0.5">
-                                    <Link
-                                      href={proposalPath}
-                                      className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
-                                    >
-                                      View proposal
-                                      <ArrowRight className="h-3 w-3" />
-                                    </Link>
-                                    {item.repository && item.eip && (
-                                      <a
-                                        href={`https://github.com/${item.repository}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-muted/60 px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted"
-                                      >
-                                        GitHub
-                                        <ArrowRight className="h-3 w-3" />
-                                      </a>
-                                    )}
-                                  </div>
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      );
-                    }
-
-                    /* PR event card — expandable */
-                    return (
-                      <div key={id} className="overflow-hidden rounded-xl border border-border bg-card/60">
-                        <button
-                          type="button"
-                          onClick={() => setOpenActivities((prev) => ({ ...prev, [id]: !prev[id] }))}
-                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
-                        >
-                          <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-full ring-1 ring-border">
-                            <Image src={activityAvatar(item.actor)} alt={item.actor || 'system'} width={28} height={28} className="h-full w-full object-cover" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="text-xs font-semibold text-foreground">{item.actor}</span>
-                              <span className="rounded-md border border-primary/30 bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">
-                                {formatEditorAction(item.eventType ?? '')}
-                              </span>
-                            </div>
-                            <p className="truncate text-[11px] text-muted-foreground">
-                              {item.eipType.toUpperCase()} PR #{item.prNumber}: {item.title}
-                            </p>
-                          </div>
-                          <div className="flex flex-shrink-0 items-center gap-1.5 text-[10px] tabular-nums text-muted-foreground">
-                            <span>{item.days === 0 ? 'today' : `${item.days}d ago`}</span>
-                            {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                          </div>
-                        </button>
-                        <AnimatePresence initial={false}>
-                          {isOpen && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.18 }}
-                              className="overflow-hidden border-t border-border/60"
-                            >
-                              <div className="px-3 py-3 space-y-2.5">
-                                <p className="text-xs font-medium text-foreground leading-snug">
-                                  {item.title || `PR #${item.prNumber}`}
-                                </p>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">PR</span>
-                                    <span className="font-medium text-foreground">#{item.prNumber}</span>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Action</span>
-                                    <span className="font-medium text-foreground">{formatEditorAction(item.eventType ?? '')}</span>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Repository</span>
-                                    <span className="font-medium text-foreground">{item.repository}</span>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Editor</span>
-                                    <span className="font-medium text-foreground">{item.actor}</span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 pt-0.5">
-                                  <a
-                                    href={item.eventUrl ?? `https://github.com/${item.repository}/pull/${item.prNumber}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex h-7 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15"
-                                  >
-                                    View on GitHub
-                                    <ArrowRight className="h-3 w-3" />
-                                  </a>
-                                  <a
-                                    href={`https://github.com/${item.repository}/pull/${item.prNumber}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-muted/60 px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted"
-                                  >
-                                    PR #{item.prNumber}
-                                    <ArrowRight className="h-3 w-3" />
-                                  </a>
-                                </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
-
-                  {hasMore && (
-                    <button
-                      type="button"
-                      onClick={() => setOpenActivities((prev) => ({ ...prev, __showMore: !prev.__showMore }))}
-                      className="mt-1 flex w-full items-center justify-center gap-1 rounded-xl border border-border bg-card/60 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                    >
-                      {openActivities['__showMore'] ? (
-                        <><ChevronUp className="h-3.5 w-3.5" /> Show less</>
-                      ) : (
-                        <><ChevronDown className="h-3.5 w-3.5" /> Show {filtered.length - PAGE_SIZE} more</>
-                      )}
-                    </button>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-
-          <aside className="self-start rounded-xl border border-border bg-card/60 p-3 shadow-sm">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Latest Editor Activity</h3>
-              <span className="rounded-md border border-border bg-muted/60 px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-                {recentEditorActivities.length}
-              </span>
-            </div>
-            <p className="mb-2.5 text-[11px] text-muted-foreground">Recent actions by editors this month.</p>
-            <div className="space-y-1.5">
-              {widgetsLoading && recentEditorActivities.length === 0 ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={`review-skeleton-${i}`} className="h-[62px] animate-pulse rounded-lg border border-border bg-muted/40" />
-                ))
-              ) : recentEditorActivities.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No editor activities found for this month.</p>
-              ) : (
-                recentEditorActivities.slice(0, 5).map((item, idx) => (
-                  <a
-                    key={`${item.editor}-${item.prNumber}-${idx}`}
-                    href={item.eventUrl || `/pr/${githubRepoFromShort(item.repoShort)}/${item.prNumber}`}
-                    target={item.eventUrl ? '_blank' : undefined}
-                    rel={item.eventUrl ? 'noopener noreferrer' : undefined}
-                    className="block rounded-lg border border-border bg-card/60 p-2.5 transition-colors hover:border-primary/40 hover:bg-muted/40"
-                  >
-                    <div className="mb-1 flex items-center gap-2">
-                      <div className="h-6 w-6 flex-shrink-0 overflow-hidden rounded-full ring-1 ring-border">
-                        <Image src={editorAvatar(item.editor)} alt={item.editor} width={24} height={24} className="h-full w-full object-cover" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[11px] font-semibold text-foreground">#{idx + 1} {item.editor}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {formatEditorAction(item.eventType)} · {new Date(item.actedAt).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="line-clamp-1 text-[11px] text-muted-foreground">
-                      {item.title || `PR #${item.prNumber}`}
-                    </p>
-                    <div className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-px text-[10px] text-muted-foreground">
-                      <GitPullRequest className="h-3 w-3" />
-                      {item.repoShort.toUpperCase()} #{item.prNumber}
-                    </div>
-                  </a>
-                ))
-              )}
-            </div>
-          </aside>
-        </div>
+        <WeeklyRecapSection sectionTitleClass={sectionTitleClass} sectionSubtitleClass={sectionSubtitleClass} />
       </section>
 
       </div>
@@ -4223,7 +3918,7 @@ export default function EIPsHomePage() {
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
               <div className="inline-flex items-center gap-2">
-                <Layers className="h-5 w-5 text-primary" />
+                <Layers className="h-5 w-5 text-emerald-400 shrink-0" />
                 <SectionTitleLink href="/resources" className={sectionTitleClass}>Practical Resources</SectionTitleLink>
                 <CopyLinkButton sectionId="builder-practical-resources" tooltipLabel="Copy link" />
               </div>

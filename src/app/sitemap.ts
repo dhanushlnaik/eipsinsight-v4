@@ -29,6 +29,7 @@ const STATIC_PUBLIC_PATHS = [
   "/resources/news",
   "/resources/videos",
   "/standards",
+  "/recap",
   "/tools",
   "/board",
   "/dependencies",

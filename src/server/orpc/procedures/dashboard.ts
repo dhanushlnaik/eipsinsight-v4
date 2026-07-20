@@ -501,17 +501,17 @@ export const dashboardProcedures = {
 
   getWeeklyRecap: os
     .$context<Ctx>()
-    .input(z.object({}))
-    .handler(async ({ context }) => {
-      await checkAPIToken(context.headers);
+    .input(z.object({
+      days: z.number().int().min(1).max(90).optional().default(7),
+    }))
+    .handler(async ({ input }) => {
+      const daysAgo = new Date();
+      daysAgo.setDate(daysAgo.getDate() - (input?.days ?? 7));
 
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const [newProposals, statusChanges, mergedPRs, devnets, recentCalls, upcomingCalls, lastCallEIPs] = await Promise.all([
+      const [newProposals, statusChanges, mergedPRs, devnets, recentCalls, upcomingCalls, lastCallEIPs, editorActions] = await Promise.all([
         prisma.eips.findMany({
           where: {
-            created_at: { gte: sevenDaysAgo },
+            created_at: { gte: daysAgo },
           },
           select: {
             eip_number: true,
@@ -534,12 +534,12 @@ export const dashboardProcedures = {
            LEFT JOIN eip_snapshots s ON s.eip_id = e.id
            WHERE se.changed_at >= $1
            ORDER BY se.changed_at DESC`,
-          sevenDaysAgo
+          daysAgo
         ),
 
         prisma.pull_requests.findMany({
           where: {
-            merged_at: { gte: sevenDaysAgo },
+            merged_at: { gte: daysAgo },
           },
           select: {
             pr_number: true,
@@ -608,6 +608,46 @@ export const dashboardProcedures = {
           },
           orderBy: { deadline: "asc" },
         }),
+
+        prisma.$queryRawUnsafe<Array<{
+          pr_number: number;
+          title: string | null;
+          editor: string;
+          event_type: string;
+          created_at: Date;
+          repo_name: string;
+          event_url: string | null;
+        }>>(
+          `SELECT
+            pe.pr_number::int AS pr_number,
+            pr.title,
+            pe.actor AS editor,
+            pe.event_type,
+            pe.created_at,
+            r.name AS repo_name,
+            COALESCE(
+              pe.metadata->>'html_url',
+              CASE
+                WHEN pe.event_type IN ('commented', 'issue_comment') AND pe.metadata->>'comment_id' IS NOT NULL
+                  THEN 'https://github.com/' || r.name || '/pull/' || pe.pr_number::text || '#issuecomment-' || (pe.metadata->>'comment_id')
+                WHEN pe.event_type = 'review_comment' AND pe.metadata->>'comment_id' IS NOT NULL
+                  THEN 'https://github.com/' || r.name || '/pull/' || pe.pr_number::text || '#discussion_r' || (pe.metadata->>'comment_id')
+                WHEN pe.event_type = 'reviewed' AND pe.metadata->>'review_id' IS NOT NULL
+                  THEN 'https://github.com/' || r.name || '/pull/' || pe.pr_number::text || '#pullrequestreview-' || (pe.metadata->>'review_id')
+                ELSE 'https://github.com/' || r.name || '/pull/' || pe.pr_number::text
+              END
+            ) AS event_url
+          FROM pr_events pe
+          JOIN repositories r ON pe.repository_id = r.id
+          LEFT JOIN pull_requests pr
+            ON pr.pr_number = pe.pr_number
+           AND pr.repository_id = pe.repository_id
+          WHERE pe.actor_role = 'EDITOR'
+            AND pe.created_at >= $1
+          ORDER BY pe.created_at DESC
+          LIMIT 50`,
+          daysAgo
+        ),
       ]);
 
       return {
@@ -632,6 +672,15 @@ export const dashboardProcedures = {
           author: pr.author || "",
           mergedAt: pr.merged_at ? pr.merged_at.toISOString() : null,
           repoName: pr.repositories?.name || "",
+        })),
+        editorActions: editorActions.map(ea => ({
+          number: ea.pr_number,
+          title: ea.title || "",
+          editor: ea.editor || "",
+          eventType: ea.event_type || "",
+          actedAt: ea.created_at ? ea.created_at.toISOString() : null,
+          repoName: ea.repo_name || "",
+          eventUrl: ea.event_url || null,
         })),
         devnets: devnets.map(d => ({
           id: d.id,
