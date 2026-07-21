@@ -694,4 +694,144 @@ const { repo, govState, search } = input;
         bucket: r.bucket as 'final' | 'lastcall' | 'review' | 'glamsterdam' | 'draft',
       }));
     }),
+
+  /**
+   * Open PRs whose EIPs were referenced on an ACD agenda (ethereum/pm).
+   *
+   * Agenda issues name EIPs, not PRs — so the join is
+   *   pm_agenda_eips.eip_number -> pull_request_eips -> pull_requests (open only).
+   * One row per PR, with every agenda that mentioned its EIP aggregated into
+   * `mentions` so an editor can see which call it is queued for and who raised it.
+   */
+  getAgendaPRs: optionalAuthProcedure
+    .input(
+      z.object({
+        /** Filter to one ACD series (acde/acdc/acdt/acdtcl). */
+        series: z.enum(['acde', 'acdc', 'acdt', 'acdtcl']).optional(),
+        /** 'upcoming' = agendas for calls not yet held; 'all' includes past calls. */
+        window: z.enum(['upcoming', 'all']).default('all'),
+        search: z.string().optional(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(25),
+      })
+    )
+    .handler(async ({ input }) => {
+      const { series, window, search, page, pageSize } = input;
+      const offset = (page - 1) * pageSize;
+      const q = search?.trim() ?? '';
+
+      // pm_agenda_eips is created by a migration and filled by the scheduler, so
+      // between deploying this code and running either one the table is simply
+      // absent. That's an expected setup state, not a server fault — report it as
+      // `ready: false` so the UI can explain it instead of surfacing a 500.
+      const [{ exists }] = await prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(
+        `SELECT to_regclass('public.pm_agenda_eips') IS NOT NULL AS exists`
+      );
+      if (!exists) {
+        return { ready: false as const, total: 0, totalPages: 1, rows: [] };
+      }
+
+      const rows = await prisma.$queryRawUnsafe<Array<{
+        pr_number: number;
+        title: string;
+        author: string | null;
+        repo_short: string;
+        created_at: string;
+        eip_numbers: number[];
+        mentions: unknown;
+        next_call_on: string | null;
+        total_count: bigint;
+      }>>(
+        `
+        WITH agenda AS (
+          SELECT a.*
+          FROM pm_agenda_eips a
+          WHERE ($1::text IS NULL OR a.series = $1)
+            -- "upcoming" keys off the call date, not issue state: an agenda issue
+            -- can be closed while its call is still ahead, and vice versa.
+            AND ($2::text = 'all' OR a.occurs_on >= CURRENT_DATE)
+        ),
+        matched AS (
+          SELECT
+            p.pr_number,
+            p.title,
+            p.author,
+            LOWER(SPLIT_PART(r.name, '/', 2)) AS repo_short,
+            TO_CHAR(p.created_at, 'YYYY-MM-DD') AS created_at,
+            pe.eip_number,
+            a.issue_number, a.issue_title, a.issue_url, a.series, a.call_number,
+            a.occurs_on, a.mentioned_by, a.snippet, a.source, a.source_url
+          FROM agenda a
+          JOIN pull_request_eips pe ON pe.eip_number = a.eip_number
+          JOIN pull_requests p
+            ON p.pr_number = pe.pr_number AND p.repository_id = pe.repository_id
+          JOIN repositories r ON r.id = p.repository_id
+          WHERE p.state = 'open'
+            AND ($3::text = '' OR p.title ILIKE '%' || $3 || '%'
+                 OR p.author ILIKE '%' || $3 || '%'
+                 OR CAST(pe.eip_number AS text) ILIKE '%' || $3 || '%')
+        ),
+        grouped AS (
+          SELECT
+            pr_number, title, author, repo_short, created_at,
+            ARRAY_AGG(DISTINCT eip_number) AS eip_numbers,
+            -- TO_CHAR, not the bare DATE: node-postgres hydrates DATE columns into
+            -- JS Date objects at local midnight, so a 2025-03-13 call comes back as
+            -- 2025-03-12T18:30Z under a +05:30 offset and renders as the wrong day.
+            -- A plain YYYY-MM-DD string has no timezone to get wrong.
+            TO_CHAR(
+              MIN(occurs_on) FILTER (WHERE occurs_on >= CURRENT_DATE), 'YYYY-MM-DD'
+            ) AS next_call_on,
+            JSON_AGG(DISTINCT JSONB_BUILD_OBJECT(
+              'issueNumber', issue_number, 'issueTitle', issue_title,
+              'issueUrl', issue_url, 'series', series, 'callNumber', call_number,
+              'occursOn', TO_CHAR(occurs_on, 'YYYY-MM-DD'), 'mentionedBy', mentioned_by,
+              'snippet', snippet, 'source', source, 'sourceUrl', source_url,
+              'eip', eip_number
+            )) AS mentions
+          FROM matched
+          GROUP BY pr_number, title, author, repo_short, created_at
+        )
+        SELECT *, COUNT(*) OVER()::bigint AS total_count
+        FROM grouped
+        -- Calls happening soonest first; PRs with no upcoming call fall to the end.
+        ORDER BY next_call_on ASC NULLS LAST, pr_number DESC
+        LIMIT $4 OFFSET $5
+        `,
+        series ?? null,
+        window,
+        q,
+        pageSize,
+        offset
+      );
+
+      const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+      return {
+        ready: true as const,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        rows: rows.map((r) => ({
+          prNumber: r.pr_number,
+          title: r.title,
+          author: r.author,
+          repo: r.repo_short,
+          createdAt: r.created_at,
+          eipNumbers: r.eip_numbers ?? [],
+          nextCallOn: r.next_call_on,
+          mentions: (r.mentions ?? []) as Array<{
+            issueNumber: number;
+            issueTitle: string | null;
+            issueUrl: string | null;
+            series: string | null;
+            callNumber: string | null;
+            occursOn: string | null;
+            mentionedBy: string | null;
+            snippet: string | null;
+            source: string;
+            sourceUrl: string | null;
+            eip: number;
+          }>,
+        })),
+      };
+    }),
 };

@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { client } from "@/lib/orpc";
+import { AgendaPrsPanel } from "./_components/agenda-prs-panel";
 import {
   AlertTriangle,
   ArrowDown,
@@ -197,6 +198,9 @@ function BoardBrowser() {
     return s === "pr" || s === "created" || s === "wait" ? s : DEFAULT_SORT;
   });
   const [sortDir, setSortDir] = useState<SortDir>(() => (searchParams.get("dir") === "asc" ? "asc" : "desc"));
+  const [tab, setTab] = useState<"queue" | "agenda">(() =>
+    searchParams.get("tab") === "agenda" ? "agenda" : "queue",
+  );
   const [needsAttention, setNeedsAttention] = useState(() => searchParams.get("attn") === "1");
   const [hasConflicts, setHasConflicts] = useState(() => searchParams.get("conflict") === "1");
 
@@ -534,6 +538,40 @@ function BoardBrowser() {
       </div>
 
       <div className="mx-auto max-w-7xl space-y-4 px-4 py-5 sm:px-6">
+        {/* Tabs. The ACD panel owns its own filters/paging, so the whole board body
+            below is skipped when it's active rather than trying to share state. */}
+        <div
+          role="tablist"
+          aria-label="Board views"
+          className="flex items-center gap-1 border-b border-border"
+        >
+          {(
+            [
+              { key: "queue", label: "Editorial queue" },
+              { key: "agenda", label: "On an ACD agenda" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                tab === t.key
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "agenda" ? (
+          <AgendaPrsPanel />
+        ) : (
+        <>
         <section className="rounded-xl border border-border bg-card/60 p-3 sm:p-4">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-12">
             <div className="relative lg:col-span-5">
@@ -956,6 +994,8 @@ function BoardBrowser() {
               </PgBtn>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
