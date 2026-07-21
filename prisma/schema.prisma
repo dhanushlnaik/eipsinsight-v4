@@ -437,6 +437,46 @@ model protocol_calls_upcoming {
   @@index([occurs_on])
 }
 
+/// EIPs referenced in ethereum/pm ACD agenda issues (body + comments).
+///
+/// Agenda issue bodies are near-empty templates ("- Glam / - Hegotá / - Misc"),
+/// so the useful signal lives in the comments, where people write things like
+/// "I'd like to PFI EIP-8115 ... for the EL side of Hegotá". We record each
+/// (issue, eip) pair with the quote and author so the board can show *why* an
+/// EIP is on an agenda, not just that it is.
+///
+/// Written by the scheduler, read by the app's /board ACD Agenda tab.
+model pm_agenda_eips {
+  id           Int       @id @default(autoincrement())
+  issue_number Int
+  eip_number   Int
+  /// Call series slug (acde/acdc/acdt/acdtcl); null when it can't be derived.
+  series       String?
+  call_number  String?
+  issue_title  String?
+  issue_url    String?
+  issue_state  String?
+  occurs_on    DateTime? @db.Date
+  /// 'body' | 'comment' — where the reference was found.
+  source       String
+  /// GitHub login of whoever wrote the body/comment. Empty string (not null) when
+  /// unknown, so it participates in the unique key — NULLs never conflict in
+  /// Postgres and would let every scheduler cycle insert a duplicate.
+  mentioned_by String    @default("")
+  /// Short surrounding quote, for context in the UI.
+  snippet      String?
+  /// Permalink to the specific comment (or the issue, for body matches).
+  source_url   String?
+  mentioned_at DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([issue_number, eip_number, source, mentioned_by])
+  @@index([eip_number])
+  @@index([series])
+  @@index([occurs_on])
+}
+
 /// Devnet specs scraped by the scheduler from ethpandaops HackMD notes
 /// (+ live status from cartographoor). Scheduler-owned; no app migrations.
 model devnet_specs {
