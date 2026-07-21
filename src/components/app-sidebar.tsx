@@ -451,7 +451,7 @@ const SECTION_LABEL_OVERRIDES: Record<string, string> = {
   "newcomer-trending-proposals": "Trending",
   "newcomer-upgrade-watch": "Upgrade Watch",
   "newcomer-tools-shortcuts": "Tool Shortcuts",
-  "recent-governance-activity": "Recent Activity",
+  "weekly-recap-digest": "Weekly Standards Recap",
   "explore-detail-header": "Overview",
   "explore-detail-timeline": "Over Time",
   "explore-detail-editor-reviews-24h": "Reviews (24h)",
