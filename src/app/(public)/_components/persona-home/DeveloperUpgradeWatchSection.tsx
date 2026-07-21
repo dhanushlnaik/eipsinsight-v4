@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CopyLinkButton } from '@/components/header';
 import { ChartFooter } from '@/components/chart-footer';
+import { ChartWatermark } from '@/components/chart-watermark';
 import { UpgradeTimelineChart } from '@/components/upgrade/upgrade-timeline-chart';
 
 type UpgradeOption = {
@@ -152,12 +153,14 @@ export default function DeveloperUpgradeWatchSection({
             No timeline data available for this upgrade.
           </div>
         ) : chartView === 'composition' ? (
-          <div>
+          <div className="relative">
             <UpgradeTimelineChart data={upgradeTimelineRows} upgradeName={upgradeName} />
+            <ChartWatermark position="center" />
           </div>
         ) : (
-          <div>
+          <div className="relative">
             <ReactECharts option={upgradeWatchChartOption as object} style={{ height: '220px', width: '100%' }} opts={{ renderer: 'svg' }} />
+            <ChartWatermark position="center" />
           </div>
         )}
         {chartView === 'compact' && (
