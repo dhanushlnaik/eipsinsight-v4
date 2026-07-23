@@ -153,7 +153,7 @@ export default async function CallDetailPage({ params }: Props) {
   const shareText =
     chosen.length > 0
       ? [shareOpener, chosen.join('\n'), artifactLine].filter(Boolean).join('\n\n')
-      : // No quotable decision — fall back to naming what's on the page.
+      : // No quotable decision - fall back to naming what's on the page.
         [shareOpener, artifactLine].filter(Boolean).join('\n\n');
 
   // EIPs discussed: union of every EIP referenced across the decisions.

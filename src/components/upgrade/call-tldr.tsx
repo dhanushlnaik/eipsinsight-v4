@@ -24,7 +24,7 @@ function itemToText(item: unknown): string {
     }
     return Object.values(record)
       .filter((value): value is string => typeof value === 'string')
-      .join(' — ');
+      .join(' - ');
   }
   return String(item);
 }

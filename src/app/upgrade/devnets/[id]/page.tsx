@@ -260,7 +260,7 @@ export default async function DevnetDetailPage({ params }: Props) {
             ))}
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            Hosted by ethpandaops at <code className="text-muted-foreground/80">&lt;service&gt;.{devnet.id}.ethpandaops.io</code> — available while the devnet is live.
+            Hosted by ethpandaops at <code className="text-muted-foreground/80">&lt;service&gt;.{devnet.id}.ethpandaops.io</code> - available while the devnet is live.
           </p>
         </section>
       )}
@@ -302,7 +302,7 @@ export default async function DevnetDetailPage({ params }: Props) {
                           {(subtitle || meta?.layman_title) && (
                             <div className="mt-0.5 text-[11px] text-muted-foreground">
                               {subtitle}
-                              {subtitle && meta?.layman_title ? ' — ' : ''}
+                              {subtitle && meta?.layman_title ? ' - ' : ''}
                               {meta?.layman_title && meta.layman_title !== title ? meta.layman_title : ''}
                             </div>
                           )}
