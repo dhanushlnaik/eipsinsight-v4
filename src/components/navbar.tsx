@@ -51,7 +51,6 @@ const mobileNavSections = [
     label: "Main",
     items: [
       { title: "Home", href: "/", icon: Home },
-      { title: "Dashboard", href: "/dashboard", icon: Home },
       { title: "Search", href: "/search", icon: Search },
     ],
   },
