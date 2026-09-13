@@ -90,9 +90,9 @@ export default function EIPsInsightHero() {
               size="lg"
               className="group relative overflow-hidden rounded-full bg-gradient-to-r from-emerald-400 to-cyan-500 px-7 text-slate-900 shadow-lg transition-all duration-300 hover:from-cyan-400 hover:to-blue-500 hover:text-white"
             >
-              <Link href="/dashboard">
+              <Link href="/">
                 <span className="relative z-10 flex items-center">
-                  Explore Dashboard
+                  Explore EIPsInsight
                   <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </span>
                 <span className="absolute inset-0 bg-gradient-to-r from-emerald-300/80 via-cyan-400/80 to-blue-400/80 opacity-0 transition-opacity group-hover:opacity-100" />

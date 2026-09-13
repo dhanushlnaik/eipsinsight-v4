@@ -115,13 +115,6 @@ export default function NotFound() {
             </Link>
             <span className="text-slate-300 dark:text-slate-600">·</span>
             <Link
-              href="/dashboard"
-              className="text-sm text-slate-600 transition-colors hover:text-cyan-700 dark:text-slate-400 dark:hover:text-cyan-400"
-            >
-              Dashboard
-            </Link>
-            <span className="text-slate-300 dark:text-slate-600">·</span>
-            <Link
               href="/analytics/prs"
               className="text-sm text-slate-600 transition-colors hover:text-cyan-700 dark:text-slate-400 dark:hover:text-cyan-400"
             >

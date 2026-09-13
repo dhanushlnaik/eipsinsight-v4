@@ -2673,7 +2673,7 @@ export default function EIPsHomePage() {
             <div>
               <div className="inline-flex items-center gap-2">
                 <Zap className="h-5 w-5 text-yellow-400 shrink-0" />
-                <SectionTitleLink href="/dashboard" className={sectionTitleClass}>Governance Over Time</SectionTitleLink>
+                <SectionTitleLink href="/#over-time" className={sectionTitleClass}>Governance Over Time</SectionTitleLink>
                 <CopyLinkButton sectionId="over-time" tooltipLabel="Copy link" />
               </div>
               <p className={sectionSubtitleClass}>Track proposal lifecycle movement across the network timeline.</p>

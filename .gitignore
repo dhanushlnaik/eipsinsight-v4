@@ -49,3 +49,5 @@ next-env.d.ts
 
 CLAUDE.mdprisma/seed-blogs.ts
 .claude/
+
+scripts 

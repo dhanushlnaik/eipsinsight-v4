@@ -20,7 +20,6 @@ import {
   Compass,
   Search,
   Wrench,
-  LayoutDashboard,
   Shield,
   Boxes,
   Lock,
@@ -91,11 +90,6 @@ const sidebarSections: SidebarSection[] = [
         title: "Home",
         icon: Home,
         href: "/",
-      },
-      {
-        title: "Dashboard",
-        icon: LayoutDashboard,
-        href: "/dashboard",
       },
       {
         title: "Search",
@@ -329,7 +323,6 @@ const SECTION_LABEL_OVERRIDES: Record<string, string> = {
  */
 function getActiveItemTitle(pathname: string): string | null {
   if (pathname === "/") return "Home";
-  if (pathname.startsWith("/dashboard")) return "Dashboard";
   if (pathname.startsWith("/search")) return "Search";
   if (
     pathname.startsWith("/standards") ||
