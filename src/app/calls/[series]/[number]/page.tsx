@@ -106,6 +106,9 @@ export default async function CallDetailPage({ params }: Props) {
 
   const youtubeId = getYoutubeId(call.video_url);
   const remoteSeries = getRemoteSeries(call.series);
+  // Self-indexed calls (e.g. ethproofs) carry their transcript inline and have no
+  // ACDbot GitHub artifacts, so hide the artifact links that would 404.
+  const selfIndexed = Boolean(call.transcript_vtt);
 
   const [transcriptCues, chatMessages] = await Promise.all([
     // Self-indexed series carry the transcript inline (transcript_vtt); ACDbot
@@ -305,7 +308,7 @@ export default async function CallDetailPage({ params }: Props) {
           </section>
 
           {/* Transcript fallback when there's a transcript but no embeddable video */}
-          {call.has_transcript && !youtubeId && (
+          {call.has_transcript && !youtubeId && !selfIndexed && (
             <a
               href={`https://github.com/ethereum/pm/tree/master/.github/ACDbot/artifacts/${remoteSeries}/${call.call_id}`}
               target="_blank"
@@ -398,17 +401,19 @@ export default async function CallDetailPage({ params }: Props) {
                   </a>
                 </li>
               )}
-              <li>
-                <a
-                  href={`https://github.com/ethereum/pm/tree/master/.github/ACDbot/artifacts/${remoteSeries}/${call.call_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-primary"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  All call artifacts
-                </a>
-              </li>
+              {!selfIndexed && (
+                <li>
+                  <a
+                    href={`https://github.com/ethereum/pm/tree/master/.github/ACDbot/artifacts/${remoteSeries}/${call.call_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    All call artifacts
+                  </a>
+                </li>
+              )}
             </ul>
           </div>
         </div>
