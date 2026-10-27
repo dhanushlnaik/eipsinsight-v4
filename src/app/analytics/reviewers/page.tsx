@@ -618,7 +618,7 @@ export default function ReviewersAnalyticsPage() {
                     </td>
                     <td className="py-3 px-4">
                       <a
-                        href={`/people/${reviewer.actor}`}
+                        href={`/user/${reviewer.actor}`}
                         className="group inline-flex items-center gap-2"
                       >
                         <img
