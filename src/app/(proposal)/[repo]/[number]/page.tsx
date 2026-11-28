@@ -389,11 +389,6 @@ export default function ProposalDetailPage() {
   const [markdownCopied, setMarkdownCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
-  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
-  const [aiSummaryReload, setAiSummaryReload] = useState(0);
-  const [showAi, setShowAi] = useState(false);
   const [showFullSpecification, setShowFullSpecification] = useState(false);
   const [requiredBy, setRequiredBy] = useState<DepNode[]>([]);
   const [editorialPRs, setEditorialPRs] = useState<EditorialPRItem[]>([]);
@@ -587,74 +582,6 @@ export default function ProposalDetailPage() {
     return () => { cancelled = true; };
   }, [number, proposal?.title]);
 
-  // Fetch AI summary when markdown content is available.
-  useEffect(() => {
-    if (!markdownContent || !number) return;
-
-    // AbortController (not just a `cancelled` flag) so a superseded run actually
-    // cancels its in-flight request. Without this, React StrictMode's double-invoke
-    // in dev fired TWO concurrent LLM calls; the second raced the first into the
-    // provider's rate limit and 503'd, and its error clobbered the good first result.
-    const controller = new AbortController();
-
-    const fetchAiSummary = async () => {
-      try {
-        setAiSummaryLoading(true);
-        setAiSummaryError(null);
-
-        const res = await fetch('/api/eip-summary', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eipNo: number, content: markdownContent, proposalType: repoDisplayName }),
-          signal: controller.signal,
-        });
-
-        const data = await res.json();
-
-        // Guard against a provider quota/error notice slipping through as a
-        // "summary" (the old Cohere trial-key warning did exactly this).
-        const summary: string = typeof data.summary === 'string' ? data.summary : '';
-        const looksLikeNoise = /trial key|api-keys|rate limit|dashboard\.cohere|upgrade to a production key/i.test(
-          summary
-        );
-
-        if (res.ok && summary && !looksLikeNoise) {
-          setAiSummary(summary);
-        } else {
-          setAiSummaryError("We couldn't generate a summary right now. Please try again in a moment.");
-        }
-      } catch (err) {
-        // An abort is expected on cleanup — don't surface it as a failure.
-        if ((err as Error)?.name !== 'AbortError') {
-          setAiSummaryError("We couldn't generate a summary right now. Please try again in a moment.");
-        }
-      } finally {
-        if (!controller.signal.aborted) setAiSummaryLoading(false);
-      }
-    };
-
-    fetchAiSummary();
-
-    return () => controller.abort();
-  }, [markdownContent, number, repoDisplayName, aiSummaryReload]);
-
-  useEffect(() => {
-    const handleEnableEnterprise = () => {
-      setEnterprise(true);
-    };
-
-    window.addEventListener('enable-enterprise', handleEnableEnterprise);
-    if (typeof window !== 'undefined' && (window.location.hash === '#enterprise-brief' || window.location.hash === '#enterprise')) {
-      setEnterprise(true);
-    }
-
-    return () => {
-      window.removeEventListener('enable-enterprise', handleEnableEnterprise);
-    };
-  }, [setEnterprise]);
-
-
-
   const handleCopyLink = async () => {
     const url = window.location.href;
     try {
@@ -726,7 +653,7 @@ export default function ProposalDetailPage() {
     : [];
 
   const overviewRailItems: RailItem[] = [
-    { id: 'ai-summary', label: 'AI Summary' },
+    { id: 'summary', label: 'Summary' },
     { id: 'proposal-timeline', label: 'Lifecycle & Upgrades' },
     ...(governanceState || editorialPRs.length > 0 || meetings.length > 0
       ? [{ id: 'governance', label: 'Governance & Edits' }]
@@ -986,27 +913,16 @@ export default function ProposalDetailPage() {
               </p>
             )}
 
-          {/* AI Summary & Plain-Language Brief */}
-          <section id="ai-summary" className="scroll-mt-24">
+          {/* Summary (Database-backed from eip_curations) */}
+          <section id="summary" className="scroll-mt-24">
             <SectionHead
               eyebrow="In brief"
-              title="AI Summary"
-              description="Plain-language synthesis of the specification and its core design."
-              action={
-                <button
-                  type="button"
-                  onClick={() => setAiSummaryReload((n) => n + 1)}
-                  disabled={aiSummaryLoading}
-                  className="chip cursor-pointer gap-1.5 px-2.5 py-1 text-xs"
-                >
-                  <RefreshCw className={cn('h-3.5 w-3.5', aiSummaryLoading && 'animate-spin')} />
-                  <span>{aiSummaryLoading ? 'Summarizing...' : 'Regenerate'}</span>
-                </button>
-              }
+              title="Summary"
+              description="Plain-language overview of what this proposal changes, its benefits, and its tradeoffs."
             />
 
-            {hasPlainCuration && curation?.layman_summary && (
-              <div className="card mb-4 p-5">
+            {hasPlainCuration && curation?.layman_summary ? (
+              <div className="card p-5">
                 <p className="text-sm leading-relaxed text-[var(--ink)]">{curation.layman_summary}</p>
                 {((curation.benefits?.length ?? 0) > 0 || (curation.tradeoffs?.length ?? 0) > 0) && (
                   <div className="mt-4 grid gap-4 border-t border-[var(--border)] pt-4 sm:grid-cols-2">
@@ -1039,37 +955,21 @@ export default function ProposalDetailPage() {
                   </div>
                 )}
               </div>
-            )}
-
-            <div className="card p-5">
-              {aiSummaryLoading ? (
-                <div className="flex items-center gap-2.5 text-sm text-[var(--ink-muted)]">
-                  <RefreshCw className="h-4 w-4 animate-spin text-[var(--brand-strong)]" />
-                  <span>Generating AI summary from specification...</span>
-                </div>
-              ) : aiSummaryError ? (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="text-sm text-[var(--ink-muted)]">{aiSummaryError}</span>
+            ) : (
+              <div className="card p-5">
+                <p className="text-sm text-[var(--ink-muted)]">
+                  A curated plain-language summary for {proposalId} has not been added yet. Read the Abstract and Specification in the{' '}
                   <button
                     type="button"
-                    onClick={() => setAiSummaryReload((n) => n + 1)}
-                    className="chip cursor-pointer gap-1.5 px-3 py-1 text-xs"
+                    onClick={() => setActiveTab('spec')}
+                    className="font-medium text-[var(--brand-strong)] hover:underline cursor-pointer"
                   >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Retry
-                  </button>
-                </div>
-              ) : aiSummary ? (
-                <div
-                  className="max-w-none text-sm leading-relaxed text-[var(--ink-muted)] [&_h4]:mb-1.5 [&_h4]:mt-3 [&_h4]:font-serif [&_h4]:text-base [&_h4]:font-semibold [&_h4]:text-[var(--ink)] [&_p]:mb-2 [&_strong]:text-[var(--ink)] [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-1"
-                  dangerouslySetInnerHTML={{ __html: aiSummary }}
-                />
-              ) : (
-                <p className="text-sm text-[var(--ink-muted)]">
-                  {markdownLoading ? 'Waiting for specification text...' : 'AI summary will appear here.'}
+                    Specification
+                  </button>{' '}
+                  tab.
                 </p>
-              )}
-            </div>
+              </div>
+            )}
           </section>
 
           {/* Unified lifecycle, upgrade-stage & PR timeline */}
