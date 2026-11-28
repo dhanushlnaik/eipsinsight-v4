@@ -944,7 +944,11 @@ const searchTerm = `%${input.query}%`;
               ? 'eip'
               : null;
 
-      // Get all matching proposals first (EIP/ERC snapshots + RIP table)
+      // Candidate proposals: exact/partial (ILIKE) + fuzzy (pg_trgm word_similarity,
+      // typo-tolerant), ordered by best fuzzy match so a wider LIMIT keeps the
+      // strongest candidates. Final ranking is still scored below. $4 = raw query.
+      const rawQuery = input.query.trim();
+      const candidateLimit = Math.max(40, input.limit * 3);
       const eipLikeResults = await prisma.$queryRawUnsafe<Array<{
         eip_number: number;
         title: string | null;
@@ -953,6 +957,8 @@ const searchTerm = `%${input.query}%`;
         type: string | null;
         category: string | null;
         repo: string;
+        title_sim: number;
+        author_sim: number;
       }>>(`
         SELECT
           e.eip_number,
@@ -961,7 +967,9 @@ const searchTerm = `%${input.query}%`;
           s.status,
           s.type,
           s.category,
-          r.name AS repo
+          r.name AS repo,
+          word_similarity($4, COALESCE(e.title, '')) AS title_sim,
+          word_similarity($4, COALESCE(e.author, '')) AS author_sim
         FROM eips e
         JOIN eip_snapshots s ON s.eip_id = e.id
         JOIN repositories r ON r.id = s.repository_id
@@ -973,8 +981,13 @@ const searchTerm = `%${input.query}%`;
           OR s.type ILIKE $1
           OR s.category ILIKE $1
           OR ($3::int IS NOT NULL AND e.eip_number = $3)
+          OR word_similarity($4, COALESCE(e.title, '')) > 0.3
+          OR word_similarity($4, COALESCE(e.author, '')) > 0.35
+        ORDER BY
+          ($3::int IS NOT NULL AND e.eip_number = $3) DESC,
+          GREATEST(word_similarity($4, COALESCE(e.title, '')), word_similarity($4, COALESCE(e.author, ''))) DESC
         LIMIT $2
-      `, searchTerm, input.limit * 2, exactNumber); // Get more to score and filter
+      `, searchTerm, candidateLimit, exactNumber, rawQuery);
       const ripResults = await prisma.$queryRawUnsafe<Array<{
         eip_number: number;
         title: string | null;
@@ -983,6 +996,8 @@ const searchTerm = `%${input.query}%`;
         type: string | null;
         category: string | null;
         repo: string;
+        title_sim: number;
+        author_sim: number;
       }>>(`
         SELECT
           rp.rip_number AS eip_number,
@@ -991,7 +1006,9 @@ const searchTerm = `%${input.query}%`;
           COALESCE(rp.status, 'Unknown') AS status,
           'RIP'::text AS type,
           'RIP'::text AS category,
-          'ethereum/RIPs'::text AS repo
+          'ethereum/RIPs'::text AS repo,
+          word_similarity($4, COALESCE(rp.title, '')) AS title_sim,
+          word_similarity($4, COALESCE(rp.author, '')) AS author_sim
         FROM rips rp
         WHERE
           rp.rip_number::text ILIKE $1
@@ -999,8 +1016,13 @@ const searchTerm = `%${input.query}%`;
           OR COALESCE(rp.author, '') ILIKE $1
           OR COALESCE(rp.status, '') ILIKE $1
           OR ($3::int IS NOT NULL AND rp.rip_number = $3)
+          OR word_similarity($4, COALESCE(rp.title, '')) > 0.3
+          OR word_similarity($4, COALESCE(rp.author, '')) > 0.35
+        ORDER BY
+          ($3::int IS NOT NULL AND rp.rip_number = $3) DESC,
+          GREATEST(word_similarity($4, COALESCE(rp.title, '')), word_similarity($4, COALESCE(rp.author, ''))) DESC
         LIMIT $2
-      `, searchTerm, input.limit * 2, exactNumber);
+      `, searchTerm, candidateLimit, exactNumber, rawQuery);
 
       const allResults = [...eipLikeResults, ...ripResults];
 
@@ -1042,6 +1064,12 @@ const searchTerm = `%${input.query}%`;
         if (r.type && r.type.toLowerCase().includes(input.query.toLowerCase())) {
           score += 80;
         }
+        // Fuzzy (pg_trgm) similarity — ranks typo/partial matches below exact/
+        // contains hits but above zero so they surface ("vitalic" → Vitalik).
+        const titleSim = Number(r.title_sim) || 0;
+        const authorSim = Number(r.author_sim) || 0;
+        score += Math.round(titleSim * 150);
+        score += Math.round(authorSim * 60);
         // Repo-family hint ("erc-20" should rank ERC-20 above EIP-20 on ties).
         if (repoHint) {
           const repoLower = r.repo.toLowerCase();
