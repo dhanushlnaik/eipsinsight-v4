@@ -1,8 +1,7 @@
 "use client";
 
 import React from "react";
-import { Users, CheckCircle2, Activity, Clock, ShieldAlert, ShieldCheck } from "lucide-react";
-import { StatCard } from "@/components/analytics/stat-card";
+import { AnalyticsKpiCard } from "../../_components/analytics-ui";
 
 interface EditorsKpiBarProps {
   totalActions: number;
@@ -12,6 +11,7 @@ interface EditorsKpiBarProps {
   avgResponseDays: number | null;
   totalCategories: number;
   thinCategoriesCount: number;
+  onSelectTab?: (tab: "leaderboard" | "explorer" | "coverage" | "trends") => void;
 }
 
 export function EditorsKpiBar({
@@ -22,6 +22,7 @@ export function EditorsKpiBar({
   avgResponseDays,
   totalCategories,
   thinCategoriesCount,
+  onSelectTab,
 }: EditorsKpiBarProps) {
   const activeRate = totalEditors > 0 ? Math.round((activeEditors / totalEditors) * 100) : 0;
   const reviewPct = totalActions > 0 ? Math.round((totalReviews / totalActions) * 100) : 0;
@@ -29,40 +30,40 @@ export function EditorsKpiBar({
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      <StatCard
-        icon={Users}
-        accent="blue"
+      <AnalyticsKpiCard
         label="Active Editors"
         value={`${activeEditors} / ${totalEditors}`}
         sub={`${activeRate}% active in window`}
+        onClick={onSelectTab ? () => onSelectTab("leaderboard") : undefined}
+        href={onSelectTab ? undefined : "#editors-tab-content"}
       />
-      <StatCard
-        icon={CheckCircle2}
-        accent="emerald"
+      <AnalyticsKpiCard
         label="PR Reviews"
-        value={totalReviews.toLocaleString()}
+        value={totalReviews}
         sub={`${reviewPct}% of total actions`}
+        onClick={onSelectTab ? () => onSelectTab("leaderboard") : undefined}
+        href={onSelectTab ? undefined : "#editors-tab-content"}
       />
-      <StatCard
-        icon={Activity}
-        accent="violet"
+      <AnalyticsKpiCard
         label="Total Actions"
-        value={totalActions.toLocaleString()}
+        value={totalActions}
         sub="Reviews, comments & commits"
+        onClick={onSelectTab ? () => onSelectTab("explorer") : undefined}
+        href={onSelectTab ? undefined : "#editors-tab-content"}
       />
-      <StatCard
-        icon={Clock}
-        accent="amber"
+      <AnalyticsKpiCard
         label="Median Latency"
         value={avgResponseDays != null ? `${avgResponseDays.toFixed(1)}d` : "–"}
         sub="PR open to first review"
+        onClick={onSelectTab ? () => onSelectTab("trends") : undefined}
+        href={onSelectTab ? undefined : "#editors-tab-content"}
       />
-      <StatCard
-        icon={isHealthyCoverage ? ShieldCheck : ShieldAlert}
-        accent={isHealthyCoverage ? "cyan" : "rose"}
+      <AnalyticsKpiCard
         label="Coverage Health"
         value={`${Math.max(0, totalCategories - thinCategoriesCount)} / ${totalCategories}`}
         sub={isHealthyCoverage ? "All categories staffed" : `${thinCategoriesCount} thin categories`}
+        onClick={onSelectTab ? () => onSelectTab("coverage") : undefined}
+        href={onSelectTab ? undefined : "#editors-tab-content"}
       />
     </div>
   );

@@ -10,7 +10,7 @@ import { LastUpdated } from "@/components/analytics/LastUpdated";
 import { ContributorHeatmap } from "@/components/analytics/ContributorHeatmap";
 import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
 import { ContributorLookupPanel } from "@/components/analytics/contributor-lookup-panel";
-import { AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
+import { AnalyticsKpiCard, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 import {
   ChartContainer,
   ChartTooltip,
@@ -289,20 +289,19 @@ export default function ContributorsAnalyticsPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard icon={Users} accent="rose" label="Total contributors" value={(kpis?.totalContributors ?? 0).toLocaleString()} sub="all-time" />
-        <StatCard icon={Activity} accent="emerald" label="Active (30d)" value={(kpis?.activeContributors30d ?? 0).toLocaleString()} sub="recently engaged" />
-        <StatCard icon={Database} accent="blue" label="Total activities" value={(kpis?.totalActivities ?? 0).toLocaleString()} sub="commits, PRs, reviews" />
-        <StatCard icon={Zap} accent="amber" label="Last 24h" value={(kpis?.last24hCount ?? 0).toLocaleString()} sub="activities today" />
+        <AnalyticsKpiCard label="Total contributors" value={kpis?.totalContributors ?? 0} sub="all-time" href="#contributor-rankings" />
+        <AnalyticsKpiCard label="Active (30d)" value={kpis?.activeContributors30d ?? 0} sub="recently engaged" href="#contributor-activity" />
+        <AnalyticsKpiCard label="Total activities" value={kpis?.totalActivities ?? 0} sub="commits, PRs, reviews" href="#activity-by-type" />
+        <AnalyticsKpiCard label="Last 24h" value={kpis?.last24hCount ?? 0} sub="activities today" href="#live-activity-feed" />
       </div>
 
       {/* Universal Contributor Lookup + Per-Contributor Chart */}
       <ContributorLookupPanel from={from} to={to} />
 
       {/* Contributor Activity Heatmap */}
-      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <section className="border-t border-[var(--border)] pt-6">
         <AnalyticsSectionHeader
           id="contributor-activity"
-          index="01"
           title="Contributor Activity"
           tooltip="Daily activity heatmap across commits, PR reviews, status changes, and authored PRs."
           action={<LastUpdated timestamp={dataUpdatedAt} />}
@@ -311,11 +310,10 @@ export default function ContributorsAnalyticsPage() {
       </section>
 
       {/* Activity by Type + Activity by Repo */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <div className="grid grid-cols-1 gap-6 border-t border-[var(--border)] pt-6 lg:grid-cols-2">
+        <section>
           <AnalyticsSectionHeader
             id="activity-by-type"
-            index="02"
             title="Activity by Type"
             tooltip="Breakdown of contributor actions across reviews, PRs, commits, and status transitions."
           />
@@ -330,10 +328,10 @@ export default function ContributorsAnalyticsPage() {
           >
             <ResponsiveContainer>
               <BarChart data={activityByType} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} horizontal={false} />
-                <XAxis type="number" tick={{ fill: CHART_AXIS, fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis dataKey="actionType" type="category" tick={{ fill: CHART_AXIS, fontSize: 11 }} tickLine={false} axisLine={false} width={100} />
-                <ChartTooltip content={<ChartTooltipContent />} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <XAxis type="number" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis dataKey="actionType" type="category" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} width={100} />
+                <ChartTooltip content={<ChartTooltipContent className="border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]" />} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false}>
                   {activityByType.map((entry, index) => (
                     <Cell
@@ -347,10 +345,9 @@ export default function ContributorsAnalyticsPage() {
           </ChartContainer>
         </section>
 
-        <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+        <section>
           <AnalyticsSectionHeader
             id="activity-by-repo"
-            index="03"
             title="Activity by Repository"
             tooltip="Distribution of contributor activity across ethereum/EIPs, ethereum/ERCs, and ethereum/RIPs."
           />
@@ -365,10 +362,10 @@ export default function ContributorsAnalyticsPage() {
           >
             <ResponsiveContainer>
               <BarChart data={repoHeatmap} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
-                <XAxis dataKey="repo" tick={{ fill: CHART_AXIS, fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: CHART_AXIS, fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
-                <ChartTooltip content={<ChartTooltipContent />} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="repo" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
+                <ChartTooltip content={<ChartTooltipContent className="border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]" />} />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                   {repoHeatmap.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
@@ -381,10 +378,9 @@ export default function ContributorsAnalyticsPage() {
       </div>
 
       {/* Contributor Rankings */}
-      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <section className="border-t border-[var(--border)] pt-6">
         <AnalyticsSectionHeader
           id="contributor-rankings"
-          index="04"
           title="Contributor Rankings"
           tooltip="Top contributors ranked by total activity, reviews, status changes, or authored PRs (10 per page)."
           action={
@@ -461,10 +457,9 @@ export default function ContributorsAnalyticsPage() {
       </section>
 
       {/* Live Activity Feed */}
-      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <section className="border-t border-[var(--border)] pt-6">
         <AnalyticsSectionHeader
           id="live-activity-feed"
-          index="05"
           title="Live Activity Feed (Last 48h)"
           tooltip="Most recent commits, reviews, PRs, and status changes across EIP, ERC, and RIP repositories."
         />

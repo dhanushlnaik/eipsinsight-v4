@@ -6,8 +6,9 @@ import { client } from "@/lib/orpc";
 import { AlertCircle, Download, FileText, Repeat2, Sparkles, Users } from "lucide-react";
 import { StatCard, AnalyticsHero } from "@/components/analytics/stat-card";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
+import { chartTooltip } from "@/lib/chart-theme";
 import ReactECharts from "echarts-for-react";
-import { AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
+import { AnalyticsKpiCard, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 
 interface AuthorKPIs {
   totalAuthors: number;
@@ -198,22 +199,22 @@ export default function AuthorsAnalyticsPage() {
 
   const cohortTrendOption = useMemo(() => ({
     backgroundColor: "transparent",
-    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    tooltip: chartTooltip({ trigger: "axis", axisPointer: { type: "shadow" } }),
     legend: {
       top: 0,
-      textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+      textStyle: { color: "var(--ink-muted)", fontSize: 11 },
     },
     grid: { top: 36, left: 28, right: 20, bottom: 28 },
     xAxis: {
       type: "category",
       data: cohortTimeline.map((row) => row.month),
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-      axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+      axisLabel: { color: "var(--ink-muted)", fontSize: 11 },
+      axisLine: { lineStyle: { color: "var(--border)" } },
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-      splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+      axisLabel: { color: "var(--ink-muted)", fontSize: 11 },
+      splitLine: { lineStyle: { color: "var(--border)", type: "dashed" } },
     },
     series: [
       {
@@ -243,22 +244,22 @@ export default function AuthorsAnalyticsPage() {
 
   const repoCompositionOption = useMemo(() => ({
     backgroundColor: "transparent",
-    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    tooltip: chartTooltip({ trigger: "axis", axisPointer: { type: "shadow" } }),
     legend: {
       top: 0,
-      textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+      textStyle: { color: "var(--ink-muted)", fontSize: 11 },
     },
     grid: { top: 36, left: 28, right: 20, bottom: 28 },
     xAxis: {
       type: "category",
       data: repoComposition.map((row) => labelRepo(row.repo)),
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-      axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+      axisLabel: { color: "var(--ink-muted)", fontSize: 11 },
+      axisLine: { lineStyle: { color: "var(--border)" } },
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-      splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+      axisLabel: { color: "var(--ink-muted)", fontSize: 11 },
+      splitLine: { lineStyle: { color: "var(--border)", type: "dashed" } },
     },
     series: [
       {
@@ -373,16 +374,15 @@ export default function AuthorsAnalyticsPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard icon={Users} accent="emerald" label="Total authors" value={kpis?.totalAuthors.toLocaleString() ?? "0"} sub="all-time" />
-        <StatCard icon={Sparkles} accent="blue" label="New authors" value={kpis?.newAuthors.toLocaleString() ?? "0"} sub="this window" />
-        <StatCard icon={Repeat2} accent="violet" label="Repeat authors" value={kpis?.repeatAuthors.toLocaleString() ?? "0"} sub="2+ proposals" />
-        <StatCard icon={FileText} accent="amber" label="Proposals authored" value={kpis?.proposalsAuthored.toLocaleString() ?? "0"} sub={`Top 10 share: ${concentrationTop10Pct.toFixed(1)}%`} />
+        <AnalyticsKpiCard label="Total authors" value={kpis?.totalAuthors ?? 0} sub="all-time" href="#author-directory" />
+        <AnalyticsKpiCard label="New authors" value={kpis?.newAuthors ?? 0} sub="this window" href="#authorship-trend" />
+        <AnalyticsKpiCard label="Repeat authors" value={kpis?.repeatAuthors ?? 0} sub="2+ proposals" href="#top-authors" />
+        <AnalyticsKpiCard label="Proposals authored" value={kpis?.proposalsAuthored ?? 0} sub={`Top 10 share: ${concentrationTop10Pct.toFixed(1)}%`} href="#author-outcomes" />
       </div>
 
-      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <section className="border-t border-[var(--border)] pt-6">
         <AnalyticsSectionHeader
           id="authorship-trend"
-          index="01"
           title="Authorship Trend"
           tooltip="New vs. returning authors with authored proposals overlay, showing onboarding velocity and repeat-contributor stability month by month."
           action={
@@ -407,11 +407,10 @@ export default function AuthorsAnalyticsPage() {
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <div className="grid grid-cols-1 gap-6 border-t border-[var(--border)] pt-6 lg:grid-cols-2">
+        <section>
           <AnalyticsSectionHeader
             id="authorship-composition"
-            index="02"
             title="Composition by Repository"
             tooltip="Unique vs. repeat authors across EIPs, ERCs, and RIPs."
             action={
@@ -433,10 +432,9 @@ export default function AuthorsAnalyticsPage() {
           </div>
         </section>
 
-        <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+        <section>
           <AnalyticsSectionHeader
             id="author-outcomes"
-            index="03"
             title="Author Outcomes"
             tooltip="Top 10 authors by authored proposals and their landed, active, and closed shares."
             action={
@@ -479,16 +477,15 @@ export default function AuthorsAnalyticsPage() {
         </section>
       </div>
 
-      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <section className="border-t border-[var(--border)] pt-6">
         <AnalyticsSectionHeader
           id="top-authors"
-          index="04"
           title="Top Active Authors"
           tooltip="Most active proposal authors in the selected window."
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {topAuthorCards.map((author) => (
-            <div key={author.author} className="rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] p-4">
+            <div key={author.author} className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <ActorAvatar handle={author.author} size="md" href={`/user/${author.author}`} />
@@ -518,10 +515,9 @@ export default function AuthorsAnalyticsPage() {
         </div>
       </section>
 
-      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <section className="border-t border-[var(--border)] pt-6">
         <AnalyticsSectionHeader
           id="author-directory"
-          index="05"
           title="Author Directory"
           tooltip="Full author directory ranked by proposals authored (10 per page)."
           action={<LastUpdated timestamp={dataUpdatedAt} />}

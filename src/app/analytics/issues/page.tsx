@@ -19,7 +19,8 @@ import {
 import { cn } from "@/lib/utils";
 import { CopyLinkButton } from "@/components/header";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
-import { AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
+import { chartTooltip } from "@/lib/chart-theme";
+import { AnalyticsKpiCard, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 
 interface IssueMonthlyPoint {
   month: string;
@@ -73,7 +74,7 @@ function Section({ title, tooltip, children, action, className, id }: {
   id?: string;
 }) {
   return (
-    <section className={cn("rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5", className)}>
+    <section className={cn("border-t border-[var(--border)] pt-6", className)}>
       <AnalyticsSectionHeader id={id ?? title.toLowerCase().replace(/\s+/g, "-")} title={title} tooltip={tooltip} action={action} />
       {children}
     </section>
@@ -147,22 +148,22 @@ export default function IssuesAnalyticsPage() {
   const monthlyOption = useMemo(() => {
     return {
       backgroundColor: "transparent",
-      tooltip: { trigger: "axis" },
+      tooltip: chartTooltip({ trigger: "axis" }),
       legend: {
         top: 0,
-        textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+        textStyle: { color: "var(--ink-muted)", fontSize: 11 },
       },
       grid: { top: 36, left: 38, right: 22, bottom: 50 },
       xAxis: {
         type: "category",
         data: monthlySeries.map((m) => m.month),
-        axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-        axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+        axisLabel: { color: "var(--ink-muted)", fontSize: 11 },
+        axisLine: { lineStyle: { color: "var(--border)" } },
       },
       yAxis: {
         type: "value",
-        axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-        splitLine: { lineStyle: { color: "rgba(148,163,184,0.15)", type: "dashed" } },
+        axisLabel: { color: "var(--ink-muted)", fontSize: 11 },
+        splitLine: { lineStyle: { color: "var(--border)", type: "dashed" } },
       },
       dataZoom: [
         { type: "inside", xAxisIndex: 0, start: 0, end: 100 },
@@ -258,18 +259,30 @@ export default function IssuesAnalyticsPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[
-          { label: "Open Issues", value: totalOpen, sub: `Median age: ${openSummary?.medianAge != null ? `${openSummary.medianAge}d` : "–"}` },
-          { label: `Created (${heroMonth?.month ?? ""})`, value: heroMonth?.newIssues ?? 0, sub: "Current month" },
-          { label: "Closed", value: heroMonth?.closedIssues ?? 0, sub: "Current month" },
-          { label: "Active", value: heroMonth?.openIssues ?? 0, sub: "In current month" },
-        ].map((kpi) => (
-          <div key={kpi.label} className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
-            <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">{kpi.label}</p>
-            <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[var(--ink)]">{kpi.value.toLocaleString()}</p>
-            <p className="mt-1 font-mono text-[10px] text-[var(--ink-faint)]">{kpi.sub}</p>
-          </div>
-        ))}
+        <AnalyticsKpiCard
+          label="Open Issues"
+          value={totalOpen}
+          sub={`Median age: ${openSummary?.medianAge != null ? `${openSummary.medianAge}d` : "–"}`}
+          href="#open-issues-section"
+        />
+        <AnalyticsKpiCard
+          label={`Created (${heroMonth?.month ?? "Month"})`}
+          value={heroMonth?.newIssues ?? 0}
+          sub="Current month"
+          href="#issue-trend"
+        />
+        <AnalyticsKpiCard
+          label="Closed"
+          value={heroMonth?.closedIssues ?? 0}
+          sub="Current month"
+          href="#issue-trend"
+        />
+        <AnalyticsKpiCard
+          label="Active"
+          value={heroMonth?.openIssues ?? 0}
+          sub="In current month"
+          href="#issue-trend"
+        />
       </div>
 
       <Section
@@ -395,7 +408,7 @@ export default function IssuesAnalyticsPage() {
           <div className="mt-4 flex items-center gap-2 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--ink-muted)]">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 text-[var(--c-review)]" />
             <span>
-              <strong className="text-[var(--ink)]">Oldest:</strong> #{openSummary.oldestIssue.issueNumber} by {openSummary.oldestIssue.author} ({openSummary.oldestIssue.ageDays}d) — {openSummary.oldestIssue.title}
+              <strong className="text-[var(--ink)]">Oldest:</strong> #{openSummary.oldestIssue.issueNumber} by {openSummary.oldestIssue.author} ({openSummary.oldestIssue.ageDays}d): {openSummary.oldestIssue.title}
             </span>
           </div>
         )}

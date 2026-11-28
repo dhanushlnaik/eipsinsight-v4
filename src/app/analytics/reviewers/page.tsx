@@ -255,6 +255,10 @@ export default function ReviewersAnalyticsPage() {
         totalReviews={totalReviews}
         totalPrsTouched={totalPrsTouched}
         avgResponseDays={avgResponseDays}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          document.getElementById("reviewers-tab-content")?.scrollIntoView({ behavior: "smooth" });
+        }}
       />
 
       {/* Segmented Tab Navigation Bar */}
@@ -326,11 +330,11 @@ export default function ReviewersAnalyticsPage() {
       </div>
 
       {/* Methodology Accordion */}
-      <div className="rounded-xl border border-border/70 bg-muted/20 p-3.5 backdrop-blur-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+      <div className="border-t border-[var(--border)] pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--ink-muted)]">
           <details className="group">
-            <summary className="inline-flex items-center gap-1.5 cursor-pointer rounded-md border border-border/70 bg-background/60 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60 transition-colors">
-              <Info className="h-3.5 w-3.5 text-primary" />
+            <summary className="chip cursor-pointer">
+              <Info className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
               <span>Methodology &amp; Scope Details</span>
               <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
             </summary>

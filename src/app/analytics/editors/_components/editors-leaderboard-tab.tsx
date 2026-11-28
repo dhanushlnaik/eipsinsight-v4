@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CHART_SERIES } from "@/lib/chart-colors";
+import { chartTooltip } from "@/lib/chart-theme";
 import { CANONICAL_EIP_EDITORS, ASSOCIATE_EIP_EDITORS } from "@/data/eip-contributor-roles";
 import { TablePager } from "../../_components/analytics-ui";
 import {
@@ -151,7 +152,7 @@ export function EditorsLeaderboardTab({
 
     return {
       backgroundColor: "transparent",
-      tooltip: {
+      tooltip: chartTooltip({
         trigger: "axis",
         axisPointer: { type: "shadow" },
         formatter: (params: Array<{ dataIndex: number }>) => {
@@ -159,30 +160,30 @@ export function EditorsLeaderboardTab({
           const row = topRows[idx];
           if (!row) return "";
           const avatar = getGitHubAvatarUrl(row.actor);
-          return `<div style="padding: 6px; font-size: 12px; min-width: 170px;">
+          return `<div style="padding: 4px; font-size: 12px; min-width: 170px;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
               <img src="${avatar}" style="width: 22px; height: 22px; border-radius: 9999px; object-fit: cover;" />
               <strong style="font-size: 13px;">${row.actor}</strong>
             </div>
-            <div style="padding: 1px 0;"><span style="color: var(--muted-foreground);">Reviews:</span> <strong>${row.reviews.toLocaleString()}</strong></div>
-            <div style="padding: 1px 0;"><span style="color: var(--muted-foreground);">PRs touched:</span> <strong>${row.prsTouched.toLocaleString()}</strong></div>
-            <div style="padding: 1px 0;"><span style="color: var(--muted-foreground);">Total actions:</span> <strong>${row.totalActions.toLocaleString()}</strong></div>
-            <div style="padding: 1px 0;"><span style="color: var(--muted-foreground);">Turnaround:</span> <strong>${row.medianResponseDays != null ? `${row.medianResponseDays.toFixed(1)}d` : "–"}</strong></div>
+            <div style="padding: 1px 0;"><span style="color: var(--ink-muted);">Reviews:</span> <strong>${row.reviews.toLocaleString()}</strong></div>
+            <div style="padding: 1px 0;"><span style="color: var(--ink-muted);">PRs touched:</span> <strong>${row.prsTouched.toLocaleString()}</strong></div>
+            <div style="padding: 1px 0;"><span style="color: var(--ink-muted);">Total actions:</span> <strong>${row.totalActions.toLocaleString()}</strong></div>
+            <div style="padding: 1px 0;"><span style="color: var(--ink-muted);">Turnaround:</span> <strong>${row.medianResponseDays != null ? `${row.medianResponseDays.toFixed(1)}d` : "–"}</strong></div>
           </div>`;
         },
-      },
+      }),
       grid: { top: 12, left: 110, right: 120, bottom: 20, containLabel: true },
       xAxis: {
         type: "value",
         max: Math.ceil(maxValue * 1.18),
-        axisLabel: { color: "var(--muted-foreground)", fontSize: 11 },
-        splitLine: { lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
+        axisLabel: { color: "var(--ink-muted)", fontSize: 11 },
+        splitLine: { lineStyle: { color: "var(--border)", type: "dashed" } },
       },
       yAxis: {
         type: "category",
         data: topRows.map((r) => r.actor),
         axisLabel: {
-          color: "var(--foreground)",
+          color: "var(--ink)",
           fontSize: 12,
           fontWeight: 600,
         },
@@ -233,24 +234,24 @@ export function EditorsLeaderboardTab({
 
     return {
       backgroundColor: "transparent",
-      tooltip: {
+      tooltip: chartTooltip({
         trigger: "axis",
         axisPointer: { type: "shadow" },
-      },
+      }),
       legend: {
-        textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+        textStyle: { color: "var(--ink-muted)", fontSize: 11 },
         bottom: 0,
       },
       grid: { top: 20, left: 90, right: 20, bottom: 40 },
       xAxis: {
         type: "value",
-        axisLabel: { color: "var(--muted-foreground)", fontSize: 10 },
-        splitLine: { lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
+        axisLabel: { color: "var(--ink-muted)", fontSize: 10 },
+        splitLine: { lineStyle: { color: "var(--border)", type: "dashed" } },
       },
       yAxis: {
         type: "category",
         data: actors,
-        axisLabel: { color: "var(--foreground)", fontSize: 10, fontWeight: 500 },
+        axisLabel: { color: "var(--ink)", fontSize: 10, fontWeight: 500 },
         axisTick: { show: false },
         axisLine: { show: false },
       },
@@ -277,24 +278,24 @@ export function EditorsLeaderboardTab({
 
     return {
       backgroundColor: "transparent",
-      tooltip: {
+      tooltip: chartTooltip({
         trigger: "axis",
         axisPointer: { type: "shadow" },
-      },
+      }),
       legend: {
-        textStyle: { color: "var(--muted-foreground)", fontSize: 11 },
+        textStyle: { color: "var(--ink-muted)", fontSize: 11 },
         bottom: 0,
       },
       grid: { top: 20, left: 90, right: 20, bottom: 40 },
       xAxis: {
         type: "value",
-        axisLabel: { color: "var(--muted-foreground)", fontSize: 10 },
-        splitLine: { lineStyle: { color: "rgba(148,163,184,0.12)", type: "dashed" } },
+        axisLabel: { color: "var(--ink-muted)", fontSize: 10 },
+        splitLine: { lineStyle: { color: "var(--border)", type: "dashed" } },
       },
       yAxis: {
         type: "category",
         data: actors,
-        axisLabel: { color: "var(--foreground)", fontSize: 10, fontWeight: 500 },
+        axisLabel: { color: "var(--ink)", fontSize: 10, fontWeight: 500 },
         axisTick: { show: false },
         axisLine: { show: false },
       },

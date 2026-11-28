@@ -362,6 +362,10 @@ export default function EditorsAnalyticsPage() {
         avgResponseDays={avgResponseDays}
         totalCategories={categoryData.length}
         thinCategoriesCount={thinCoverageCategories.length}
+        onSelectTab={(tab) => {
+          setActiveTab(tab);
+          document.getElementById("editors-tab-content")?.scrollIntoView({ behavior: "smooth" });
+        }}
       />
 
       {/* Segmented Tab Navigation Bar */}

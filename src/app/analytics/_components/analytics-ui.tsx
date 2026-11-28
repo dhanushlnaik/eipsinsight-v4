@@ -32,7 +32,6 @@ export function InfoTip({ text, className }: { text: string; className?: string 
 
 export function AnalyticsSectionHeader({
   id,
-  index,
   title,
   tooltip,
   action,
@@ -48,11 +47,6 @@ export function AnalyticsSectionHeader({
   return (
     <div id={id} className={cn("scroll-mt-20 mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-3", className)}>
       <div className="flex min-w-0 items-center gap-2">
-        {index && (
-          <span className="font-mono text-xs font-semibold tabular-nums text-[var(--brand-strong)]">
-            {index}
-          </span>
-        )}
         <h2 className="font-serif text-lg font-bold tracking-tight text-[var(--ink)] sm:text-xl">
           {title}
         </h2>
@@ -146,8 +140,73 @@ export function TablePager({
 
 export function AnalyticsLoader({ label }: { label: string }) {
   return (
-    <div className="flex min-h-[420px] items-center justify-center rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)]">
+    <div className="flex min-h-[360px] items-center justify-center">
       <InlineBrandLoader size="md" label={label} />
     </div>
   );
+}
+
+export function AnalyticsKpiCard({
+  label,
+  value,
+  sub,
+  tooltip,
+  href,
+  onClick,
+  active,
+  accentClassName,
+  className,
+}: {
+  label: string;
+  value: string | number;
+  sub?: string;
+  tooltip?: string;
+  href?: string;
+  onClick?: () => void;
+  active?: boolean;
+  accentClassName?: string;
+  className?: string;
+}) {
+  const interactive = Boolean(href || onClick);
+  const cardClasses = cn(
+    "group block w-full rounded-[var(--l-radius)] border bg-[var(--surface)] p-4 text-left transition-colors",
+    active ? "border-[var(--ink)]" : "border-[var(--border)]",
+    interactive && "cursor-pointer hover:border-[var(--ink)]",
+    className
+  );
+
+  const inner = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-muted)]">
+          {label}
+        </span>
+        {tooltip && <InfoTip text={tooltip} />}
+      </div>
+      <div className={cn("mt-2 font-serif text-2xl font-bold tabular-nums tracking-tight text-[var(--ink)]", accentClassName)}>
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </div>
+      {sub && (
+        <div className="mt-1 font-mono text-[11px] text-[var(--ink-muted)]">
+          {sub}
+        </div>
+      )}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a href={href} className={cardClasses}>
+        {inner}
+      </a>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={cardClasses}>
+        {inner}
+      </button>
+    );
+  }
+  return <div className={cardClasses}>{inner}</div>;
 }
