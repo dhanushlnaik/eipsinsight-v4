@@ -10,7 +10,7 @@ import { LastUpdated } from "@/components/analytics/LastUpdated";
 import { ContributorHeatmap } from "@/components/analytics/ContributorHeatmap";
 import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
 import { ContributorLookupPanel } from "@/components/analytics/contributor-lookup-panel";
-import { InlineBrandLoader } from "@/components/inline-brand-loader";
+import { AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 import {
   ChartContainer,
   ChartTooltip,
@@ -138,6 +138,7 @@ export default function ContributorsAnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [dataUpdatedAt, setDataUpdatedAt] = useState<Date>(new Date());
   const [sortBy, setSortBy] = useState<'total' | 'reviews' | 'status_changes' | 'prs_authored' | 'prs_reviewed'>('total');
+  const [rankingsPage, setRankingsPage] = useState(1);
   
   const [kpis, setKPIs] = useState<ContributorKPIs | null>(null);
   const [activityByType, setActivityByType] = useState<ActivityByType[]>([]);
@@ -272,30 +273,19 @@ export default function ContributorsAnalyticsPage() {
   }, `contributors-analytics-${repoFilter}-${timeRange}`);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <InlineBrandLoader size="md" label="Loading analytics..." />
-      </div>
-    );
+    return <AnalyticsLoader label="Loading contributor analytics..." />;
   }
+
+  const pagedRankings = rankings.slice((rankingsPage - 1) * 10, rankingsPage * 10);
 
   return (
     <div className="space-y-6">
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="flex items-start gap-2 rounded-[var(--l-radius)] border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
-
-      {/* Hero insight */}
-      <AnalyticsHero eyebrow="Contributor activity" title="Everyone moving Ethereum standards forward">
-        Across the EIP, ERC and RIP repositories,{" "}
-        <span className="font-semibold text-foreground">{(kpis?.totalContributors ?? 0).toLocaleString()}</span> contributors
-        have logged <span className="font-semibold text-foreground">{(kpis?.totalActivities ?? 0).toLocaleString()}</span>{" "}
-        activities, with <span className="font-semibold text-foreground">{(kpis?.activeContributors30d ?? 0).toLocaleString()}</span>{" "}
-        active in the last 30 days.
-      </AnalyticsHero>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -305,25 +295,30 @@ export default function ContributorsAnalyticsPage() {
         <StatCard icon={Zap} accent="amber" label="Last 24h" value={(kpis?.last24hCount ?? 0).toLocaleString()} sub="activities today" />
       </div>
 
-      {/* Universal Contributor Lookup + Per-Contributor Chart + Creative Score* */}
+      {/* Universal Contributor Lookup + Per-Contributor Chart */}
       <ContributorLookupPanel from={from} to={to} />
 
       {/* Contributor Activity Heatmap */}
-      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">Contributor Activity</h2>
-          <LastUpdated timestamp={dataUpdatedAt} />
-        </div>
+      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+        <AnalyticsSectionHeader
+          id="contributor-activity"
+          index="01"
+          title="Contributor Activity"
+          tooltip="Daily activity heatmap across commits, PR reviews, status changes, and authored PRs."
+          action={<LastUpdated timestamp={dataUpdatedAt} />}
+        />
         <ContributorHeatmap data={dailyActivity} />
-        <AnalyticsAnnotation>
-          Activity patterns reveal contributor engagement trends across commits, reviews, and PR interactions.
-        </AnalyticsAnnotation>
-      </div>
+      </section>
 
       {/* Activity by Type + Activity by Repo */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Activity by Type</h2>
+        <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+          <AnalyticsSectionHeader
+            id="activity-by-type"
+            index="02"
+            title="Activity by Type"
+            tooltip="Breakdown of contributor actions across reviews, PRs, commits, and status transitions."
+          />
           <ChartContainer
             config={Object.fromEntries(
               Object.entries(actionTypeColors).map(([type, color]) => [
@@ -339,21 +334,26 @@ export default function ContributorsAnalyticsPage() {
                 <XAxis type="number" tick={{ fill: CHART_AXIS, fontSize: 11 }} tickLine={false} axisLine={false} />
                 <YAxis dataKey="actionType" type="category" tick={{ fill: CHART_AXIS, fontSize: 11 }} tickLine={false} axisLine={false} width={100} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="count" radius={[0, 8, 8, 0]} isAnimationActive={false}>
+                <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false}>
                   {activityByType.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={actionTypeColors[entry.actionType] || "#94a3b8"}
+                      fill={actionTypeColors[entry.actionType] || "#0F5E4D"}
                     />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
-        </div>
+        </section>
 
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Activity by Repository</h2>
+        <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+          <AnalyticsSectionHeader
+            id="activity-by-repo"
+            index="03"
+            title="Activity by Repository"
+            tooltip="Distribution of contributor activity across ethereum/EIPs, ethereum/ERCs, and ethereum/RIPs."
+          />
           <ChartContainer
             config={Object.fromEntries(
               repoHeatmap.map((r) => [
@@ -377,76 +377,79 @@ export default function ContributorsAnalyticsPage() {
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
-        </div>
+        </section>
       </div>
 
       {/* Contributor Rankings */}
-      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold text-foreground">Contributor Rankings</h2>
-            <LastUpdated timestamp={dataUpdatedAt} />
-          </div>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="rounded-lg border border-border/70 bg-muted/40 px-3 py-1.5 text-sm text-foreground/85"
-          >
-            <option value="total">Total Activities</option>
-            <option value="reviews">Reviews</option>
-            <option value="status_changes">Status Changes</option>
-            <option value="prs_authored">PRs Authored</option>
-            <option value="prs_reviewed">PRs Reviewed</option>
-          </select>
-        </div>
+      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+        <AnalyticsSectionHeader
+          id="contributor-rankings"
+          index="04"
+          title="Contributor Rankings"
+          tooltip="Top contributors ranked by total activity, reviews, status changes, or authored PRs (10 per page)."
+          action={
+            <div className="flex items-center gap-2">
+              <LastUpdated timestamp={dataUpdatedAt} />
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as typeof sortBy);
+                  setRankingsPage(1);
+                }}
+                className="h-8 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 font-mono text-[11px] text-[var(--ink)] outline-none focus:border-[var(--ink)]"
+              >
+                <option value="total">Total Activities</option>
+                <option value="reviews">Reviews</option>
+                <option value="status_changes">Status Changes</option>
+                <option value="prs_authored">PRs Authored</option>
+                <option value="prs_reviewed">PRs Reviewed</option>
+              </select>
+            </div>
+          }
+        />
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border/70">
-                <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">Rank</th>
-                <th className="py-3 px-4 text-left text-sm font-medium text-muted-foreground">Contributor</th>
-                <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">Total</th>
-                <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">Reviews</th>
-                <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">Status Changes</th>
-                <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">PRs Authored</th>
-                <th className="py-3 px-4 text-right text-sm font-medium text-muted-foreground">PRs Reviewed</th>
+              <tr className="border-b border-[var(--border)]">
+                <th className="py-2.5 px-3 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Rank</th>
+                <th className="py-2.5 px-3 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Contributor</th>
+                <th className="py-2.5 px-3 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Total</th>
+                <th className="py-2.5 px-3 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Reviews</th>
+                <th className="py-2.5 px-3 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Status Changes</th>
+                <th className="py-2.5 px-3 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">PRs Authored</th>
+                <th className="py-2.5 px-3 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">PRs Reviewed</th>
               </tr>
             </thead>
-            <tbody>
-              {rankings.map((contributor, idx) => (
+            <tbody className="divide-y divide-[var(--border)]/60">
+              {pagedRankings.map((contributor, idx) => (
                 <tr
                   key={contributor.actor}
-                  className="border-b border-border/60 hover:bg-muted/40 transition-colors"
+                  className="transition-colors hover:bg-[var(--surface-2)]"
                 >
-                  <td className="py-3 px-4 text-sm text-muted-foreground">#{idx + 1}</td>
-                  <td className="py-3 px-4">
-                    <Link
-                      href={`/analytics/contributors/${contributor.actor}`}
-                      className="font-medium text-primary hover:text-primary"
-                    >
-                      {contributor.actor}
-                    </Link>
+                  <td className="py-2.5 px-3 font-mono text-[var(--ink-muted)]">#{(rankingsPage - 1) * 10 + idx + 1}</td>
+                  <td className="py-2.5 px-3">
+                    <ActorAvatar handle={contributor.actor} size="sm" href={`/analytics/contributors/${contributor.actor}`} />
                   </td>
-                  <td className="py-3 px-4 text-right text-sm text-foreground/85">
+                  <td className="py-2.5 px-3 text-right font-mono font-semibold tabular-nums text-[var(--ink)]">
                     {contributor.total.toLocaleString()}
                   </td>
-                  <td className="py-3 px-4 text-right text-sm text-foreground/85">
+                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--ink-muted)]">
                     {contributor.reviews.toLocaleString()}
                   </td>
-                  <td className="py-3 px-4 text-right text-sm text-foreground/85">
+                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--ink-muted)]">
                     {contributor.statusChanges.toLocaleString()}
                   </td>
-                  <td className="py-3 px-4 text-right text-sm text-foreground/85">
+                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--ink-muted)]">
                     {contributor.prsAuthored.toLocaleString()}
                   </td>
-                  <td className="py-3 px-4 text-right text-sm text-foreground/85">
+                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-[var(--ink-muted)]">
                     {contributor.prsReviewed.toLocaleString()}
                   </td>
                 </tr>
               ))}
               {rankings.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="py-6 text-center text-sm text-[var(--ink-muted)]">
                     No contributor data found for the current filters.
                   </td>
                 </tr>
@@ -454,42 +457,50 @@ export default function ContributorsAnalyticsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+        <TablePager page={rankingsPage} total={rankings.length} pageSize={10} onPageChange={setRankingsPage} />
+      </section>
 
       {/* Live Activity Feed */}
-      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <h2 className="mb-4 text-lg font-semibold text-foreground">Live Activity Feed (Last 48h)</h2>
+      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+        <AnalyticsSectionHeader
+          id="live-activity-feed"
+          index="05"
+          title="Live Activity Feed (Last 48h)"
+          tooltip="Most recent commits, reviews, PRs, and status changes across EIP, ERC, and RIP repositories."
+        />
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {liveFeed.map((item, idx) => {
             const repoName = item.repo ? item.repo.split('/')[1] : 'Unknown';
             return (
               <div
                 key={idx}
-                className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs"
               >
-                <div className="flex items-center gap-3">
-                  <span className="font-medium text-foreground/90">{item.actor}</span>
-                  <span className="text-muted-foreground">
+                <div className="flex items-center gap-2.5">
+                  <ActorAvatar handle={item.actor} size="xs" href={`/analytics/contributors/${item.actor}`} />
+                  <span className="text-[var(--ink-muted)]">
                     {item.actionType.replace('_', ' ')}
                   </span>
                   {item.prNumber > 0 && (
-                    <span className="text-primary">PR #{item.prNumber}</span>
+                    <Link href={`/pr/${repoName.toLowerCase()}/${item.prNumber}`} className="font-mono text-[var(--brand-strong)] hover:underline">
+                      PR #{item.prNumber}
+                    </Link>
                   )}
                   {item.repo && (
-                    <span className="text-muted-foreground">{repoName}</span>
+                    <span className="font-mono text-[var(--ink-faint)]">{repoName}</span>
                   )}
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <span className="font-mono text-[10px] text-[var(--ink-muted)]">
                   {new Date(item.occurredAt).toLocaleString()}
                 </span>
               </div>
             );
           })}
           {liveFeed.length === 0 && (
-            <p className="text-sm text-muted-foreground">No recent activity in the last 48 hours.</p>
+            <p className="text-sm text-[var(--ink-muted)]">No recent activity in the last 48 hours.</p>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

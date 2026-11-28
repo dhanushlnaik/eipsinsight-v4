@@ -19,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CopyLinkButton } from "@/components/header";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
-import { InlineBrandLoader } from "@/components/inline-brand-loader";
+import { AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 
 interface IssueMonthlyPoint {
   month: string;
@@ -64,26 +64,17 @@ interface OpenIssueRow {
   numComments: number;
 }
 
-function Section({ title, icon, children, action, className, id }: {
+function Section({ title, tooltip, children, action, className, id }: {
   title: string;
-  icon: React.ReactNode;
+  tooltip?: string;
   children: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
   id?: string;
 }) {
   return (
-    <section id={id} className={cn("rounded-xl border border-border bg-card/60 p-5", className)}>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-primary">{icon}</span>
-          <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">{title}</h2>
-          {id && (
-            <CopyLinkButton sectionId={id} className="h-7 w-7 rounded-md border border-border bg-muted/60 hover:border-primary/40 hover:bg-primary/10" />
-          )}
-        </div>
-        {action}
-      </div>
+    <section className={cn("rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5", className)}>
+      <AnalyticsSectionHeader id={id ?? title.toLowerCase().replace(/\s+/g, "-")} title={title} tooltip={tooltip} action={action} />
       {children}
     </section>
   );
@@ -103,6 +94,7 @@ export default function IssuesAnalyticsPage() {
   const [openIssues, setOpenIssues] = useState<OpenIssueRow[]>([]);
 
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [issuesPage, setIssuesPage] = useState(1);
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
 
   useEffect(() => {
@@ -251,17 +243,15 @@ export default function IssuesAnalyticsPage() {
   }, `analytics-issues-${repoFilter}`);
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <InlineBrandLoader />
-      </div>
-    );
+    return <AnalyticsLoader label="Loading issue analytics..." />;
   }
+
+  const pagedIssues = openIssues.slice((issuesPage - 1) * 10, issuesPage * 10);
 
   return (
     <div className="space-y-6">
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="flex items-start gap-2 rounded-[var(--l-radius)] border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -269,20 +259,15 @@ export default function IssuesAnalyticsPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
-          { label: "Open Issues", value: totalOpen, sub: `Median age: ${openSummary?.medianAge != null ? `${openSummary.medianAge}d` : "–"}`, icon: <Github className="h-5 w-5" /> },
-          { label: `Created (${heroMonth?.month ?? ""})`, value: heroMonth?.newIssues ?? 0, sub: "Current month", icon: <Activity className="h-5 w-5" /> },
-          { label: "Closed", value: heroMonth?.closedIssues ?? 0, sub: "Current month", icon: <AlertCircle className="h-5 w-5" /> },
-          { label: "Active", value: heroMonth?.openIssues ?? 0, sub: "In current month", icon: <Loader2 className="h-5 w-5" /> },
+          { label: "Open Issues", value: totalOpen, sub: `Median age: ${openSummary?.medianAge != null ? `${openSummary.medianAge}d` : "–"}` },
+          { label: `Created (${heroMonth?.month ?? ""})`, value: heroMonth?.newIssues ?? 0, sub: "Current month" },
+          { label: "Closed", value: heroMonth?.closedIssues ?? 0, sub: "Current month" },
+          { label: "Active", value: heroMonth?.openIssues ?? 0, sub: "In current month" },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-xl border border-border bg-card/60 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground">{kpi.label}</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{kpi.value.toLocaleString()}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">{kpi.sub}</p>
-              </div>
-              <div className="rounded-lg bg-primary/10 p-2.5 text-primary">{kpi.icon}</div>
-            </div>
+          <div key={kpi.label} className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+            <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">{kpi.label}</p>
+            <p className="mt-1.5 font-mono text-2xl font-bold tabular-nums text-[var(--ink)]">{kpi.value.toLocaleString()}</p>
+            <p className="mt-1 font-mono text-[10px] text-[var(--ink-faint)]">{kpi.sub}</p>
           </div>
         ))}
       </div>
@@ -290,16 +275,16 @@ export default function IssuesAnalyticsPage() {
       <Section
         id="issue-trend"
         title="Open Issue trend by month"
-        icon={<BarChart3 className="h-4 w-4" />}
+        tooltip="Created and Closed count issues by activity within each month. Open EOM (Open at End of Month) tracks the running backlog still open on the last day of each month."
         action={
           <div className="flex items-center gap-2">
-            <span className="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground">Context: {monthContext}</span>
+            <span className="chip px-2 py-0.5 font-mono text-[11px]">{monthContext}</span>
             <LastUpdated timestamp={dataUpdatedAt} />
           </div>
         }
       >
         {monthlySeries.length > 0 ? (
-          <div className="h-[380px] w-full">
+          <div className="h-[360px] w-full">
             <ReactECharts
               option={monthlyOption}
               style={{ height: "100%", width: "100%" }}
@@ -308,16 +293,11 @@ export default function IssuesAnalyticsPage() {
             />
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No monthly data available.</p>
+          <p className="text-sm text-[var(--ink-muted)]">No monthly data available.</p>
         )}
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-          <strong className="text-foreground">Created</strong> and <strong className="text-foreground">Closed</strong> count issues
-          by what happened to them within each month. <strong className="text-foreground">Open EOM</strong> ={" "}
-          <em>Open at End of Month</em>: issues still open on the last day of that month (the running backlog).
-        </p>
       </Section>
 
-      <Section id="issue-labels" title="Label distribution" icon={<BarChart3 className="h-4 w-4" />}>
+      <Section id="issue-labels" title="Label distribution" tooltip="Most frequent GitHub labels across open issues in the selected repository scope.">
         <div className="space-y-2">
           {labelStats.length > 0 ? (
             labelStats.map((label) => {
@@ -325,18 +305,18 @@ export default function IssuesAnalyticsPage() {
               const percentage = (label.count / maxCount) * 100;
               return (
                 <div key={label.label} className="flex items-center gap-3">
-                  <span className="w-28 truncate text-xs font-medium text-foreground">{label.label}</span>
+                  <span className="w-32 truncate font-mono text-xs text-[var(--ink)]">{label.label}</span>
                   <div className="flex-1">
-                    <div className="h-2 rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary" style={{ width: `${percentage}%` }} />
+                    <div className="h-2 rounded-full bg-[var(--surface-2)]">
+                      <div className="h-full rounded-full bg-[var(--brand-strong)]" style={{ width: `${percentage}%` }} />
                     </div>
                   </div>
-                  <span className="w-12 text-right text-xs text-muted-foreground">{label.count}</span>
+                  <span className="w-12 text-right font-mono text-xs tabular-nums text-[var(--ink-muted)]">{label.count}</span>
                 </div>
               );
             })
           ) : (
-            <p className="text-xs text-muted-foreground">No labels found.</p>
+            <p className="text-xs text-[var(--ink-muted)]">No labels found.</p>
           )}
         </div>
       </Section>
@@ -344,58 +324,64 @@ export default function IssuesAnalyticsPage() {
       <Section
         id="open-issues-section"
         title="Open Issues"
-        icon={<Github className="h-4 w-4" />}
+        tooltip="Currently open issues in the selected repository scope, paginated 10 per page."
         action={
           <button
+            type="button"
             onClick={downloadOpenIssuesDetailedCSV}
-            className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
+            className="chip cursor-pointer gap-1.5 px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:border-[var(--ink)]"
           >
-            <Download className="h-3.5 w-3.5" />
-            Download CSV
+            <Download className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+            CSV
           </button>
         }
       >
-        <p className="mb-3 text-xs text-muted-foreground">Snapshot of currently open issues in selected repository scope.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-border">
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Issue</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Title</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Repo</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Author</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Comments</th>
-                <th className="py-2 pr-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Created</th>
+              <tr className="border-b border-[var(--border)]">
+                <th className="py-2 pr-4 font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)]">Issue</th>
+                <th className="py-2 pr-4 font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)]">Title</th>
+                <th className="py-2 pr-4 font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)]">Repo</th>
+                <th className="py-2 pr-4 font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)]">Author</th>
+                <th className="py-2 pr-4 font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)]">Comments</th>
+                <th className="py-2 pr-4 font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--ink-muted)]">Created</th>
               </tr>
             </thead>
-            <tbody>
-              {openIssues.map((issue) => {
+            <tbody className="divide-y divide-[var(--border)]/60">
+              {pagedIssues.map((issue) => {
                 const [org, repoName] = issue.repo.split("/");
                 const url = `https://github.com/${org}/${repoName}/issues/${issue.issueNumber}`;
                 const repoShort = repoName.toLowerCase();
                 return (
-                  <tr key={`${issue.repo}-${issue.issueNumber}`} className="border-b border-border/50 transition-colors hover:bg-muted/40">
-                    <td className="py-2 pr-4">
-                      <div className="inline-flex items-center gap-2">
-                        <Link href={`/issue/${repoShort}/${issue.issueNumber}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                  <tr key={`${issue.repo}-${issue.issueNumber}`} className="transition-colors hover:bg-[var(--surface-2)]">
+                    <td className="py-2.5 pr-4">
+                      <div className="inline-flex items-center gap-1.5">
+                        <Link href={`/issue/${repoShort}/${issue.issueNumber}`} className="font-mono font-semibold text-[var(--brand-strong)] hover:underline">
                           #{issue.issueNumber}
                         </Link>
-                        <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground" title="Open on GitHub">
+                        <a href={url} target="_blank" rel="noreferrer" className="text-[var(--ink-faint)] hover:text-[var(--ink)]" title="Open on GitHub">
                           <ArrowUpRight className="h-3 w-3" />
                         </a>
                       </div>
                     </td>
-                    <td className="max-w-xs truncate py-2 pr-4 text-foreground/90">{issue.title || <span className="text-muted-foreground">No title</span>}</td>
-                    <td className="py-2 pr-4 text-muted-foreground">{repoName}</td>
-                    <td className="py-2 pr-4 text-foreground/80">{issue.author || <span className="text-muted-foreground">Unknown</span>}</td>
-                    <td className="py-2 pr-4 tabular-nums text-muted-foreground">{issue.numComments}</td>
-                    <td className="py-2 pr-4 tabular-nums text-muted-foreground">{issue.createdAt}</td>
+                    <td className="max-w-xs truncate py-2.5 pr-4 text-[var(--ink)]">{issue.title || <span className="text-[var(--ink-faint)]">No title</span>}</td>
+                    <td className="py-2.5 pr-4 font-mono text-[var(--ink-muted)]">{repoName}</td>
+                    <td className="py-2.5 pr-4">
+                      {issue.author ? (
+                        <ActorAvatar handle={issue.author} size="xs" href={`/user/${issue.author}`} />
+                      ) : (
+                        <span className="text-[var(--ink-faint)]">Unknown</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-4 font-mono tabular-nums text-[var(--ink-muted)]">{issue.numComments}</td>
+                    <td className="py-2.5 pr-4 font-mono tabular-nums text-[var(--ink-muted)]">{issue.createdAt}</td>
                   </tr>
                 );
               })}
               {openIssues.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-sm text-[var(--ink-muted)]">
                     No open issues found for current filters.
                   </td>
                 </tr>
@@ -403,13 +389,13 @@ export default function IssuesAnalyticsPage() {
             </tbody>
           </table>
         </div>
+        <TablePager page={issuesPage} total={openIssues.length} pageSize={10} onPageChange={setIssuesPage} />
 
         {openSummary?.oldestIssue && (
-          <div className="mt-4 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-100">
-            <AlertCircle className="h-4 w-4 shrink-0" />
+          <div className="mt-4 flex items-center gap-2 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--ink-muted)]">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-[var(--c-review)]" />
             <span>
-              <strong>Oldest issue:</strong> #{openSummary.oldestIssue.issueNumber} by {openSummary.oldestIssue.author} ({openSummary.oldestIssue.ageDays}d old) —{" "}
-              {openSummary.oldestIssue.title}
+              <strong className="text-[var(--ink)]">Oldest:</strong> #{openSummary.oldestIssue.issueNumber} by {openSummary.oldestIssue.author} ({openSummary.oldestIssue.ageDays}d) — {openSummary.oldestIssue.title}
             </span>
           </div>
         )}

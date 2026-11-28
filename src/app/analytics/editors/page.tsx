@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useAnalytics, useAnalyticsExport } from "../analytics-layout-client";
 import { client } from "@/lib/orpc";
-import { BrandLoader } from "@/components/brand-loader";
+import { AnalyticsLoader } from "../_components/analytics-ui";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
 import { CANONICAL_EIP_EDITORS } from "@/data/eip-contributor-roles";
 import {
@@ -316,13 +316,7 @@ export default function EditorsAnalyticsPage() {
   }, `editors-analytics-${repoFilter}-${timeRange}`);
 
   if (loading) {
-    return (
-      <BrandLoader
-        title="Analyzing Editor Contributions"
-        description="Compiling rankings, review metrics, turnaround latency, and category coverage across Ethereum standards..."
-        minHeight="min-h-[460px]"
-      />
-    );
+    return <AnalyticsLoader label="Analyzing editor contributions..." />;
   }
 
   const TABS = [

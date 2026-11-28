@@ -7,7 +7,7 @@ import { AlertCircle, Download, FileText, Repeat2, Sparkles, Users } from "lucid
 import { StatCard, AnalyticsHero } from "@/components/analytics/stat-card";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
 import ReactECharts from "echarts-for-react";
-import { InlineBrandLoader } from "@/components/inline-brand-loader";
+import { AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 
 interface AuthorKPIs {
   totalAuthors: number;
@@ -133,6 +133,7 @@ export default function AuthorsAnalyticsPage() {
   const [cohortTimeline, setCohortTimeline] = useState<AuthorCohortTimelinePoint[]>([]);
   const [repoComposition, setRepoComposition] = useState<AuthorRepoCompositionRow[]>([]);
   const [topAuthors, setTopAuthors] = useState<TopAuthorRow[]>([]);
+  const [dirPage, setDirPage] = useState(1);
 
   const repoParam = repoFilter === "all" ? undefined : repoFilter;
   const { from, to } = getTimeWindow(timeRange, customFromMonth, customToMonth);
@@ -356,232 +357,212 @@ export default function AuthorsAnalyticsPage() {
   }, `authors-analytics-${repoFilter}-${timeRange}`);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[400px] items-center justify-center">
-        <InlineBrandLoader size="md" label="Loading analytics..." />
-      </div>
-    );
+    return <AnalyticsLoader label="Loading author analytics..." />;
   }
+
+  const pagedAuthors = topAuthors.slice((dirPage - 1) * 10, dirPage * 10);
 
   return (
     <div className="space-y-6">
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div className="flex items-start gap-2 rounded-[var(--l-radius)] border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Hero insight */}
-      <AnalyticsHero eyebrow="Authorship" title="Who writes Ethereum&rsquo;s standards">
-        <span className="font-semibold text-foreground">{kpis?.totalAuthors.toLocaleString() ?? "0"}</span> authors have
-        written <span className="font-semibold text-foreground">{kpis?.proposalsAuthored.toLocaleString() ?? "0"}</span>{" "}
-        proposals across EIPs, ERCs and RIPs, including{" "}
-        <span className="font-semibold text-foreground">{kpis?.newAuthors.toLocaleString() ?? "0"}</span> new authors this
-        window and <span className="font-semibold text-foreground">{kpis?.repeatAuthors.toLocaleString() ?? "0"}</span>{" "}
-        who have come back for more.
-      </AnalyticsHero>
-
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard icon={Users} accent="emerald" label="Total authors" value={kpis?.totalAuthors.toLocaleString() ?? "0"} sub="all-time" />
         <StatCard icon={Sparkles} accent="blue" label="New authors" value={kpis?.newAuthors.toLocaleString() ?? "0"} sub="this window" />
-        <StatCard icon={Repeat2} accent="violet" label="Repeat authors" value={kpis?.repeatAuthors.toLocaleString() ?? "0"} sub="more than one proposal" />
-        <StatCard icon={FileText} accent="amber" label="Proposals authored" value={kpis?.proposalsAuthored.toLocaleString() ?? "0"} sub="EIP/ERC/RIP" />
+        <StatCard icon={Repeat2} accent="violet" label="Repeat authors" value={kpis?.repeatAuthors.toLocaleString() ?? "0"} sub="2+ proposals" />
+        <StatCard icon={FileText} accent="amber" label="Proposals authored" value={kpis?.proposalsAuthored.toLocaleString() ?? "0"} sub={`Top 10 share: ${concentrationTop10Pct.toFixed(1)}%`} />
       </div>
 
-      <div className="rounded-xl border border-border/70 bg-card/60 px-4 py-3 text-sm text-foreground">
-        One-time authors: {oneTimeAuthors.toLocaleString()}
-        <span className="mx-2 text-muted-foreground">·</span>
-        Authors with landed proposals: {kpis?.authorsWithMerged.toLocaleString() ?? "0"}
-        <span className="mx-2 text-muted-foreground">·</span>
-        Top 10 concentration: {concentrationTop10Pct.toFixed(1)}%
-      </div>
-
-      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Authorship Trend</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">New vs returning authors, with authored proposals overlay.</p>
-          </div>
-          <button onClick={downloadCohortReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
-            <Download className="h-3.5 w-3.5" />
-            Download Reports
-          </button>
-        </div>
+      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+        <AnalyticsSectionHeader
+          id="authorship-trend"
+          index="01"
+          title="Authorship Trend"
+          tooltip="New vs. returning authors with authored proposals overlay, showing onboarding velocity and repeat-contributor stability month by month."
+          action={
+            <div className="flex items-center gap-2">
+              <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
+              <button
+                type="button"
+                onClick={downloadCohortReport}
+                className="chip cursor-pointer gap-1.5 px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:border-[var(--ink)]"
+              >
+                <Download className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+                CSV
+              </button>
+            </div>
+          }
+        />
         <div className="relative h-72 w-full">
           <ReactECharts option={cohortTrendOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+            <span className="font-mono text-xl font-semibold text-[var(--ink)]/10">EIPsInsight.com</span>
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Highlights onboarding velocity and repeat-contributor stability month by month.</p>
-          <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
-        </div>
-      </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Authorship Composition by Repository</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">Where unique and repeat authors contribute.</p>
-            </div>
-            <button onClick={downloadRepoCompositionReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
-              <Download className="h-3.5 w-3.5" />
-              Download Reports
-            </button>
-          </div>
+        <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+          <AnalyticsSectionHeader
+            id="authorship-composition"
+            index="02"
+            title="Composition by Repository"
+            tooltip="Unique vs. repeat authors across EIPs, ERCs, and RIPs."
+            action={
+              <button
+                type="button"
+                onClick={downloadRepoCompositionReport}
+                className="chip cursor-pointer gap-1.5 px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:border-[var(--ink)]"
+              >
+                <Download className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+                CSV
+              </button>
+            }
+          />
           <div className="relative h-72 w-full">
             <ReactECharts option={repoCompositionOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-semibold text-foreground/10">EIPsInsight.com</span>
+              <span className="font-mono text-xl font-semibold text-[var(--ink)]/10">EIPsInsight.com</span>
             </div>
           </div>
-          <div className="mt-3 flex justify-end">
-            <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
-          </div>
-        </div>
+        </section>
 
-        <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">Author Outcomes</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">Top authors by authored proposals and current outcomes.</p>
-            </div>
-            <button onClick={downloadOutcomesReport} className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground/85 hover:bg-muted/60">
-              <Download className="h-3.5 w-3.5" />
-              Download Reports
-            </button>
-          </div>
-          <div className="space-y-3">
+        <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+          <AnalyticsSectionHeader
+            id="author-outcomes"
+            index="03"
+            title="Author Outcomes"
+            tooltip="Top 10 authors by authored proposals and their landed, active, and closed shares."
+            action={
+              <button
+                type="button"
+                onClick={downloadOutcomesReport}
+                className="chip cursor-pointer gap-1.5 px-2.5 py-1 text-xs font-medium text-[var(--ink)] hover:border-[var(--ink)]"
+              >
+                <Download className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+                CSV
+              </button>
+            }
+          />
+          <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
             {outcomeRows.map((row) => {
               const landedPct = row.prsCreated > 0 ? Math.round((row.prsMerged / row.prsCreated) * 100) : 0;
               const activePct = row.prsCreated > 0 ? Math.round((row.prsOpen / row.prsCreated) * 100) : 0;
               const closedPct = row.prsCreated > 0 ? Math.round((row.prsClosed / row.prsCreated) * 100) : 0;
               return (
-                <div key={row.author} className="rounded-lg border border-border/70 bg-muted/30 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">{row.author}</span>
-                    <span className="text-xs text-muted-foreground">{row.prsCreated} proposals</span>
+                <div key={row.author} className="rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <ActorAvatar handle={row.author} size="xs" href={`/user/${row.author}`} />
+                    <span className="font-mono text-[11px] text-[var(--ink-muted)]">{row.prsCreated} proposals</span>
                   </div>
-                  <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted/50">
-                    <div className="h-full bg-emerald-500" style={{ width: `${landedPct}%` }} />
-                    <div className="h-full bg-blue-500" style={{ width: `${activePct}%` }} />
-                    <div className="h-full bg-slate-500" style={{ width: `${closedPct}%` }} />
+                  <div className="flex h-2 w-full overflow-hidden rounded-full bg-[var(--surface)]">
+                    <div className="h-full bg-[#0F5E4D]" style={{ width: `${landedPct}%` }} />
+                    <div className="h-full bg-[#0284c7]" style={{ width: `${activePct}%` }} />
+                    <div className="h-full bg-[#9ca3af]" style={{ width: `${closedPct}%` }} />
                   </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
+                  <p className="mt-1 font-mono text-[10px] text-[var(--ink-muted)]">
                     Landed {landedPct}% · Active {activePct}% · Closed {closedPct}%
                   </p>
                 </div>
               );
             })}
             {outcomeRows.length === 0 && (
-              <p className="text-sm text-muted-foreground">No outcome data available for current filters.</p>
+              <p className="text-sm text-[var(--ink-muted)]">No outcome data available for current filters.</p>
             )}
           </div>
-          <div className="mt-3 flex justify-end">
-            <LastUpdated timestamp={dataUpdatedAt} className="text-xs" />
-          </div>
-        </div>
+        </section>
       </div>
 
-      <div className="rounded-xl border border-border/70 bg-card/60 p-5 backdrop-blur-sm">
-        <h2 className="mb-4 text-xl font-semibold text-foreground">Top Active Authors</h2>
+      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+        <AnalyticsSectionHeader
+          id="top-authors"
+          index="04"
+          title="Top Active Authors"
+          tooltip="Most active proposal authors in the selected window."
+        />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {topAuthorCards.map((author) => (
-            <div key={author.author} className="rounded-lg border border-border/60 bg-background/35 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <img
-                    src={getGitHubAvatarUrl(author.author)}
-                    alt={`${author.author} avatar`}
-                    className="h-9 w-9 rounded-full border border-border object-cover"
-                    loading="lazy"
-                  />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{author.author}</p>
-                    <p className="text-[11px] text-muted-foreground">Top repo: {labelRepo(author.topRepo)}</p>
-                  </div>
+            <div key={author.author} className="rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <ActorAvatar handle={author.author} size="md" href={`/user/${author.author}`} />
+                  <p className="mt-1 font-mono text-[10px] text-[var(--ink-muted)]">Top repo: {labelRepo(author.topRepo)}</p>
                 </div>
-                <p className="text-lg font-semibold text-foreground tabular-nums">{author.prsCreated}</p>
+                <p className="font-mono text-lg font-bold tabular-nums text-[var(--ink)]">{author.prsCreated}</p>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
-                <div className="rounded-md border border-border/50 bg-muted/30 px-2 py-1">
-                  <p className="text-muted-foreground">Landed</p>
-                  <p className="font-medium text-foreground tabular-nums">{author.prsMerged}</p>
+              <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[11px]">
+                <div className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1">
+                  <p className="text-[10px] text-[var(--ink-muted)]">Landed</p>
+                  <p className="font-semibold tabular-nums text-[var(--ink)]">{author.prsMerged}</p>
                 </div>
-                <div className="rounded-md border border-border/50 bg-muted/30 px-2 py-1">
-                  <p className="text-muted-foreground">Open</p>
-                  <p className="font-medium text-foreground tabular-nums">{author.prsOpen}</p>
+                <div className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1">
+                  <p className="text-[10px] text-[var(--ink-muted)]">Open</p>
+                  <p className="font-semibold tabular-nums text-[var(--ink)]">{author.prsOpen}</p>
                 </div>
-                <div className="rounded-md border border-border/50 bg-muted/30 px-2 py-1">
-                  <p className="text-muted-foreground">Closed</p>
-                  <p className="font-medium text-foreground tabular-nums">{author.prsClosed}</p>
+                <div className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1">
+                  <p className="text-[10px] text-[var(--ink-muted)]">Closed</p>
+                  <p className="font-semibold tabular-nums text-[var(--ink)]">{author.prsClosed}</p>
                 </div>
               </div>
             </div>
           ))}
           {topAuthorCards.length === 0 && (
-            <p className="text-sm text-muted-foreground">No author cards available for current filters.</p>
+            <p className="text-sm text-[var(--ink-muted)]">No author cards available for current filters.</p>
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-foreground">Author Directory</h2>
-          <LastUpdated timestamp={dataUpdatedAt} />
-        </div>
+      <section className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+        <AnalyticsSectionHeader
+          id="author-directory"
+          index="05"
+          title="Author Directory"
+          tooltip="Full author directory ranked by proposals authored (10 per page)."
+          action={<LastUpdated timestamp={dataUpdatedAt} />}
+        />
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border/70">
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Rank</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Author</th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Proposals</th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Landed</th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active</th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Closed</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Top Repo</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">First Seen</th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Last Activity</th>
+              <tr className="border-b border-[var(--border)]">
+                <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Rank</th>
+                <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Author</th>
+                <th className="px-3 py-2.5 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Proposals</th>
+                <th className="px-3 py-2.5 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Landed</th>
+                <th className="px-3 py-2.5 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Active</th>
+                <th className="px-3 py-2.5 text-right font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Closed</th>
+                <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Top Repo</th>
+                <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">First Seen</th>
+                <th className="px-3 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-[var(--ink-muted)]">Last Activity</th>
               </tr>
             </thead>
-            <tbody>
-              {topAuthors.map((author, idx) => (
-                <tr key={author.author} className={`border-b border-border/60 transition-colors hover:bg-muted/40 ${idx === 0 ? "bg-primary/[0.04]" : ""}`}>
-                  <td className="px-4 py-3">
-                    {idx <= 2 ? (
-                      <span className="text-base" title={`Rank ${idx + 1}`}>{idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"}</span>
-                    ) : (
-                      <span className="text-sm font-medium text-muted-foreground">#{idx + 1}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={getGitHubAvatarUrl(author.author)}
-                        alt={`${author.author} avatar`}
-                        className="h-7 w-7 rounded-full border border-border object-cover"
-                        loading="lazy"
-                      />
-                      <span className="font-medium text-foreground/90">{author.author}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-foreground/85 tabular-nums">{author.prsCreated.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-sm text-foreground/85 tabular-nums">{author.prsMerged.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-sm text-foreground/85 tabular-nums">{author.prsOpen.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-sm text-foreground/85 tabular-nums">{author.prsClosed.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{labelRepo(author.topRepo)}</td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{author.firstSeen ? new Date(author.firstSeen).toLocaleDateString() : "–"}</td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{author.lastActivity ? new Date(author.lastActivity).toLocaleDateString() : "–"}</td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-[var(--border)]/60">
+              {pagedAuthors.map((author, idx) => {
+                const rank = (dirPage - 1) * 10 + idx + 1;
+                return (
+                  <tr key={author.author} className="transition-colors hover:bg-[var(--surface-2)]">
+                    <td className="px-3 py-2.5 font-mono text-[var(--ink-muted)]">#{rank}</td>
+                    <td className="px-3 py-2.5">
+                      <ActorAvatar handle={author.author} size="sm" href={`/user/${author.author}`} />
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono font-semibold tabular-nums text-[var(--ink)]">{author.prsCreated.toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--ink-muted)]">{author.prsMerged.toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--ink-muted)]">{author.prsOpen.toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--ink-muted)]">{author.prsClosed.toLocaleString()}</td>
+                    <td className="px-3 py-2.5 font-mono text-[var(--ink-muted)]">{labelRepo(author.topRepo)}</td>
+                    <td className="px-3 py-2.5 font-mono tabular-nums text-[var(--ink-muted)]">{author.firstSeen ? new Date(author.firstSeen).toLocaleDateString() : "–"}</td>
+                    <td className="px-3 py-2.5 font-mono tabular-nums text-[var(--ink-muted)]">{author.lastActivity ? new Date(author.lastActivity).toLocaleDateString() : "–"}</td>
+                  </tr>
+                );
+              })}
               {topAuthors.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={9} className="py-6 text-center text-sm text-[var(--ink-muted)]">
                     No author data found for the current filters.
                   </td>
                 </tr>
@@ -589,7 +570,8 @@ export default function AuthorsAnalyticsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+        <TablePager page={dirPage} total={topAuthors.length} pageSize={10} onPageChange={setDirPage} />
+      </section>
     </div>
   );
 }

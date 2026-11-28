@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CHART_SERIES } from "@/lib/chart-colors";
 import { CANONICAL_EIP_EDITORS, ASSOCIATE_EIP_EDITORS } from "@/data/eip-contributor-roles";
+import { TablePager } from "../../_components/analytics-ui";
 import {
   EditorLeaderboardRow,
   RepoDistribution,
@@ -57,6 +58,7 @@ export function EditorsLeaderboardTab({
   const [sortColumn, setSortColumn] = useState<SortColumn>("reviews");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
+  const [tablePage, setTablePage] = useState(1);
   const [showMacroBreakdowns, setShowMacroBreakdowns] = useState(false);
 
   const canonicalHandles = useMemo(() => new Set(CANONICAL_EIP_EDITORS.map((e) => e.toLowerCase())), []);
@@ -594,7 +596,7 @@ export function EditorsLeaderboardTab({
                     </td>
                   </tr>
                 ) : (
-                  sortedRows.map((editor, idx) => {
+                  sortedRows.slice((tablePage - 1) * 10, tablePage * 10).map((editor, idx) => {
                     const categories = categoriesByActor[editor.actor] || [];
                     const isActive = editor.totalActions > 0;
                     const isCanonical = canonicalHandles.has(editor.actor.toLowerCase());
@@ -607,7 +609,7 @@ export function EditorsLeaderboardTab({
                     const otherPct = Math.max(0, 100 - reviewsPct - commentsPct);
 
                     let rankBadge: React.ReactNode = (
-                      <span className="font-mono text-xs text-muted-foreground">#{idx + 1}</span>
+                      <span className="font-mono text-xs text-muted-foreground">#{(tablePage - 1) * 10 + idx + 1}</span>
                     );
                     if (idx === 0) {
                       rankBadge = (
@@ -821,6 +823,7 @@ export function EditorsLeaderboardTab({
                 )}
               </tbody>
             </table>
+            <TablePager page={tablePage} total={sortedRows.length} pageSize={10} onPageChange={setTablePage} />
           </div>
         )}
       </div>
