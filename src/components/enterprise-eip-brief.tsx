@@ -449,7 +449,7 @@ function getBusinessImpact(proposal: ProposalData, upgrades: UpgradeInclusion[])
   const isInformational = proposal.type === 'Informational' || proposal.type === 'Meta';
   if (isInformational) {
     return [
-      { label: 'Enterprise impact', icon: FileCode, note: `No major enterprise impact — this is an ${proposal.type?.toLowerCase()} proposal that documents guidance or process, not a change to on-chain behavior.` },
+      { label: 'Enterprise impact', icon: FileCode, note: `No major enterprise impact: this is a ${proposal.type?.toLowerCase()} proposal that documents guidance or process, not a change to on-chain behavior.` },
       { label: 'Assets & controls', icon: Coins, note: 'Unchanged — no new asset, account, or settlement behavior is introduced.' },
       { label: 'Operational procedures', icon: Server, note: 'No node, custody, or reporting changes required. Awareness only.' },
     ] as Array<{ label: string; icon: LucideIcon; note: string }>;
@@ -639,178 +639,177 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
   const impactTier = TIER_META[tierKey];
 
   return (
-    <motion.div
-      id="enterprise-brief"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-      className="space-y-6 my-8"
-    >
-      {/* 1. Enterprise Assessment (five-point institutional framework) */}
-      <div className="space-y-3">
-        <div className="overflow-hidden rounded-xl border border-violet-500/25 bg-card/60 shadow-sm">
-          <div className="flex items-center gap-2 border-b border-border/60 bg-violet-500/5 px-5 py-3">
-            <Scale className="h-4 w-4 text-violet-500" />
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Enterprise Assessment</p>
-            <span className="ml-auto text-[10px] text-muted-foreground/70">Affected orgs · Business impact · Risk &amp; readiness · Participation</span>
+    <div id="enterprise-brief" className="space-y-8">
+      {/* Impact tier + summary plate */}
+      <div className="card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="rounded-[var(--l-radius-control)] border border-[var(--border-strong)] bg-[var(--surface-2)] px-2.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--ink)]">
+              {impactTier.label}
+            </span>
+            <span className="text-xs text-[var(--ink-muted)]">{impactTier.note}</span>
           </div>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--ink-faint)]">
+            {groundingLabel}
+          </span>
+        </div>
+        {summaryText && (
+          <p className="mt-3 border-t border-[var(--border)] pt-3 text-sm leading-relaxed text-[var(--ink)]">
+            {summaryText}
+          </p>
+        )}
+      </div>
 
-          {/* Per-EIP impact category + curated plain-language summary */}
-          <div className="border-b border-border/60 bg-muted/20 px-5 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide', impactTier.cls)}>{impactTier.label}</span>
-              <span className="text-[11px] text-muted-foreground">{impactTier.note}</span>
-            </div>
-            {summaryText && (
-              <p className="mt-2 text-xs leading-relaxed text-foreground/90">{summaryText}</p>
-            )}
+      {/* Affected organizations */}
+      <div className="border-t border-[var(--border)] pt-6">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="eyebrow">Affected organizations</p>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--ink-faint)]">
+            {groundingLabel}
+          </span>
+        </div>
+        <div className="gap-3 sm:columns-2 [column-gap:0.75rem]">
+          {financeStakeholders.map((s) => (
+            <OrgImpactCard key={s.role} item={s} />
+          ))}
+        </div>
+        <details className="group mt-3">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-[var(--ink-muted)] transition-colors hover:text-[var(--ink)]">
+            <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+            <span>What do the ratings mean?</span>
+          </summary>
+          <ul className="mt-2.5 space-y-1.5 border-l border-[var(--border)] pl-4 text-xs text-[var(--ink-muted)]">
+            <li>
+              <strong className="font-mono text-[11px] uppercase text-[var(--ink)]">High:</strong> Directly changes assets, controls, or operations this group runs. Plan and test before it ships.
+            </li>
+            <li>
+              <strong className="font-mono text-[11px] uppercase text-[var(--ink)]">Medium:</strong> Indirect exposure (routine client or tooling updates). Monitor readiness.
+            </li>
+            <li>
+              <strong className="font-mono text-[11px] uppercase text-[var(--ink)]">Low:</strong> Minimal direct impact. Informational only.
+            </li>
+            <li>
+              <strong className="font-mono text-[11px] uppercase text-[var(--ink)]">Not affected:</strong> This organization type is not touched by the change.
+            </li>
+          </ul>
+        </details>
+      </div>
+
+      {/* Business impact */}
+      <div className="border-t border-[var(--border)] pt-6">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="eyebrow">Business impact</p>
+          {(hasEnterpriseBusiness || benefits.length > 0 || tradeoffs.length > 0) && (
+            <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--brand-strong)]">
+              {hasEnterpriseBusiness ? 'Enterprise-curated' : 'Curated'}
+            </span>
+          )}
+        </div>
+        {hasEnterpriseBusiness ? (
+          <div className="space-y-2">
+            {enterpriseBusiness.map((b) => (
+              <BusinessAreaCard key={b.area} area={b.area} summary={b.summary} detail={b.detail} />
+            ))}
           </div>
-
-          <div className="divide-y divide-border/50">
-            {/* 1. Affected organizations */}
-            <div className="px-5 py-3.5">
-              <div className="mb-2 flex items-center gap-2">
-                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400"><Building2 className="h-3.5 w-3.5" /> 1 · Affected organizations</p>
-                <span className={cn('rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide', groundingCurated ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400')}>{groundingLabel}</span>
-              </div>
-              {/* Masonry columns so an expanded card doesn't stretch its row-mate. */}
-              <div className="gap-2 sm:columns-2 [column-gap:0.5rem]">
-                {financeStakeholders.map((s) => (
-                  <OrgImpactCard key={s.role} item={s} />
-                ))}
-              </div>
-              {/* What the priority ratings mean — context on demand */}
-              <details className="mt-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
-                <summary className="cursor-pointer text-[11px] font-semibold text-muted-foreground">What do the ratings mean?</summary>
-                <ul className="mt-2 space-y-1.5 text-[11px] text-muted-foreground">
-                  <li className="flex items-start gap-2">
-                    <span className={cn('mt-px shrink-0 rounded-full border px-1.5 py-px text-[9px] font-bold uppercase', REL_META.high.cls)}>High</span>
-                    <span>Directly changes assets, controls, or operations this group runs — plan and test before it ships.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className={cn('mt-px shrink-0 rounded-full border px-1.5 py-px text-[9px] font-bold uppercase', REL_META.medium.cls)}>Medium</span>
-                    <span>Indirect exposure (e.g. routine client/tooling updates) — monitor readiness, no major workstream expected.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className={cn('mt-px shrink-0 rounded-full border px-1.5 py-px text-[9px] font-bold uppercase', REL_META.low.cls)}>Low</span>
-                    <span>Minimal direct impact — informational; no action anticipated.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className={cn('mt-px shrink-0 rounded-full border px-1.5 py-px text-[9px] font-bold uppercase', LEVEL_META.none.cls)}>Not affected</span>
-                    <span>This organization type is not touched by the change.</span>
-                  </li>
-                </ul>
-              </details>
-            </div>
-
-            {/* 2. Business impact — dedicated enterprise report (collapsible) when
-                 available, else curated benefits/trade-offs, else generic. */}
-            <div className="px-5 py-3.5">
-              <div className="mb-2 flex items-center gap-2">
-                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400"><TrendingUp className="h-3.5 w-3.5" /> 2 · Business impact</p>
-                {(hasEnterpriseBusiness || benefits.length > 0 || tradeoffs.length > 0) && (
-                  <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">{hasEnterpriseBusiness ? 'Enterprise-curated' : 'Curated'}</span>
-                )}
-              </div>
-              {hasEnterpriseBusiness ? (
-                <div className="space-y-1.5">
-                  {enterpriseBusiness.map((b) => (
-                    <BusinessAreaCard key={b.area} area={b.area} summary={b.summary} detail={b.detail} />
-                  ))}
-                </div>
-              ) : benefits.length > 0 || tradeoffs.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {benefits.length > 0 && (
-                    <div>
-                      <p className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" /> What it enables</p>
-                      <ul className="space-y-1">
-                        {benefits.map((b, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground"><span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-emerald-500" /><span>{b}</span></li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {tradeoffs.length > 0 && (
-                    <div>
-                      <p className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3 w-3" /> Trade-offs to weigh</p>
-                      <ul className="space-y-1">
-                        {tradeoffs.map((t, i) => (
-                          <li key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground"><span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-amber-500" /><span>{t}</span></li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <ul className="space-y-1.5">
-                  {businessImpact.map((b) => (
-                    <li key={b.label} className="flex items-start gap-2 text-xs">
-                      <b.icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span><span className="font-semibold text-foreground">{b.label}:</span> <span className="text-muted-foreground">{b.note}</span></span>
+        ) : benefits.length > 0 || tradeoffs.length > 0 ? (
+          <div className="grid gap-6 sm:grid-cols-2">
+            {benefits.length > 0 && (
+              <div>
+                <p className="eyebrow mb-2.5 text-[var(--brand-strong)]">What it enables</p>
+                <ul className="space-y-2">
+                  {benefits.map((b, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--brand-strong)]" />
+                      <span>{b}</span>
                     </li>
                   ))}
                 </ul>
-              )}
-            </div>
-
-            {/* 3. Risk & readiness — grounded in curated trade-offs when present. */}
-            <div className="px-5 py-3.5">
-              <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400"><AlertTriangle className="h-3.5 w-3.5" /> 3 · Risk &amp; readiness</p>
-              <p className="text-sm"><span className={cn('font-semibold', enterpriseRisk.color)}>{enterpriseRisk.level} risk</span> <span className="text-muted-foreground">— {tradeoffs.length > 0 ? tradeoffs[0] : `${enterpriseRisk.note}.`}</span></p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                <span className="font-medium text-foreground/80">What to review internally:</span>{' '}
-                {readinessText ?? (
-                  <>
-                    {enterpriseAction} Track testing via the upgrade&apos;s <span className="text-foreground/80">test-complexity</span> and <span className="text-foreground/80">devnet-inclusion</span> pages, and client readiness under <span className="text-foreground/80">client-priority</span>.
-                  </>
-                )}
-              </p>
-            </div>
-
-            {/* 4. Participation */}
-            <div className="px-5 py-3.5">
-              <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400"><MessageSquarePlus className="h-3.5 w-3.5" /> 4 · Participation</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-semibold', participation.open ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-border bg-muted/50 text-muted-foreground')}>{participation.state}</span>
-                <span className="text-xs text-muted-foreground">{participation.note}</span>
               </div>
-              {participation.open && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">Institutions can route consolidated, anonymized feedback to the EIP authors and protocol contributors.</p>
-              )}
-            </div>
+            )}
+            {tradeoffs.length > 0 && (
+              <div>
+                <p className="eyebrow mb-2.5">Trade-offs to weigh</p>
+                <ul className="space-y-2">
+                  {tradeoffs.map((t, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ink-faint)]" />
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
+        ) : (
+          <ul className="space-y-2">
+            {businessImpact.map((b) => (
+              <li key={b.label} className="flex items-start gap-2.5 text-sm">
+                <b.icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ink-faint)]" />
+                <span>
+                  <span className="font-medium text-[var(--ink)]">{b.label}:</span>{' '}
+                  <span className="text-[var(--ink-muted)]">{b.note}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Risk & readiness + Participation (2-column Ledger strip) */}
+      <div className="grid gap-6 border-t border-[var(--border)] pt-6 sm:grid-cols-2">
+        <div>
+          <p className="eyebrow mb-2">Risk &amp; readiness</p>
+          <p className="text-sm leading-relaxed">
+            <span className="font-semibold text-[var(--ink)]">{enterpriseRisk.level} risk:</span>{' '}
+            <span className="text-[var(--ink-muted)]">
+              {tradeoffs.length > 0 ? tradeoffs[0] : `${enterpriseRisk.note}.`}
+            </span>
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+            <span className="font-medium text-[var(--ink)]">What to review internally:</span>{' '}
+            {readinessText ?? (
+              <>
+                {enterpriseAction} Track testing via the upgrade&apos;s test-complexity and devnet-inclusion pages, and client readiness under client-priority.
+              </>
+            )}
+          </p>
+        </div>
+
+        <div>
+          <p className="eyebrow mb-2">Participation</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--ink)]">
+              {participation.state}
+            </span>
+            <span className="text-xs text-[var(--ink-muted)]">{participation.note}</span>
+          </div>
+          {participation.open && (
+            <p className="mt-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+              Institutions can route consolidated, anonymized feedback to the EIP authors and protocol contributors.
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Governance status + upgrade stage are shown by the unified ProposalTimeline
-          on the page (not duplicated here). */}
-
-      {/* Related dependencies (real — from the EIP's `requires`) */}
+      {/* Related dependencies */}
       {proposalRequires.length > 0 && (
-        <div className="rounded-xl border border-border bg-card/60 shadow-sm overflow-hidden">
-          <div className="border-b border-border/60 bg-muted/40 px-5 py-3">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Package className="h-3.5 w-3.5" /> Related dependencies
-            </p>
-          </div>
-          <div className="p-5">
-            <div className="flex flex-wrap gap-2">
-              {proposalRequires.map(r => (
-                <Link
-                  key={r}
-                  href={`/eips/${r}`}
-                  className="inline-flex items-center gap-1 rounded bg-violet-500/10 hover:bg-violet-500/20 px-2 py-0.5 text-[11px] font-mono font-bold text-violet-600 dark:text-violet-400 border border-violet-500/20 transition-colors"
-                >
-                  <Package className="h-2.5 w-2.5" />
-                  EIP-{r}
-                </Link>
-              ))}
-            </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">Prerequisites and foundational standards this proposal builds on.</p>
+        <div className="border-t border-[var(--border)] pt-6">
+          <p className="eyebrow mb-3">Prerequisites</p>
+          <div className="flex flex-wrap gap-2">
+            {proposalRequires.map((r) => (
+              <Link
+                key={r}
+                href={`/eips/${r}`}
+                className="inline-flex items-center gap-1.5 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 font-mono text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
+              >
+                <Package className="h-3 w-3 text-[var(--brand-strong)]" />
+                EIP-{r}
+              </Link>
+            ))}
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -822,41 +821,46 @@ function OrgImpactCard({ item }: { item: OrgItem }) {
   const Icon = item.icon;
   const hasDetail = !!(item.how || item.action || (item.why && item.why !== item.summary));
   return (
-    <div className="mb-2 break-inside-avoid rounded-lg border border-border bg-background/40">
+    <div className="mb-3 break-inside-avoid rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)]">
       <button
         type="button"
         onClick={() => hasDetail && setOpen((o) => !o)}
         aria-expanded={open}
-        className={cn('flex w-full items-start gap-2 rounded-lg p-2.5 text-left', hasDetail ? 'cursor-pointer transition-colors hover:bg-muted/40' : 'cursor-default')}
+        className={cn(
+          'flex w-full items-start gap-3 p-3.5 text-left',
+          hasDetail ? 'cursor-pointer transition-colors hover:bg-[var(--surface-2)]' : 'cursor-default'
+        )}
       >
-        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ink-faint)]" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-foreground">{item.role}</span>
-            <span className={cn('shrink-0 rounded-full border px-1.5 py-px text-[9px] font-bold uppercase', meta.cls)}>{meta.label}</span>
+            <span className="text-xs font-semibold text-[var(--ink)]">{item.role}</span>
+            <span className="shrink-0 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase text-[var(--ink-muted)]">
+              {meta.label}
+            </span>
           </div>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{item.summary}</p>
+          <p className="mt-1 text-xs leading-snug text-[var(--ink-muted)]">{item.summary}</p>
         </div>
         {hasDetail && (open
-          ? <ChevronDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          : <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />)}
+          ? <ChevronDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ink-faint)]" />
+          : <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ink-faint)]" />)}
       </button>
       {open && hasDetail && (
-        <div className="space-y-2 border-t border-border/60 px-2.5 py-2.5 pl-8">
+        <div className="space-y-2.5 border-t border-[var(--border)] px-3.5 py-3 pl-10">
           {item.how && (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">Affected how?</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{item.how}</p>
+              <p className="eyebrow text-[10px]">Affected how</p>
+              <p className="mt-0.5 text-xs leading-snug text-[var(--ink-muted)]">{item.how}</p>
             </div>
           )}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">Why it matters</p>
-            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{item.why}</p>
+            <p className="eyebrow text-[10px]">Why it matters</p>
+            <p className="mt-0.5 text-xs leading-snug text-[var(--ink-muted)]">{item.why}</p>
           </div>
           {item.action && (
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">What to do</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{item.action}</p>
+              <p className="eyebrow text-[10px]">What to do</p>
+              <p className="mt-0.5 text-xs leading-snug text-[var(--ink-muted)]">{item.action}</p>
             </div>
           )}
         </div>
@@ -870,24 +874,27 @@ function BusinessAreaCard({ area, summary, detail }: { area: string; summary: st
   const [open, setOpen] = React.useState(false);
   const hasDetail = !!detail && detail !== summary;
   return (
-    <div className="rounded-lg border border-border/60 bg-background/40">
+    <div className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)]">
       <button
         type="button"
         onClick={() => hasDetail && setOpen((o) => !o)}
         aria-expanded={open}
-        className={cn('flex w-full items-start gap-2 rounded-lg p-2.5 text-left', hasDetail ? 'cursor-pointer transition-colors hover:bg-muted/40' : 'cursor-default')}
+        className={cn(
+          'flex w-full items-start gap-2 p-3.5 text-left',
+          hasDetail ? 'cursor-pointer transition-colors hover:bg-[var(--surface-2)]' : 'cursor-default'
+        )}
       >
         <div className="min-w-0 flex-1">
-          <span className="text-xs font-semibold text-foreground">{area}</span>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{summary}</p>
+          <span className="text-xs font-semibold text-[var(--ink)]">{area}</span>
+          <p className="mt-0.5 text-xs leading-snug text-[var(--ink-muted)]">{summary}</p>
         </div>
         {hasDetail && (open
-          ? <ChevronDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          : <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />)}
+          ? <ChevronDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ink-faint)]" />
+          : <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ink-faint)]" />)}
       </button>
       {open && hasDetail && (
-        <div className="border-t border-border/60 px-2.5 py-2.5">
-          <p className="text-[11px] leading-relaxed text-muted-foreground">{detail}</p>
+        <div className="border-t border-[var(--border)] px-3.5 py-3">
+          <p className="text-xs leading-relaxed text-[var(--ink-muted)]">{detail}</p>
         </div>
       )}
     </div>
