@@ -8,6 +8,11 @@ interface ResourceArticle {
   url: string;
   excerpt: string;
   publishedAt: string;
+  featureImage?: string | null;
+  readingTime?: number | null;
+  authorName?: string | null;
+  tags?: string[];
+  source: 'etherworld';
 }
 
 interface ResourceVideo {
@@ -117,11 +122,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const number = Number(body?.number);
     const title = String(body?.title ?? '');
+    const repoPrefix = String(body?.repo ?? 'eip').toLowerCase().replace(/s$/, '');
     if (!Number.isFinite(number)) {
       return NextResponse.json({ error: 'Invalid proposal number' }, { status: 400 });
     }
 
-    const eipLabel = `eip-${number}`.toLowerCase();
+    const eipLabel = `${repoPrefix}-${number}`.toLowerCase();
+    const altLabel = `eip-${number}`.toLowerCase();
     const titleTerms = title
       .toLowerCase()
       .split(/\s+/)
@@ -131,22 +138,52 @@ export async function POST(req: NextRequest) {
     const ghostClient = getGhostClient();
     let articles: ResourceArticle[] = [];
     if (ghostClient) {
-      const posts = (await ghostClient.posts.browse({
-        limit: 40,
-        include: 'tags,authors',
-        order: 'published_at DESC',
-      })) as Array<{
+      type GhostPost = {
+        id?: string;
         title?: string;
         excerpt?: string | null;
+        custom_excerpt?: string | null;
         plaintext?: string | null;
         url?: string;
         published_at?: string | null;
+        feature_image?: string | null;
+        reading_time?: number | null;
+        authors?: Array<{ name?: string }>;
         tags?: Array<{ slug?: string; name?: string }>;
-      }>;
+      };
 
-      const scoreText = (text: string) => {
+      const [taggedRes, recentRes] = await Promise.allSettled([
+        ghostClient.posts.browse({
+          filter: `tag:${eipLabel},tag:${altLabel}`,
+          limit: 20,
+          include: 'tags,authors',
+          order: 'published_at DESC',
+        }) as Promise<GhostPost[]>,
+        ghostClient.posts.browse({
+          limit: 80,
+          include: 'tags,authors',
+          order: 'published_at DESC',
+        }) as Promise<GhostPost[]>,
+      ]);
+
+      const mergedMap = new Map<string, GhostPost>();
+      for (const res of [taggedRes, recentRes]) {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          for (const post of res.value) {
+            const key = post.id || post.url;
+            if (key && !mergedMap.has(key)) {
+              mergedMap.set(key, post);
+            }
+          }
+        }
+      }
+
+      const posts = Array.from(mergedMap.values());
+
+      const scoreText = (text: string, hasTagMatch: boolean) => {
         const value = text.toLowerCase();
-        let score = value.includes(eipLabel) ? 6 : 0;
+        let score = hasTagMatch ? 10 : 0;
+        if (value.includes(eipLabel) || value.includes(altLabel)) score += 6;
         titleTerms.forEach((term) => {
           if (value.includes(term)) score += 1;
         });
@@ -155,14 +192,16 @@ export async function POST(req: NextRequest) {
 
       articles = posts
         .map((post) => {
-          const tagText = (post.tags || []).map((tag) => tag.slug || tag.name || '').join(' ');
-          const haystack = [post.title, post.excerpt, post.plaintext, tagText]
+          const tagSlugs = (post.tags || []).map((t) => (t.slug || t.name || '').toLowerCase());
+          const hasTagMatch = tagSlugs.some((t) => t === eipLabel || t === altLabel);
+          const tagText = tagSlugs.join(' ');
+          const haystack = [post.title, post.custom_excerpt, post.excerpt, post.plaintext, tagText]
             .filter(Boolean)
             .join(' ');
           const normalizedHaystack = haystack.toLowerCase();
-          const hasDirectEip = normalizedHaystack.includes(eipLabel);
+          const hasDirectEip = hasTagMatch || normalizedHaystack.includes(eipLabel) || normalizedHaystack.includes(altLabel);
           const matchedTerms = titleTerms.reduce((count, term) => (normalizedHaystack.includes(term) ? count + 1 : count), 0);
-          const score = scoreText(haystack);
+          const score = scoreText(haystack, hasTagMatch);
           return { post, score, hasDirectEip, matchedTerms };
         })
         .filter((item) => (item.hasDirectEip || item.matchedTerms >= 2) && item.score > 0 && item.post.url && item.post.title)
@@ -171,8 +210,16 @@ export async function POST(req: NextRequest) {
         .map((item) => ({
           title: item.post.title || '',
           url: item.post.url || '#',
-          excerpt: item.post.excerpt || item.post.plaintext?.slice(0, 180) || '',
+          excerpt: item.post.custom_excerpt || item.post.excerpt || item.post.plaintext?.slice(0, 180) || '',
           publishedAt: item.post.published_at || '',
+          featureImage: item.post.feature_image ?? null,
+          readingTime: item.post.reading_time ?? null,
+          authorName: item.post.authors?.[0]?.name ?? 'EtherWorld',
+          tags: (item.post.tags || [])
+            .map((t) => t.name)
+            .filter((n): n is string => Boolean(n && !n.startsWith('#')))
+            .slice(0, 3),
+          source: 'etherworld' as const,
         }));
     }
 

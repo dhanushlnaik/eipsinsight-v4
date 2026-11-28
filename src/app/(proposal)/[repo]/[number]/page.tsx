@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Users,
   ListTree,
+  ChevronRight,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -32,7 +33,6 @@ import {
   Database,
 } from 'lucide-react';
 import { client } from '@/lib/orpc';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -45,8 +45,11 @@ import { normalizeUpgradeBucket } from '@/lib/upgrade-stages';
 import { UpgradeStageSplitBadge } from '@/components/upgrade/stage-badge';
 import { EnterpriseEIPBrief, type EipCuration } from '@/components/enterprise-eip-brief';
 import { ProposalTimeline } from '@/components/proposal-timeline';
-import { BrandLoader } from '@/components/brand-loader';
+import { InlineBrandLoader } from '@/components/inline-brand-loader';
 import { LucidProposalSection } from '@/components/lucid-proposal-section';
+import { SectionHead } from '@/components/ledger/section-head';
+import { LedgerBadge } from '@/components/ledger/badge';
+import { OnThisPage, type RailItem } from '@/components/proposal/on-this-page';
 
 
 interface ProposalData {
@@ -102,6 +105,10 @@ interface ResourceArticle {
   url: string;
   excerpt: string;
   publishedAt: string;
+  featureImage?: string | null;
+  readingTime?: number | null;
+  authorName?: string | null;
+  tags?: string[];
 }
 
 interface ResourceVideo {
@@ -281,6 +288,33 @@ function getStatusBadgeClass(status: string | null): string {
   if (norm === 'stagnant') return 'border-gray-500/25 bg-gray-500/12 text-gray-700 dark:text-gray-400';
   if (norm === 'withdrawn') return 'border-red-500/25 bg-red-500/12 text-red-700 dark:text-red-300';
   return 'border-slate-500/25 bg-slate-500/12 text-slate-700 dark:text-slate-300';
+}
+
+const STATUS_MEANING: Record<string, string> = {
+  draft: "Early work-in-progress. The proposal is open for discussion and may change substantially.",
+  review: "Ready for peer and editor review. The author believes the design is solid.",
+  "last call": "Final review window before moving to Final. Feedback closes on the last-call deadline.",
+  final: "Accepted standard. Changes are no longer made except for errata.",
+  living: "Continually updated standard that never freezes at Final.",
+  stagnant: "No activity for 6+ months. Can be revived by an author or champion.",
+  withdrawn: "Withdrawn by the authors and no longer pursued.",
+};
+
+function splitSpec(content: string): { head: string; rest: string } {
+  const abs = content.match(/##\s*Abstract/i);
+  if (!abs || abs.index == null) return { head: content, rest: "" };
+  const afterAbs = content.slice(abs.index + abs[0].length);
+  const nextRel = afterAbs.search(/\n#{1,2}\s/);
+  if (nextRel === -1) return { head: content, rest: "" };
+  const splitAt = abs.index + abs[0].length + nextRel;
+  return { head: content.slice(0, splitAt).trim(), rest: content.slice(splitAt).trim() };
+}
+
+function formatShortDate(value: string | null | undefined): string {
+  if (!value) return "–";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
 // Helper to get author initials
@@ -510,6 +544,7 @@ export default function ProposalDetailPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            repo: proposalRepo,
             number,
             title: proposal.title,
           }),
@@ -631,24 +666,24 @@ export default function ProposalDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <BrandLoader
-          title="Loading Proposal Details"
-          description="Fetching EIP specifications, coordination status, and related resources..."
-          minHeight="min-h-[300px]"
-          className="w-full max-w-lg border border-border/40"
-        />
+      <div data-ledger className="flex min-h-[70vh] items-center justify-center bg-[var(--paper)] p-6 text-[var(--ink)]">
+        <InlineBrandLoader size="md" label={`Loading ${repoDisplayName}-${number}...`} />
       </div>
     );
   }
 
   if (error || !proposal) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 dark:text-red-400 mx-auto mb-4" />
-          <h2 className="dec-title mb-2 text-xl font-semibold tracking-tight text-foreground">Failed to load proposal</h2>
-          <p className="text-muted-foreground">{error || 'Unknown error'}</p>
+      <div data-ledger className="flex min-h-[70vh] items-center justify-center bg-[var(--paper)] p-6 text-[var(--ink)]">
+        <div className="max-w-md text-center">
+          <AlertCircle className="mx-auto mb-4 h-10 w-10 text-[#ef4444]" />
+          <h2 className="font-serif text-2xl font-normal tracking-tight text-[var(--ink)]">
+            Failed to load proposal
+          </h2>
+          <p className="mt-2 text-sm text-[var(--ink-muted)]">{error || 'Unknown error'}</p>
+          <Link href="/explore" className="btn btn-outline mt-5 inline-flex h-9 px-4 text-xs">
+            Browse proposals
+          </Link>
         </div>
       </div>
     );
@@ -656,521 +691,554 @@ export default function ProposalDetailPage() {
 
   const proposalId = `${repoDisplayName}-${proposal.number}`;
   const githubUrl = `https://github.com/ethereum/${repoPath}/blob/master/${filePath}/${fileName}`;
+  const officialUrl =
+    normalizedRepo === 'rip'
+      ? `https://rips.ethereum.org/RIPS/rip-${proposal.number}`
+      : normalizedRepo === 'erc'
+        ? `https://eips.ethereum.org/ERCS/erc-${proposal.number}`
+        : `https://eips.ethereum.org/EIPS/eip-${proposal.number}`;
   const discussionUrl = proposal.discussions_to || discussionsTo || null;
+  const statusMeaning = proposal.status ? STATUS_MEANING[proposal.status.toLowerCase()] : null;
+  const { head: specHead, rest: specRest } = markdownContent ? splitSpec(markdownContent) : { head: '', rest: '' };
+  const hasPlainCuration = Boolean(
+    curation && (curation.layman_summary || (curation.benefits?.length ?? 0) > 0 || (curation.tradeoffs?.length ?? 0) > 0)
+  );
+
+  const railItems: RailItem[] = [
+    { id: 'ai-summary', label: 'AI Summary' },
+    { id: 'enterprise-brief', label: 'Enterprise' },
+    { id: 'proposal-timeline', label: 'Lifecycle & Upgrades' },
+    ...(governanceState ? [{ id: 'governance', label: 'Governance' }] : []),
+    ...(proposalRequires.length > 0 ? [{ id: 'dependencies', label: 'Dependencies' }] : []),
+    ...(curation?.faq && curation.faq.length > 0 ? [{ id: 'faq', label: 'FAQ' }] : []),
+    { id: 'resources', label: 'Resources' },
+    { id: 'proposal-text', label: 'Specification' },
+    { id: 'proposal-subscription', label: 'Subscriptions' },
+  ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <section id="proposal-overview" data-sidebar-label="Overview" className="w-full border-b border-border bg-card/40">
-        <div className="mx-auto w-full px-3 pb-6 pt-10 sm:px-4 sm:pb-8 sm:pt-12 lg:px-5 xl:px-6">
-            <div className="space-y-3">
-                {/* Metadata chips */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Status chip — value only, no "Status:" prefix */}
-                  <span className={cn(
-                    'inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium',
-                    getStatusBadgeClass(proposal.status)
-                  )}>
-                    {proposal.status}
-                  </span>
+    <div data-ledger className="min-h-screen bg-[var(--paper)] text-[var(--ink)] pb-16">
+      {/* ── Masthead: the document's identity ───────────────────── */}
+      <header id="proposal-overview" className="masthead border-b border-[var(--border)] bg-[var(--paper)]">
+        <div className="wrap">
+          <div className="relative overflow-hidden pb-8 pt-7 sm:pt-9">
+            <span
+              aria-hidden
+              className="pointer-events-none select-none font-serif text-[7rem] font-bold leading-none tracking-tight text-[var(--ink)]/[0.04] absolute -bottom-8 right-0 hidden md:block lg:text-[9rem]"
+            >
+              {proposal.number}
+            </span>
 
-                  {/* Type/Category Chip */}
-                  {(proposal.type || proposal.category) && (
-                    <span className="inline-flex items-center rounded-full border border-border bg-muted/60 text-muted-foreground px-3 py-1 text-xs font-medium">
-                      {proposal.type && proposal.category
-                        ? `${proposal.type}: ${proposal.category}`
-                        : proposal.type || proposal.category}
-                    </span>
-                  )}
+            <div className="relative">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <nav className="flex items-center gap-1.5 font-mono text-xs text-[var(--ink-faint)]" aria-label="Breadcrumb">
+                  <Link href="/" className="transition-colors hover:text-[var(--ink)]">Home</Link>
+                  <ChevronRight className="h-3 w-3" />
+                  <Link href="/explore" className="transition-colors hover:text-[var(--ink)]">Proposals</Link>
+                  <ChevronRight className="h-3 w-3" />
+                  <span className="text-[var(--ink-muted)]">{proposalId}</span>
+                </nav>
 
-                  {/* Layer Chip — only when we actually know it's EL or CL */}
-                  {proposal.category === 'Core' && (latestUpgrade?.layer === 'consensus' || latestUpgrade?.layer === 'execution') && (
-                    <span className={cn(
-                      'inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium',
-                      latestUpgrade?.layer === 'consensus'
-                        ? 'border-violet-500/25 bg-violet-500/12 text-violet-700 dark:text-violet-300'
-                        : 'border-cyan-500/25 bg-cyan-500/12 text-cyan-700 dark:text-cyan-300'
-                    )}>
-                      {latestUpgrade?.layer === 'consensus'
-                        ? 'Consensus Layer (CL)'
-                        : 'Execution Layer (EL)'}
-                    </span>
-                  )}
-
-                  {/* Network upgrade chips */}
-                  {upgrades.length > 0 && upgrades.map((upgrade) => (
-                    <UpgradeStageSplitBadge
-                      key={upgrade.slug ?? upgrade.name}
-                      upgradeName={upgrade.name || `Upgrade ${upgrade.upgrade_id}`}
-                      bucket={upgrade.bucket}
-                      className="text-xs"
-                    />
-                  ))}
-
-                  {/* Community / Enterprise view toggle — shareable via ?enterprise=1,
-                      remembered in localStorage. */}
-                  <div
-                    role="radiogroup"
-                    aria-label="View mode"
-                    className="ml-auto inline-flex items-center rounded-full border border-border bg-muted/40 p-0.5 text-xs font-medium"
-                  >
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={!showEnterpriseView}
-                      onClick={() => setEnterprise(false)}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1 transition-colors',
-                        !showEnterpriseView
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      )}
-                    >
-                      <Users className="h-3.5 w-3.5" />
-                      Community
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={showEnterpriseView}
-                      onClick={() => setEnterprise(true)}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1 transition-colors',
-                        showEnterpriseView
-                          ? 'bg-violet-500/15 text-violet-700 shadow-sm dark:text-violet-300'
-                          : 'text-muted-foreground hover:text-foreground'
-                      )}
-                    >
-                      <Building2 className="h-3.5 w-3.5" />
-                      Enterprise
-                    </button>
-                  </div>
-                </div>
-
-                {/* Title with action icons inline at the end */}
-                <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-                  <h1 className="dec-title persona-title text-pretty text-2xl font-semibold tracking-tight text-foreground sm:text-3xl md:text-[2.5rem] md:leading-[1.1]">
-                    {proposalId}: {proposal.title}
-                  </h1>
-                  <TooltipProvider>
-                    <div className="flex items-center gap-2 pb-1">
-                      {discussionUrl && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <a
-                              href={discussionUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label="Open discussion thread"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            >
-                              <MessageSquare className="h-[18px] w-[18px]" />
-                            </a>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="text-xs">Discussion thread</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <a
-                            href={githubUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label="View specification on GitHub"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          >
-                            <Github className="h-[18px] w-[18px]" />
-                          </a>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-xs">View on GitHub</p>
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={handleCopyLink}
-                            aria-label="Copy link to this proposal"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card/70 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground"
-                          >
-                            {linkCopied ? (
-                              <Check className="h-[18px] w-[18px] text-emerald-600 dark:text-emerald-400" />
-                            ) : (
-                              <Copy className="h-[18px] w-[18px]" />
-                            )}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="text-xs">{linkCopied ? 'Copied!' : 'Copy link'}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
-                  </TooltipProvider>
-                </div>
-
-                {/* Description */}
-                <p className="mt-3 max-w-5xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                  Reference view for specification metadata, lifecycle transitions, governance signals, and linked upgrade context.
-                </p>
-
-                {/* Compact Metadata Row */}
-                {(proposal.authors.length > 0 || proposal.created || proposalRequires.length > 0) && (
-                  <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-                    {/* Authors */}
-                    {proposal.authors.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold uppercase tracking-wider text-muted-foreground text-[11px]">Authors:</span>
-                        <div className="flex -space-x-1.5 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background">
-                          <TooltipProvider>
-                            {proposal.authors.map((author, index) => (
-                              <Tooltip key={index}>
-                                <TooltipTrigger asChild>
-                                  <div className="cursor-pointer">
-                                    <Avatar className="h-7 w-7 border border-primary/20 hover:border-primary/50 transition-all hover:scale-110">
-                                      <AvatarImage
-                                        src={getGitHubAvatar(author) || undefined}
-                                        alt={author}
-                                        onError={(e) => {
-                                          e.currentTarget.style.display = 'none';
-                                        }}
-                                      />
-                                      <AvatarFallback className="bg-primary/10 font-semibold text-primary text-[10px]">
-                                        {getInitials(author)}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="text-xs">{author}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
-                          </TooltipProvider>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Created Date */}
-                    {proposal.created && (
-                      <div className="inline-flex items-center gap-1.5 rounded-md border border-border/80 bg-background/80 px-2.5 py-1 text-foreground font-medium shadow-2xs">
-                        <Calendar className="h-3.5 w-3.5 text-cyan-500" />
-                        <span className="text-muted-foreground font-normal">Created:</span>
-                        <span className="text-foreground">
-                          {Number.isNaN(Date.parse(proposal.created))
-                            ? proposal.created
-                            : new Date(proposal.created).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                                timeZone: 'UTC',
-                              }) + ' UTC'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Requires Dependencies */}
-                    {proposalRequires.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-semibold uppercase tracking-wider text-muted-foreground text-[11px]">Requires:</span>
-                        {proposalRequires.map((r) => (
-                          <Link
-                            key={r}
-                            href={`/${normalizedRepo}s/${r}`}
-                            className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-xs font-semibold text-primary transition-all hover:bg-primary/20 hover:border-primary/60 shadow-2xs"
-                          >
-                            <Link2 className="h-3 w-3 text-primary/70" />
-                            {repoDisplayName}-{r}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* AI Summary toggle (collapsible inline) */}
-                <div className="mt-4">
+                {/* Community / Enterprise view toggle */}
+                <div
+                  role="radiogroup"
+                  aria-label="View mode"
+                  className="inline-flex items-center gap-1 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs"
+                >
                   <button
-                    onClick={() => setShowAi(s => !s)}
-                    className="text-sm font-medium text-primary hover:underline focus:outline-none"
+                    type="button"
+                    role="radio"
+                    aria-checked={!showEnterpriseView}
+                    onClick={() => setEnterprise(false)}
+                    data-active={!showEnterpriseView ? 'true' : undefined}
+                    className="chip h-7 border-transparent bg-transparent px-2.5 text-xs hover:border-transparent cursor-pointer"
                   >
-                    {showAi ? 'Hide AI summary' : 'Show AI summary'}
+                    <Users className="h-3.5 w-3.5" />
+                    <span>Community</span>
                   </button>
-                  {showAi && (
-                    <div className="mt-2 text-sm text-foreground/90">
-                      {aiSummaryLoading ? (
-                        <div className="flex items-center gap-2">
-                          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
-                          <span>Generating summary...</span>
-                        </div>
-                      ) : aiSummaryError ? (
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="text-sm text-muted-foreground">{aiSummaryError}</span>
-                          <button
-                            onClick={() => setAiSummaryReload((n) => n + 1)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/70 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10"
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                            Retry
-                          </button>
-                        </div>
-                      ) : aiSummary ? (
-                        <div
-                          className="max-w-none text-sm [&_h4]:text-foreground [&_p]:text-foreground/90 [&_strong]:text-foreground"
-                          dangerouslySetInnerHTML={{ __html: aiSummary }}
-                        />
-                      ) : (
-                        <div className="text-sm text-muted-foreground">AI summary will appear here.</div>
-                      )}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={showEnterpriseView}
+                    onClick={() => setEnterprise(true)}
+                    data-active={showEnterpriseView ? 'true' : undefined}
+                    className="chip h-7 border-transparent bg-transparent px-2.5 text-xs hover:border-transparent cursor-pointer"
+                  >
+                    <Building2 className="h-3.5 w-3.5" />
+                    <span>Enterprise</span>
+                  </button>
                 </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center gap-2">
+                <LedgerBadge token={proposal.status}>{proposal.status}</LedgerBadge>
+                {(proposal.type || proposal.category) && (
+                  <LedgerBadge token={proposal.category || proposal.type || 'core'}>
+                    {proposal.type && proposal.category ? `${proposal.type}: ${proposal.category}` : proposal.type || proposal.category}
+                  </LedgerBadge>
+                )}
+                {proposal.category === 'Core' && (latestUpgrade?.layer === 'consensus' || latestUpgrade?.layer === 'execution') && (
+                  <span className="chip font-mono text-[11px]">
+                    {latestUpgrade.layer === 'consensus' ? 'Consensus Layer (CL)' : 'Execution Layer (EL)'}
+                  </span>
+                )}
+                {upgrades.length > 0 && upgrades.map((upgrade) => (
+                  <UpgradeStageSplitBadge
+                    key={upgrade.slug ?? upgrade.name}
+                    upgradeName={upgrade.name || `Upgrade ${upgrade.upgrade_id}`}
+                    bucket={upgrade.bucket}
+                    className="text-xs"
+                  />
+                ))}
+              </div>
+
+              <h1 className="t-h1 mt-4 max-w-4xl text-[var(--ink)]">
+                <span className="text-[var(--brand-strong)]">{proposalId}:</span> {proposal.title}
+              </h1>
+
+              {curation?.layman_summary && (
+                <p className="t-lead mt-4 max-w-2xl text-[var(--ink-muted)]">{curation.layman_summary}</p>
+              )}
+
+              <div className="mt-7 flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
+                {proposal.authors.length > 0 ? (
+                  <div className="flex items-center gap-3">
+                    <span className="eyebrow">Authors</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <TooltipProvider>
+                        {proposal.authors.map((author, index) => (
+                          <Tooltip key={index}>
+                            <TooltipTrigger asChild>
+                              <div className="cursor-default">
+                                <Avatar className="h-7 w-7 border border-[var(--border)] bg-[var(--surface-2)] transition-colors hover:border-[var(--ink)]">
+                                  <AvatarImage
+                                    src={getGitHubAvatar(author) || undefined}
+                                    alt={author}
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                  <AvatarFallback className="bg-[var(--surface-2)] font-mono text-[10px] font-semibold text-[var(--ink-muted)]">
+                                    {getInitials(author)}
+                                  </AvatarFallback>
+                                </Avatar>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">{author}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </TooltipProvider>
+                    </div>
+                  </div>
+                ) : <span />}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href={officialUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-outline h-9 bg-[var(--surface)] px-3 text-xs text-[var(--ink)] border-[var(--border)] hover:border-[var(--ink)]"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Official page
+                  </a>
+                  {discussionUrl && (
+                    <a
+                      href={discussionUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Open discussion thread"
+                      aria-label="Open discussion thread"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-muted)] transition-colors hover:border-[var(--ink)] hover:text-[var(--ink)]"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </a>
+                  )}
+                  <a
+                    href={githubUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="View source on GitHub"
+                    aria-label="View source on GitHub"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-muted)] transition-colors hover:border-[var(--ink)] hover:text-[var(--ink)]"
+                  >
+                    <Github className="h-4 w-4" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    title={linkCopied ? 'Copied!' : 'Copy link'}
+                    aria-label="Copy link to this proposal"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface)] text-[var(--ink-muted)] transition-colors hover:border-[var(--ink)] hover:text-[var(--ink)] cursor-pointer"
+                  >
+                    {linkCopied ? <Check className="h-4 w-4 text-[var(--brand-strong)]" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-      </section>
 
-        <div className="mx-auto mt-6 w-full max-w-6xl px-3 pb-10 sm:px-4 lg:px-5 xl:px-6">
-          <div className="space-y-6">
-            {/* Enterprise Brief Section — Always rendered so it appears in sidebar */}
-            <section id="enterprise-brief" data-sidebar-label="Enterprise Assessment" className="scroll-mt-28">
-              {showEnterpriseView ? (
-                <EnterpriseEIPBrief
-                  proposal={proposal}
-                  upgrades={upgrades}
-                  statusEvents={statusEvents}
-                  governanceState={governanceState}
-                  proposalRequires={proposalRequires}
-                  curation={curation}
-                />
-              ) : (
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/20 bg-card/60 p-5 backdrop-blur-xs shadow-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                      <Building2 className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">Enterprise Assessment</h3>
-                      <p className="text-xs text-muted-foreground">
-                        View node client readiness, technical complexity breakdown, and enterprise risk metrics for {repoDisplayName}-{proposal.number}.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => setEnterprise(true)}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold"
-                  >
-                    <Building2 className="mr-1.5 h-3.5 w-3.5" />
-                    View Enterprise Brief
-                  </Button>
-                </div>
-              )}
-            </section>
-
-            {/* Unified lifecycle, upgrade-stage & PR timeline */}
-            <section id="proposal-timeline" data-sidebar-label="Lifecycle & Upgrade Timeline">
-              <ProposalTimeline
-                proposal={proposal}
-                statusEvents={statusEvents}
-                stageEvents={stageEvents}
-                upgrades={upgrades}
-                governanceState={governanceState}
-                repoPath={repoPath}
-                normalizedRepo={normalizedRepo}
-              />
-            </section>
-
-            {/* Dedicated Lucid (EIP-8184) Encrypted Mempool Sections */}
-            {number === 8184 && <LucidProposalSection />}
-
-            {/* Native AA (EIP-8141) → link to the Account Abstraction usage dashboard */}
-            {number === 8141 && (
-              <Link
-                href="/aa"
-                className="group flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-5 py-4 transition-colors hover:border-primary/50 hover:bg-primary/10"
+          {/* Record strip */}
+          <dl className="grid grid-cols-2 border-t border-[var(--border)] sm:grid-cols-4">
+            {[
+              { k: 'Created', v: formatShortDate(proposal.created) },
+              {
+                k: 'Governance',
+                v: governanceState?.waiting_on
+                  ? governanceState.waiting_on.replace(/_/g, ' ')
+                  : proposal.last_call_deadline
+                    ? `Deadline ${formatShortDate(proposal.last_call_deadline)}`
+                    : proposal.status,
+              },
+              {
+                k: 'Requires',
+                v: proposalRequires.length
+                  ? `${proposalRequires.length} proposal${proposalRequires.length === 1 ? '' : 's'}`
+                  : 'None',
+              },
+              { k: 'Source', v: `ethereum/${repoPath}`, mono: true },
+            ].map((f, i) => (
+              <div
+                key={f.k}
+                className={cn(
+                  'py-4',
+                  i % 2 === 1 && 'border-l border-[var(--border)] pl-4 sm:pl-6',
+                  i >= 2 && 'border-t border-[var(--border)] sm:border-t-0',
+                  i === 2 && 'sm:border-l sm:pl-6'
+                )}
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Boxes className="h-4 w-4 text-primary" />
-                    Account Abstraction usage dashboard
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Live on-chain adoption of EIP-7702 and ERC-4337, the AA mechanisms in production today.
-                  </p>
-                </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-                  Open /aa <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                </span>
-              </Link>
-            )}
+                <dt className="eyebrow">{f.k}</dt>
+                <dd className={cn('mt-1.5 truncate text-sm text-[var(--ink)]', f.mono && 'font-mono text-xs')}>
+                  {f.v}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </header>
 
-            {/* Blob data-layer EIPs → link to the Blob Data Layer dashboard */}
-            {[4844, 7691, 7742, 7918, 7892].includes(number) && (
-              <Link
-                href="/blobs"
-                className="group flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 px-5 py-4 transition-colors hover:border-primary/50 hover:bg-primary/10"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Database className="h-4 w-4 text-primary" />
-                    Blob Data Layer dashboard
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Live blob throughput, the fee market &amp; congestion forecast, and per-rollup DA cost since Dencun.
-                  </p>
-                </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-                  Open /blobs <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                </span>
-              </Link>
-            )}
+      {/* ── Phone: section jump bar ─────────────────────────────── */}
+      <nav className="sticky top-[var(--header-h)] z-30 border-b border-[var(--border)] bg-[var(--paper)] lg:hidden" aria-label="On this page">
+        <div className="wrap no-scrollbar flex gap-2 overflow-x-auto py-2.5">
+          {railItems.map((n) => (
+            <a key={n.id} href={`#${n.id}`} className="chip shrink-0">
+              {n.label}
+            </a>
+          ))}
+        </div>
+      </nav>
 
-            {/* Proposal Body (Single Card, Collapsed by Default) */}
-            <section id="proposal-text" data-sidebar-label="Specification" className="scroll-mt-28">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-                className="overflow-hidden rounded-xl border border-border bg-card/60 backdrop-blur-xs shadow-xs"
-              >
-                {/* Single Collapsible Card Header */}
-                <div
-                  onClick={() => setShowFullSpecification((s) => !s)}
-                  className="flex flex-wrap items-center justify-between gap-3 bg-muted/30 px-5 py-4 cursor-pointer transition-colors hover:bg-muted/50 select-none"
+      {/* ── Two-column editorial body + sticky rail ──────────────── */}
+      <div className="wrap grid gap-x-14 pt-10 lg:grid-cols-[minmax(0,1fr)_14rem] lg:pt-12">
+        <article className="min-w-0 space-y-14">
+          {statusMeaning && (
+            <p className="flex items-start gap-3 border-l-2 border-[var(--brand)] bg-[var(--surface-2)] py-3 pl-4 pr-4 text-sm text-[var(--ink-muted)]">
+              <span className="font-semibold text-[var(--ink)]">{proposal.status}</span>
+              <span>{statusMeaning}</span>
+            </p>
+          )}
+
+          {/* AI Summary & Plain-Language Brief */}
+          <section id="ai-summary" className="scroll-mt-24">
+            <SectionHead
+              eyebrow="In brief"
+              title="AI Summary"
+              description="Plain-language synthesis of the specification and its core design."
+              action={
+                <button
+                  type="button"
+                  onClick={() => setAiSummaryReload((n) => n + 1)}
+                  disabled={aiSummaryLoading}
+                  className="chip cursor-pointer gap-1.5 px-2.5 py-1 text-xs"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
-                      <FileText className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground sm:text-base">
-                        {repoDisplayName}-{proposal.number} Specification
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {showFullSpecification
-                          ? 'Click to collapse specification document'
-                          : 'Click to expand full proposal specification'}
-                      </p>
-                    </div>
-                  </div>
+                  <RefreshCw className={cn('h-3.5 w-3.5', aiSummaryLoading && 'animate-spin')} />
+                  <span>{aiSummaryLoading ? 'Summarizing...' : 'Regenerate'}</span>
+                </button>
+              }
+            />
 
-                  <div className="flex items-center gap-2">
-                    {markdownContent && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCopyMarkdown();
-                        }}
-                        className="h-8 border-border bg-background/80 text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        {markdownCopied ? (
-                          <>
-                            <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-500" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <FileCode className="mr-1.5 h-3.5 w-3.5 text-purple-500" />
-                            Copy Markdown
-                          </>
-                        )}
-                      </Button>
+            {hasPlainCuration && curation?.layman_summary && (
+              <div className="card mb-4 p-5">
+                <p className="text-sm leading-relaxed text-[var(--ink)]">{curation.layman_summary}</p>
+                {((curation.benefits?.length ?? 0) > 0 || (curation.tradeoffs?.length ?? 0) > 0) && (
+                  <div className="mt-4 grid gap-4 border-t border-[var(--border)] pt-4 sm:grid-cols-2">
+                    {(curation.benefits?.length ?? 0) > 0 && (
+                      <div>
+                        <p className="eyebrow mb-2 text-[var(--brand-strong)]">Benefits</p>
+                        <ul className="space-y-1.5 text-xs text-[var(--ink-muted)]">
+                          {curation.benefits!.map((b, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--brand)]" />
+                              <span>{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
-
-                    <button
-                      type="button"
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground shadow-2xs transition-colors hover:border-primary/40 hover:bg-primary/10"
-                    >
-                      <span>{showFullSpecification ? 'Collapse' : 'Expand Specification'}</span>
-                      {showFullSpecification ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Card Content Body - Collapsed by Default */}
-                {showFullSpecification && (
-                  <div className="p-5 sm:p-6 border-t border-border/50">
-                    {markdownLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
+                    {(curation.tradeoffs?.length ?? 0) > 0 && (
+                      <div>
+                        <p className="eyebrow mb-2">Tradeoffs</p>
+                        <ul className="space-y-1.5 text-xs text-[var(--ink-muted)]">
+                          {curation.tradeoffs!.map((t, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--ink-faint)]" />
+                              <span>{t}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    ) : markdownError ? (
-                      <div className="py-12 text-center">
-                        <AlertCircle className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-                        <p className="mb-4 text-sm text-muted-foreground">{markdownError}</p>
-                        <a
-                          href={githubUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary/80"
-                        >
-                          View on GitHub instead <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      </div>
-                    ) : markdownContent ? (
-                      <MarkdownRenderer
-                        content={markdownContent}
-                        skipPreamble={true}
-                        stripDuplicateHeaders={true}
-                        collapsibleSections={false}
-                      />
-                    ) : null}
+                    )}
                   </div>
                 )}
-              </motion.div>
+              </div>
+            )}
+
+            <div className="card p-5">
+              {aiSummaryLoading ? (
+                <div className="flex items-center gap-2.5 text-sm text-[var(--ink-muted)]">
+                  <RefreshCw className="h-4 w-4 animate-spin text-[var(--brand-strong)]" />
+                  <span>Generating AI summary from specification...</span>
+                </div>
+              ) : aiSummaryError ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-sm text-[var(--ink-muted)]">{aiSummaryError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAiSummaryReload((n) => n + 1)}
+                    className="chip cursor-pointer gap-1.5 px-3 py-1 text-xs"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Retry
+                  </button>
+                </div>
+              ) : aiSummary ? (
+                <div
+                  className="max-w-none text-sm leading-relaxed text-[var(--ink-muted)] [&_h4]:mb-1.5 [&_h4]:mt-3 [&_h4]:font-serif [&_h4]:text-base [&_h4]:font-semibold [&_h4]:text-[var(--ink)] [&_p]:mb-2 [&_strong]:text-[var(--ink)] [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-1"
+                  dangerouslySetInnerHTML={{ __html: aiSummary }}
+                />
+              ) : (
+                <p className="text-sm text-[var(--ink-muted)]">
+                  {markdownLoading ? 'Waiting for specification text...' : 'AI summary will appear here.'}
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Enterprise Assessment */}
+          <section id="enterprise-brief" className="scroll-mt-24">
+            <SectionHead
+              eyebrow="Institutional lens"
+              title="Enterprise Assessment"
+              description={`Client readiness, technical complexity, and operational risk for ${proposalId}.`}
+            />
+            {showEnterpriseView ? (
+              <EnterpriseEIPBrief
+                proposal={proposal}
+                upgrades={upgrades}
+                statusEvents={statusEvents}
+                governanceState={governanceState}
+                proposalRequires={proposalRequires}
+                curation={curation}
+              />
+            ) : (
+              <div className="card flex flex-wrap items-center justify-between gap-4 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--brand-strong)]">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[var(--ink)]">Enterprise Brief</h3>
+                    <p className="text-xs text-[var(--ink-muted)]">
+                      Inspect node client readiness, institutional stakeholder impact, and risk metrics.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEnterprise(true)}
+                  className="btn cursor-pointer bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-[var(--brand-ink)] hover:opacity-90"
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  <span>View Enterprise Brief</span>
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* Unified lifecycle, upgrade-stage & PR timeline */}
+          <section id="proposal-timeline" className="scroll-mt-24">
+            <SectionHead
+              eyebrow="Standards process"
+              title="Lifecycle & Upgrade Timeline"
+              description="Status transitions, editorial pull requests, and network upgrade inclusion."
+            />
+            <ProposalTimeline
+              proposal={proposal}
+              statusEvents={statusEvents}
+              stageEvents={stageEvents}
+              upgrades={upgrades}
+              governanceState={governanceState}
+              repoPath={repoPath}
+              normalizedRepo={normalizedRepo}
+            />
+          </section>
+
+          {/* Governance state */}
+          {governanceState && (
+            <section id="governance" className="scroll-mt-24">
+              <SectionHead
+                eyebrow="Editorial state"
+                title="Governance"
+                description="Current pull request queue state and editorial review velocity."
+              />
+              <dl className="grid grid-cols-2 divide-y divide-[var(--border)] border-y border-[var(--border)] bg-[var(--surface)] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                <div className="px-4 py-4">
+                  <dt className="eyebrow">Active PR</dt>
+                  <dd className="mt-1.5 font-mono text-sm text-[var(--ink)]">
+                    {governanceState.pr_number ? (
+                      <Link href={`/pr/${normalizedRepo}/${governanceState.pr_number}`} className="text-[var(--brand-strong)] hover:underline">
+                        PR #{governanceState.pr_number}
+                      </Link>
+                    ) : 'None'}
+                  </dd>
+                </div>
+                <div className="px-4 py-4">
+                  <dt className="eyebrow">PR State</dt>
+                  <dd className="mt-1.5 text-sm capitalize text-[var(--ink)]">
+                    {governanceState.current_pr_state || '–'}
+                  </dd>
+                </div>
+                <div className="px-4 py-4">
+                  <dt className="eyebrow">Waiting On</dt>
+                  <dd className="mt-1.5 text-sm capitalize text-[var(--ink)]">
+                    {governanceState.waiting_on ? governanceState.waiting_on.replace(/_/g, ' ') : '–'}
+                  </dd>
+                </div>
+                <div className="px-4 py-4">
+                  <dt className="eyebrow">Days Since Action</dt>
+                  <dd className="mt-1.5 font-mono text-sm tabular-nums text-[var(--ink)]">
+                    {governanceState.days_since_last_action != null ? `${governanceState.days_since_last_action}d` : '–'}
+                  </dd>
+                </div>
+              </dl>
             </section>
+          )}
+
+          {/* Dependencies */}
+          {proposalRequires.length > 0 && (
+            <section id="dependencies" className="scroll-mt-24">
+              <SectionHead
+                eyebrow="Relationships"
+                title="Dependencies"
+                description={`Proposals required by ${proposalId}.`}
+              />
+              <div className="card p-5">
+                <p className="eyebrow mb-3">Requires</p>
+                <div className="flex flex-wrap gap-2">
+                  {proposalRequires.map((r) => (
+                    <Link
+                      key={r}
+                      href={`/${repo}/${r}`}
+                      className="inline-flex items-center gap-1.5 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 font-mono text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
+                    >
+                      <Link2 className="h-3 w-3 text-[var(--brand-strong)]" />
+                      {repoDisplayName}-{r}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Dedicated Lucid (EIP-8184) Encrypted Mempool Sections */}
+          {number === 8184 && <LucidProposalSection />}
+
+          {/* Native AA (EIP-8141) → link to the Account Abstraction usage dashboard */}
+          {number === 8141 && (
+            <Link
+              href="/aa"
+              className="card group flex flex-wrap items-center justify-between gap-3 px-5 py-4 transition-colors hover:border-[var(--ink)]"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
+                  <Boxes className="h-4 w-4 text-[var(--brand-strong)]" />
+                  Account Abstraction usage dashboard
+                </div>
+                <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+                  Live on-chain adoption of EIP-7702 and ERC-4337, the AA mechanisms in production today.
+                </p>
+              </div>
+              <span className="chip inline-flex shrink-0 items-center gap-1 text-xs font-medium">
+                Open /aa <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+          )}
+
+          {/* Blob data-layer EIPs → link to the Blob Data Layer dashboard */}
+          {[4844, 7691, 7742, 7918, 7892].includes(number) && (
+            <Link
+              href="/blobs"
+              className="card group flex flex-wrap items-center justify-between gap-3 px-5 py-4 transition-colors hover:border-[var(--ink)]"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
+                  <Database className="h-4 w-4 text-[var(--brand-strong)]" />
+                  Blob Data Layer dashboard
+                </div>
+                <p className="mt-0.5 text-xs text-[var(--ink-muted)]">
+                  Live blob throughput, the fee market &amp; congestion forecast, and per-rollup DA cost since Dencun.
+                </p>
+              </div>
+              <span className="chip inline-flex shrink-0 items-center gap-1 text-xs font-medium">
+                Open /blobs <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+          )}
 
             {/* FAQ (curated Q&A) */}
             {curation?.faq && curation.faq.length > 0 && (
-              <section
-                id="faq"
-                data-sidebar-label="FAQ"
-                className="scroll-mt-28 rounded-xl border border-border bg-card/60 p-6"
-              >
-                <h2 className="mb-1 text-lg font-semibold tracking-tight text-foreground">Frequently Asked Questions</h2>
-                <p className="mb-4 text-xs text-muted-foreground">Curated from the proposal spec.</p>
-                <div className="divide-y divide-border/70">
+              <section id="faq" className="scroll-mt-24">
+                <SectionHead
+                  eyebrow="Questions"
+                  title="Frequently Asked"
+                  description="Common questions about this proposal, answered plainly."
+                />
+                <div className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
                   {curation.faq.map((item, idx) => (
-                    <details key={idx} className="group py-2">
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-1.5 text-sm font-medium text-foreground">
+                    <details key={idx} className="group py-3">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-1 text-sm font-medium text-[var(--ink)]">
                         <span>{item.question}</span>
-                        <span className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180">▾</span>
+                        <span className="shrink-0 text-[var(--ink-muted)] transition-transform group-open:rotate-180">▾</span>
                       </summary>
-                      <p className="pb-2 pr-6 text-sm leading-relaxed text-muted-foreground">{item.answer}</p>
+                      <p className="pb-1 pt-2 pr-6 text-sm leading-relaxed text-[var(--ink-muted)]">{item.answer}</p>
                     </details>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* Resources */}
-            <motion.section
-              id="resources"
-              data-sidebar-label="Resources & Media"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.42 }}
-              className="scroll-mt-28 rounded-xl border border-border bg-card/60 p-6"
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resources</h3>
-                <Link
-                  href={`/resources?q=${encodeURIComponent(`EIP-${proposal.number}`)}`}
-                  className="text-xs font-medium text-primary hover:underline"
-                >
-                  Open Resources Hub
-                </Link>
-              </div>
+            {/* Resources — Powered by EtherWorld API */}
+            <section id="resources" className="scroll-mt-24">
+              <SectionHead
+                eyebrow="Further reading"
+                title="Resources & EtherWorld Coverage"
+                description="Editorial coverage from EtherWorld, community threads, and video explainers."
+                action={
+                  <Link
+                    href={`/resources?q=${encodeURIComponent(proposalId)}`}
+                    className="chip gap-1.5 px-3 py-1 text-xs"
+                  >
+                    <span>Resources Hub</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                }
+              />
 
               {number === 8184 && (
-                <div className="mb-6 rounded-xl border border-violet-500/30 bg-gradient-to-r from-violet-500/10 via-card/70 to-card/50 p-4">
-                  <p className="mb-2.5 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-300">
-                    <Sparkles className="h-4 w-4" />
+                <div className="card mb-6 p-4">
+                  <p className="eyebrow mb-3 text-[var(--brand-strong)]">
                     Official EIP-8184 (Lucid) Resources & Research
                   </p>
                   <div className="grid gap-2.5 sm:grid-cols-2">
@@ -1178,167 +1246,303 @@ export default function ProposalDetailPage() {
                       href="https://encryptedmempool.org/"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between rounded-lg border border-border bg-background/80 px-3.5 py-2.5 text-xs font-medium text-foreground transition-all hover:border-violet-500/50 hover:bg-violet-500/10"
+                      className="flex items-center justify-between rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2.5 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
                     >
-                      <div className="flex items-center gap-2">
-                        <BookOpen className="h-4 w-4 text-violet-500" />
-                        <span>encryptedmempool.org (Official Hub)</span>
-                      </div>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-[var(--brand-strong)]" />
+                        encryptedmempool.org (Official Hub)
+                      </span>
+                      <ExternalLink className="h-3.5 w-3.5 text-[var(--ink-muted)]" />
                     </a>
-
                     <a
                       href="https://ethereum-magicians.org/t/eip-8184-lucid-encrypted-mempool/28017"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between rounded-lg border border-border bg-background/80 px-3.5 py-2.5 text-xs font-medium text-foreground transition-all hover:border-violet-500/50 hover:bg-violet-500/10"
+                      className="flex items-center justify-between rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2.5 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
                     >
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4 text-cyan-500" />
-                        <span>Ethereum Magicians: EIP-8184</span>
-                      </div>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-[var(--brand-strong)]" />
+                        Ethereum Magicians: EIP-8184
+                      </span>
+                      <ExternalLink className="h-3.5 w-3.5 text-[var(--ink-muted)]" />
                     </a>
-
                     <a
                       href="https://ethresear.ch/t/lucid-encrypted-mempool-with-distributed-payload-propagation/24042"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between rounded-lg border border-border bg-background/80 px-3.5 py-2.5 text-xs font-medium text-foreground transition-all hover:border-violet-500/50 hover:bg-violet-500/10"
+                      className="flex items-center justify-between rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2.5 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
                     >
-                      <div className="flex items-center gap-2">
-                        <FileCode className="h-4 w-4 text-emerald-500" />
-                        <span>ethresear.ch: Lucid Architecture</span>
-                      </div>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="flex items-center gap-2">
+                        <FileCode className="h-4 w-4 text-[var(--brand-strong)]" />
+                        ethresear.ch: Lucid Architecture
+                      </span>
+                      <ExternalLink className="h-3.5 w-3.5 text-[var(--ink-muted)]" />
                     </a>
-
                     <Link
                       href="/calls?series=etm"
-                      className="flex items-center justify-between rounded-lg border border-border bg-background/80 px-3.5 py-2.5 text-xs font-medium text-foreground transition-all hover:border-violet-500/50 hover:bg-violet-500/10"
+                      className="flex items-center justify-between rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2.5 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
                     >
-                      <div className="flex items-center gap-2">
-                        <Video className="h-4 w-4 text-amber-500" />
-                        <span>ETM Working Group Call Transcripts</span>
-                      </div>
-                      <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="flex items-center gap-2">
+                        <Video className="h-4 w-4 text-[var(--brand-strong)]" />
+                        ETM Working Group Call Transcripts
+                      </span>
+                      <ArrowUpRight className="h-3.5 w-3.5 text-[var(--ink-muted)]" />
                     </Link>
                   </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <div className="space-y-2 rounded-lg border border-border/70 bg-muted/25 p-3">
-                  <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Web Suggestions
+              {/* Featured EtherWorld Articles */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="eyebrow inline-flex items-center gap-1.5">
+                    <Newspaper className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+                    EtherWorld Articles
                   </p>
-                  {webSuggestions.slice(0, 6).map((item, idx) => (
-                    <a
-                      key={`${item.url}-${idx}`}
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group block rounded-md border border-border bg-background/60 p-2.5 transition-colors hover:border-primary/40 hover:bg-muted/50"
-                    >
-                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <BookOpen className="h-3.5 w-3.5 text-emerald-500" />
-                        {item.title}
-                      </div>
-                      {item.snippet && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.snippet}</p>}
-                    </a>
-                  ))}
-                  {!resourceLoading && webSuggestions.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No live web suggestions found right now.</p>
+                  {resourceLoading && (
+                    <span className="font-mono text-[11px] text-[var(--ink-muted)]">Fetching from EtherWorld...</span>
                   )}
-                  {aiRecommendations.slice(0, 2).map((item, idx) => (
-                    <a
-                      key={`${item.url}-ai-${idx}`}
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-md border border-dashed border-border bg-background/40 p-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                    >
-                      AI fallback: {item.label}
-                    </a>
-                  ))}
                 </div>
 
-                <div className="space-y-2 rounded-lg border border-border/70 bg-muted/25 p-3">
-                  <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    <Newspaper className="h-3.5 w-3.5" />
-                    Latest Articles
-                  </p>
-                  {resourceArticles.slice(0, 6).map((article, idx) => (
+                {resourceArticles.length > 0 ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {resourceArticles.slice(0, 6).map((article, idx) => (
+                      <a
+                        key={`${article.url}-${idx}`}
+                        href={article.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="card group flex flex-col overflow-hidden transition-colors hover:border-[var(--ink)]"
+                      >
+                        {article.featureImage && (
+                          <div className="h-36 w-full overflow-hidden border-b border-[var(--border)] bg-[var(--surface-2)]">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={article.featureImage}
+                              alt={article.title}
+                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                            />
+                          </div>
+                        )}
+                        <div className="flex flex-1 flex-col justify-between p-4">
+                          <div>
+                            {article.tags && article.tags.length > 0 && (
+                              <div className="mb-2 flex flex-wrap gap-1.5">
+                                {article.tags.map((tag) => (
+                                  <span key={tag} className="rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--ink-muted)]">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <h3 className="line-clamp-2 text-sm font-semibold text-[var(--ink)] group-hover:text-[var(--brand-strong)]">
+                              {article.title}
+                            </h3>
+                            {article.excerpt && (
+                              <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--ink-muted)]">
+                                {article.excerpt}
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-2.5 font-mono text-[11px] text-[var(--ink-faint)]">
+                            <span>{article.authorName || 'EtherWorld'}</span>
+                            <span>
+                              {article.publishedAt ? formatShortDate(article.publishedAt) : ''}
+                              {article.readingTime ? ` · ${article.readingTime}m read` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                ) : !resourceLoading ? (
+                  <div className="card p-4 text-xs text-[var(--ink-muted)]">
+                    No direct EtherWorld articles matched {proposalId} yet.{' '}
                     <a
-                      key={`${article.url}-${idx}`}
-                      href={article.url}
+                      href={`https://etherworld.co/?s=${encodeURIComponent(proposalId)}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block rounded-md border border-border bg-background/60 p-2.5 transition-colors hover:border-primary/40 hover:bg-muted/50"
+                      className="font-medium text-[var(--brand-strong)] hover:underline"
                     >
-                      <p className="line-clamp-2 text-sm font-medium text-foreground">{article.title}</p>
-                      {article.publishedAt && (
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          {new Date(article.publishedAt).toLocaleDateString()}
-                        </p>
+                      Search EtherWorld for {proposalId}
+                    </a>
+                  </div>
+                ) : null}
+
+                {/* Videos, Discussions & Web Suggestions */}
+                <div className="grid grid-cols-1 gap-4 pt-2 lg:grid-cols-2">
+                  <div className="card p-4">
+                    <p className="eyebrow mb-3 inline-flex items-center gap-1.5">
+                      <Video className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+                      Video &amp; Audio
+                    </p>
+                    <div className="space-y-2">
+                      {videoSuggestions.slice(0, 4).map((video, idx) => (
+                        <a
+                          key={`${video.url}-search-${idx}`}
+                          href={video.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-2 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
+                        >
+                          <span className="line-clamp-1">{video.title}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 text-[var(--ink-faint)]" />
+                        </a>
+                      ))}
+                      {resourceVideos.slice(0, 3).map((video, idx) => (
+                        <a
+                          key={`${video.url}-${idx}`}
+                          href={video.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-2 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
+                        >
+                          <span className="line-clamp-1">{video.title}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 text-[var(--ink-faint)]" />
+                        </a>
+                      ))}
+                      {!resourceLoading && videoSuggestions.length === 0 && resourceVideos.length === 0 && (
+                        <p className="text-xs text-[var(--ink-muted)]">No video links found yet.</p>
                       )}
-                    </a>
-                  ))}
-                  {!resourceLoading && resourceArticles.length === 0 && (
-                    <p className="text-xs text-muted-foreground">We don&apos;t have relevant articles for this proposal yet.</p>
-                  )}
-                </div>
+                    </div>
+                  </div>
 
-                <div className="space-y-2 rounded-lg border border-border/70 bg-muted/25 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Video & Audio</p>
-                  {videoSuggestions.slice(0, 4).map((video, idx) => (
-                    <a
-                      key={`${video.url}-search-${idx}`}
-                      href={video.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
-                    >
-                      {video.title}
-                    </a>
-                  ))}
-                  {resourceVideos.slice(0, 3).map((video, idx) => (
-                    <a
-                      key={`${video.url}-${idx}`}
-                      href={video.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
-                    >
-                      {video.title}
-                    </a>
-                  ))}
-                  {!resourceLoading && videoSuggestions.length === 0 && resourceVideos.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No relevant video links found yet.</p>
-                  )}
-                  <a
-                    href={`https://www.google.com/search?q=${encodeURIComponent(`EIP-${proposal.number} podcast`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
-                  >
-                    Explore more podcasts
-                  </a>
-                  <a
-                    href={`https://ethereum-magicians.org/search?q=${encodeURIComponent(`EIP-${proposal.number}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-foreground transition-colors hover:border-primary/40 hover:bg-muted/50"
-                  >
-                    Open Magicians threads
-                  </a>
+                  <div className="card p-4">
+                    <p className="eyebrow mb-3 inline-flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+                      Web &amp; Discussions
+                    </p>
+                    <div className="space-y-2">
+                      {webSuggestions.slice(0, 4).map((item, idx) => (
+                        <a
+                          key={`${item.url}-${idx}`}
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-2 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
+                        >
+                          <span className="line-clamp-1">{item.title}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 text-[var(--ink-faint)]" />
+                        </a>
+                      ))}
+                      {aiRecommendations.slice(0, 2).map((item, idx) => (
+                        <a
+                          key={`${item.url}-ai-${idx}`}
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-2 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--ink-muted)] transition-colors hover:border-[var(--ink)] hover:text-[var(--ink)]"
+                        >
+                          <span className="line-clamp-1">{item.label}: {item.reason}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0 text-[var(--ink-faint)]" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </motion.section>
+            </section>
+
+            {/* Full Specification — Abstract shown, rest expandable */}
+            <section id="proposal-text" className="scroll-mt-24">
+              <SectionHead
+                eyebrow="Source text"
+                title="Specification"
+                description="Rendered directly from the canonical Ethereum specification file."
+                action={
+                  markdownContent ? (
+                    <button
+                      type="button"
+                      onClick={handleCopyMarkdown}
+                      className="chip cursor-pointer gap-1.5 px-3 py-1 text-xs"
+                    >
+                      {markdownCopied ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileCode className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+                          <span>Copy Markdown</span>
+                        </>
+                      )}
+                    </button>
+                  ) : null
+                }
+              />
+
+              {markdownLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <InlineBrandLoader size="sm" label="Loading specification..." />
+                </div>
+              ) : markdownError ? (
+                <div className="card p-6 text-center">
+                  <AlertCircle className="mx-auto mb-2 h-7 w-7 text-[var(--ink-muted)]" />
+                  <p className="mb-3 text-sm text-[var(--ink-muted)]">{markdownError}</p>
+                  <a
+                    href={githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--brand-strong)] hover:underline"
+                  >
+                    View on GitHub instead <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              ) : markdownContent ? (
+                <div>
+                  <MarkdownRenderer
+                    content={specHead || markdownContent}
+                    skipPreamble={true}
+                    stripDuplicateHeaders={true}
+                    collapsibleSections={false}
+                  />
+                  {specRest && (
+                    <div className="mt-6">
+                      {showFullSpecification ? (
+                        <div className="border-t border-[var(--border)] pt-6">
+                          <MarkdownRenderer
+                            content={specRest}
+                            skipPreamble={false}
+                            stripDuplicateHeaders={true}
+                            collapsibleSections={false}
+                          />
+                          <div className="mt-6 flex justify-center border-t border-[var(--border)] pt-4">
+                            <button
+                              type="button"
+                              onClick={() => setShowFullSpecification(false)}
+                              className="btn btn-outline cursor-pointer h-9 px-4 text-xs"
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                              Collapse specification
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-center border-t border-[var(--border)] pt-6">
+                          <button
+                            type="button"
+                            onClick={() => setShowFullSpecification(true)}
+                            className="btn btn-outline cursor-pointer h-9 px-5 text-xs font-medium"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                            Read full specification
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </section>
 
             {/* Email updates */}
-            <section id="proposal-subscription" data-sidebar-label="Subscriptions">
+            <section id="proposal-subscription" className="scroll-mt-24">
+              <SectionHead
+                eyebrow="Notifications"
+                title="Stay Updated"
+                description="Subscribe to status changes for this proposal or repository."
+              />
               <div className="grid gap-4 md:grid-cols-2">
                 <ProposalSubscriptionCard
                   repo={normalizedRepo as 'eip' | 'erc' | 'rip'}
@@ -1350,8 +1554,16 @@ export default function ProposalDetailPage() {
                 />
               </div>
             </section>
-          </div>
+          </article>
+
+          {/* ── Rail: on this page ──────────────────────────────── */}
+          <aside className="hidden lg:block">
+            <div className="sticky top-[calc(var(--header-h,3.75rem)+2rem)]">
+              <p className="eyebrow">On this page</p>
+              <OnThisPage items={railItems} />
+            </div>
+          </aside>
         </div>
-    </div>
+      </div>
   );
 }
