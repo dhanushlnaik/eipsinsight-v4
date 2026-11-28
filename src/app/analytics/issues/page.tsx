@@ -19,8 +19,10 @@ import {
 import { cn } from "@/lib/utils";
 import { CopyLinkButton } from "@/components/header";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
+import { ChartWatermark } from "@/components/chart-watermark";
+import { ChartFooter } from "@/components/chart-footer";
 import { chartTooltip } from "@/lib/chart-theme";
-import { AnalyticsKpiCard, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
+import { AnalyticsKpiStrip, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 
 interface IssueMonthlyPoint {
   month: string;
@@ -258,32 +260,35 @@ export default function IssuesAnalyticsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <AnalyticsKpiCard
-          label="Open Issues"
-          value={totalOpen}
-          sub={`Median age: ${openSummary?.medianAge != null ? `${openSummary.medianAge}d` : "–"}`}
-          href="#open-issues-section"
-        />
-        <AnalyticsKpiCard
-          label={`Created (${heroMonth?.month ?? "Month"})`}
-          value={heroMonth?.newIssues ?? 0}
-          sub="Current month"
-          href="#issue-trend"
-        />
-        <AnalyticsKpiCard
-          label="Closed"
-          value={heroMonth?.closedIssues ?? 0}
-          sub="Current month"
-          href="#issue-trend"
-        />
-        <AnalyticsKpiCard
-          label="Active"
-          value={heroMonth?.openIssues ?? 0}
-          sub="In current month"
-          href="#issue-trend"
-        />
-      </div>
+      <AnalyticsKpiStrip
+        columns={4}
+        items={[
+          {
+            label: "Open Issues",
+            value: totalOpen,
+            sub: `Median age: ${openSummary?.medianAge != null ? `${openSummary.medianAge}d` : "–"}`,
+            href: "#open-issues-section",
+          },
+          {
+            label: `Created (${heroMonth?.month ?? "Month"})`,
+            value: heroMonth?.newIssues ?? 0,
+            sub: "Current month",
+            href: "#issue-trend",
+          },
+          {
+            label: "Closed",
+            value: heroMonth?.closedIssues ?? 0,
+            sub: "Current month",
+            href: "#issue-trend",
+          },
+          {
+            label: "Active",
+            value: heroMonth?.openIssues ?? 0,
+            sub: "In current month",
+            href: "#issue-trend",
+          },
+        ]}
+      />
 
       <Section
         id="issue-trend"
@@ -297,17 +302,19 @@ export default function IssuesAnalyticsPage() {
         }
       >
         {monthlySeries.length > 0 ? (
-          <div className="h-[360px] w-full">
+          <div className="relative h-[360px] w-full">
             <ReactECharts
               option={monthlyOption}
               style={{ height: "100%", width: "100%" }}
               opts={{ renderer: "svg" }}
               notMerge
             />
+            <ChartWatermark />
           </div>
         ) : (
           <p className="text-sm text-[var(--ink-muted)]">No monthly data available.</p>
         )}
+        <ChartFooter nextUpdateAt={nextUpdateAt} />
       </Section>
 
       <Section id="issue-labels" title="Label distribution" tooltip="Most frequent GitHub labels across open issues in the selected repository scope.">

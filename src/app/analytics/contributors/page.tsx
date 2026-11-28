@@ -7,10 +7,12 @@ import { Users, Activity, Zap, Database, AlertCircle } from "lucide-react";
 import { StatCard, AnalyticsHero } from "@/components/analytics/stat-card";
 import { CHART_AXIS, CHART_GRID } from "@/lib/chart-colors";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
+import { ChartWatermark } from "@/components/chart-watermark";
+import { ChartFooter } from "@/components/chart-footer";
 import { ContributorHeatmap } from "@/components/analytics/ContributorHeatmap";
 import { AnalyticsAnnotation } from "@/components/analytics/AnalyticsAnnotation";
 import { ContributorLookupPanel } from "@/components/analytics/contributor-lookup-panel";
-import { AnalyticsKpiCard, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
+import { AnalyticsKpiStrip, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 import {
   ChartContainer,
   ChartTooltip,
@@ -288,12 +290,15 @@ export default function ContributorsAnalyticsPage() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <AnalyticsKpiCard label="Total contributors" value={kpis?.totalContributors ?? 0} sub="all-time" href="#contributor-rankings" />
-        <AnalyticsKpiCard label="Active (30d)" value={kpis?.activeContributors30d ?? 0} sub="recently engaged" href="#contributor-activity" />
-        <AnalyticsKpiCard label="Total activities" value={kpis?.totalActivities ?? 0} sub="commits, PRs, reviews" href="#activity-by-type" />
-        <AnalyticsKpiCard label="Last 24h" value={kpis?.last24hCount ?? 0} sub="activities today" href="#live-activity-feed" />
-      </div>
+      <AnalyticsKpiStrip
+        columns={4}
+        items={[
+          { label: "Total contributors", value: kpis?.totalContributors ?? 0, sub: "all-time", href: "#contributor-rankings" },
+          { label: "Active (30d)", value: kpis?.activeContributors30d ?? 0, sub: "recently engaged", href: "#contributor-activity" },
+          { label: "Total activities", value: kpis?.totalActivities ?? 0, sub: "commits, PRs, reviews", href: "#activity-by-type" },
+          { label: "Last 24h", value: kpis?.last24hCount ?? 0, sub: "activities today", href: "#live-activity-feed" },
+        ]}
+      />
 
       {/* Universal Contributor Lookup + Per-Contributor Chart */}
       <ContributorLookupPanel from={from} to={to} />
@@ -306,7 +311,11 @@ export default function ContributorsAnalyticsPage() {
           tooltip="Daily activity heatmap across commits, PR reviews, status changes, and authored PRs."
           action={<LastUpdated timestamp={dataUpdatedAt} />}
         />
-        <ContributorHeatmap data={dailyActivity} />
+        <div className="relative">
+          <ContributorHeatmap data={dailyActivity} />
+          <ChartWatermark />
+        </div>
+        <ChartFooter nextUpdateAt={null} />
       </section>
 
       {/* Activity by Type + Activity by Repo */}
@@ -317,32 +326,36 @@ export default function ContributorsAnalyticsPage() {
             title="Activity by Type"
             tooltip="Breakdown of contributor actions across reviews, PRs, commits, and status transitions."
           />
-          <ChartContainer
-            config={Object.fromEntries(
-              Object.entries(actionTypeColors).map(([type, color]) => [
-                type,
-                { label: type, color },
-              ])
-            )}
-            className="h-64 w-full"
-          >
-            <ResponsiveContainer>
-              <BarChart data={activityByType} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis dataKey="actionType" type="category" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} width={100} />
-                <ChartTooltip content={<ChartTooltipContent className="border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]" />} />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false}>
-                  {activityByType.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={actionTypeColors[entry.actionType] || "#0F5E4D"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
+          <div className="relative">
+            <ChartContainer
+              config={Object.fromEntries(
+                Object.entries(actionTypeColors).map(([type, color]) => [
+                  type,
+                  { label: type, color },
+                ])
+              )}
+              className="h-64 w-full"
+            >
+              <ResponsiveContainer>
+                <BarChart data={activityByType} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis dataKey="actionType" type="category" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} width={100} />
+                  <ChartTooltip content={<ChartTooltipContent className="border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]" />} />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} isAnimationActive={false}>
+                    {activityByType.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={actionTypeColors[entry.actionType] || "#0F5E4D"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+            <ChartWatermark />
+          </div>
+          <ChartFooter nextUpdateAt={null} />
         </section>
 
         <section>
@@ -351,29 +364,33 @@ export default function ContributorsAnalyticsPage() {
             title="Activity by Repository"
             tooltip="Distribution of contributor activity across ethereum/EIPs, ethereum/ERCs, and ethereum/RIPs."
           />
-          <ChartContainer
-            config={Object.fromEntries(
-              repoHeatmap.map((r) => [
-                r.repo,
-                { label: r.repo, color: r.color },
-              ])
-            )}
-            className="h-64 w-full"
-          >
-            <ResponsiveContainer>
-              <BarChart data={repoHeatmap} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="repo" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
-                <ChartTooltip content={<ChartTooltipContent className="border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]" />} />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-                  {repoHeatmap.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
+          <div className="relative">
+            <ChartContainer
+              config={Object.fromEntries(
+                repoHeatmap.map((r) => [
+                  r.repo,
+                  { label: r.repo, color: r.color },
+                ])
+              )}
+              className="h-64 w-full"
+            >
+              <ResponsiveContainer>
+                <BarChart data={repoHeatmap} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="repo" tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fill: "var(--ink-muted)", fontSize: 11 }} tickLine={false} axisLine={false} width={32} />
+                  <ChartTooltip content={<ChartTooltipContent className="border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)]" />} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                    {repoHeatmap.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+            <ChartWatermark />
+          </div>
+          <ChartFooter nextUpdateAt={null} />
         </section>
       </div>
 

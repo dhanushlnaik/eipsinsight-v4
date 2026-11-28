@@ -146,6 +146,83 @@ export function AnalyticsLoader({ label }: { label: string }) {
   );
 }
 
+export interface KpiStripItem {
+  label: string;
+  value: string | number;
+  sub?: string;
+  tooltip?: string;
+  href?: string;
+  onClick?: () => void;
+  active?: boolean;
+}
+
+export function AnalyticsKpiStrip({
+  items,
+  columns = 4,
+  className,
+}: {
+  items: KpiStripItem[];
+  columns?: 4 | 5;
+  className?: string;
+}) {
+  const gridCols = columns === 5 ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 md:grid-cols-4";
+  return (
+    <div
+      className={cn(
+        "grid divide-y divide-[var(--border)] border-y border-[var(--border)] bg-[var(--surface)] md:divide-x md:divide-y-0",
+        gridCols,
+        className
+      )}
+    >
+      {items.map((item) => {
+        const interactive = Boolean(item.href || item.onClick);
+        const cellClasses = cn(
+          "group flex flex-col items-start px-5 py-4 text-left transition-colors",
+          interactive && "cursor-pointer hover:bg-[var(--surface-2)]",
+          item.active && "bg-[var(--surface-2)]"
+        );
+        const inner = (
+          <>
+            <div className="flex w-full items-center justify-between gap-2">
+              <span className="eyebrow">{item.label}</span>
+              <div className="flex items-center gap-1.5">
+                {item.tooltip && <InfoTip text={item.tooltip} />}
+                {item.active && <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand)]" />}
+              </div>
+            </div>
+            <p className="t-figure mt-2 text-2xl sm:text-3xl">
+              {typeof item.value === "number" ? item.value.toLocaleString() : item.value}
+            </p>
+            {item.sub && (
+              <p className="mt-1 text-[11px] text-[var(--ink-muted)]">{item.sub}</p>
+            )}
+          </>
+        );
+
+        if (item.href) {
+          return (
+            <a key={item.label} href={item.href} className={cellClasses}>
+              {inner}
+            </a>
+          );
+        }
+        if (item.onClick) {
+          return (
+            <button key={item.label} type="button" onClick={item.onClick} className={cellClasses}>
+              {inner}
+            </button>
+          );
+        }
+        return (
+          <div key={item.label} className={cellClasses}>
+            {inner}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AnalyticsKpiCard({
   label,
   value,

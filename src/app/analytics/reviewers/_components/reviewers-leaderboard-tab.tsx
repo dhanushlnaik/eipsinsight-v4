@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { chartTooltip } from "@/lib/chart-theme";
+import { ChartWatermark } from "@/components/chart-watermark";
+import { ChartFooter } from "@/components/chart-footer";
 import {
   ReviewerLeaderboardRow,
   getGitHubAvatarUrl,
@@ -345,14 +347,16 @@ export function ReviewersLeaderboardTab({
         {/* Content Body: Graph or Table */}
         {viewMode === "chart" ? (
           <div className="p-4 sm:p-5">
-            <div className="h-[320px] w-full">
+            <div className="relative h-[320px] w-full">
               <ReactECharts
                 option={leaderboardChartOption}
                 style={{ height: "100%", width: "100%" }}
                 opts={{ renderer: "svg" }}
                 notMerge
               />
+              <ChartWatermark />
             </div>
+            <ChartFooter nextUpdateAt={null} />
           </div>
         ) : (
           <div>

@@ -6,9 +6,11 @@ import { client } from "@/lib/orpc";
 import { AlertCircle, Download, FileText, Repeat2, Sparkles, Users } from "lucide-react";
 import { StatCard, AnalyticsHero } from "@/components/analytics/stat-card";
 import { LastUpdated } from "@/components/analytics/LastUpdated";
+import { ChartWatermark } from "@/components/chart-watermark";
+import { ChartFooter } from "@/components/chart-footer";
 import { chartTooltip } from "@/lib/chart-theme";
 import ReactECharts from "echarts-for-react";
-import { AnalyticsKpiCard, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
+import { AnalyticsKpiStrip, AnalyticsLoader, AnalyticsSectionHeader, ActorAvatar, TablePager } from "../_components/analytics-ui";
 
 interface AuthorKPIs {
   totalAuthors: number;
@@ -373,12 +375,15 @@ export default function AuthorsAnalyticsPage() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <AnalyticsKpiCard label="Total authors" value={kpis?.totalAuthors ?? 0} sub="all-time" href="#author-directory" />
-        <AnalyticsKpiCard label="New authors" value={kpis?.newAuthors ?? 0} sub="this window" href="#authorship-trend" />
-        <AnalyticsKpiCard label="Repeat authors" value={kpis?.repeatAuthors ?? 0} sub="2+ proposals" href="#top-authors" />
-        <AnalyticsKpiCard label="Proposals authored" value={kpis?.proposalsAuthored ?? 0} sub={`Top 10 share: ${concentrationTop10Pct.toFixed(1)}%`} href="#author-outcomes" />
-      </div>
+      <AnalyticsKpiStrip
+        columns={4}
+        items={[
+          { label: "Total authors", value: kpis?.totalAuthors ?? 0, sub: "all-time", href: "#author-directory" },
+          { label: "New authors", value: kpis?.newAuthors ?? 0, sub: "this window", href: "#authorship-trend" },
+          { label: "Repeat authors", value: kpis?.repeatAuthors ?? 0, sub: "2+ proposals", href: "#top-authors" },
+          { label: "Proposals authored", value: kpis?.proposalsAuthored ?? 0, sub: `Top 10 share: ${concentrationTop10Pct.toFixed(1)}%`, href: "#author-outcomes" },
+        ]}
+      />
 
       <section className="border-t border-[var(--border)] pt-6">
         <AnalyticsSectionHeader
@@ -401,10 +406,9 @@ export default function AuthorsAnalyticsPage() {
         />
         <div className="relative h-72 w-full">
           <ReactECharts option={cohortTrendOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <span className="font-mono text-xl font-semibold text-[var(--ink)]/10">EIPsInsight.com</span>
-          </div>
+          <ChartWatermark />
         </div>
+        <ChartFooter nextUpdateAt={null} />
       </section>
 
       <div className="grid grid-cols-1 gap-6 border-t border-[var(--border)] pt-6 lg:grid-cols-2">
@@ -426,10 +430,9 @@ export default function AuthorsAnalyticsPage() {
           />
           <div className="relative h-72 w-full">
             <ReactECharts option={repoCompositionOption} style={{ height: "100%", width: "100%" }} opts={{ renderer: "svg" }} notMerge />
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="font-mono text-xl font-semibold text-[var(--ink)]/10">EIPsInsight.com</span>
-            </div>
+            <ChartWatermark />
           </div>
+          <ChartFooter nextUpdateAt={null} />
         </section>
 
         <section>

@@ -20,6 +20,8 @@ import { CHART_SERIES } from "@/lib/chart-colors";
 import { chartTooltip } from "@/lib/chart-theme";
 import { CANONICAL_EIP_EDITORS, ASSOCIATE_EIP_EDITORS } from "@/data/eip-contributor-roles";
 import { TablePager } from "../../_components/analytics-ui";
+import { ChartWatermark } from "@/components/chart-watermark";
+import { ChartFooter } from "@/components/chart-footer";
 import {
   EditorLeaderboardRow,
   RepoDistribution,
@@ -454,18 +456,22 @@ export function EditorsLeaderboardTab({
         {viewMode === "chart" ? (
           <div className="p-4 sm:p-5">
             {sortedRows.length === 0 ? (
-              <div className="py-12 text-center text-xs text-muted-foreground">
+              <div className="py-12 text-center text-xs text-[var(--ink-muted)]">
                 No editors match your search filter.
               </div>
             ) : (
-              <div className="h-[400px] w-full">
-                <ReactECharts
-                  option={leaderboardHeroOption}
-                  style={{ height: "100%", width: "100%" }}
-                  opts={{ renderer: "svg" }}
-                  notMerge
-                />
-              </div>
+              <>
+                <div className="relative h-[400px] w-full">
+                  <ReactECharts
+                    option={leaderboardHeroOption}
+                    style={{ height: "100%", width: "100%" }}
+                    opts={{ renderer: "svg" }}
+                    notMerge
+                  />
+                  <ChartWatermark />
+                </div>
+                <ChartFooter nextUpdateAt={null} />
+              </>
             )}
           </div>
         ) : (
