@@ -49,7 +49,6 @@ import { InlineBrandLoader } from '@/components/inline-brand-loader';
 import { LucidProposalSection } from '@/components/lucid-proposal-section';
 import { SectionHead } from '@/components/ledger/section-head';
 import { LedgerBadge } from '@/components/ledger/badge';
-import { OnThisPage, type RailItem } from '@/components/proposal/on-this-page';
 
 
 interface ProposalData {
@@ -392,6 +391,7 @@ export default function ProposalDetailPage() {
   const [aiSummaryReload, setAiSummaryReload] = useState(0);
   const [showAi, setShowAi] = useState(false);
   const [showFullSpecification, setShowFullSpecification] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'enterprise' | 'lifecycle' | 'resources'>('overview');
   // Enterprise view is URL-driven (?enterprise=1) so the exact view is shareable,
   // and remembered in localStorage so a user who prefers it keeps it across EIPs.
   const ENTERPRISE_STORAGE_KEY = 'eip-enterprise-view';
@@ -704,7 +704,7 @@ export default function ProposalDetailPage() {
     curation && (curation.layman_summary || (curation.benefits?.length ?? 0) > 0 || (curation.tradeoffs?.length ?? 0) > 0)
   );
 
-  const railItems: RailItem[] = [
+  const railItems = [
     { id: 'ai-summary', label: 'AI Summary' },
     { id: 'enterprise-brief', label: 'Enterprise' },
     { id: 'proposal-timeline', label: 'Lifecycle & Upgrades' },
@@ -749,7 +749,10 @@ export default function ProposalDetailPage() {
                     type="button"
                     role="radio"
                     aria-checked={!showEnterpriseView}
-                    onClick={() => setEnterprise(false)}
+                    onClick={() => {
+                      setEnterprise(false);
+                      if (activeTab === 'enterprise') setActiveTab('overview');
+                    }}
                     data-active={!showEnterpriseView ? 'true' : undefined}
                     className="chip h-7 border-transparent bg-transparent px-2.5 text-xs hover:border-transparent cursor-pointer"
                   >
@@ -760,7 +763,10 @@ export default function ProposalDetailPage() {
                     type="button"
                     role="radio"
                     aria-checked={showEnterpriseView}
-                    onClick={() => setEnterprise(true)}
+                    onClick={() => {
+                      setEnterprise(true);
+                      setActiveTab('enterprise');
+                    }}
                     data-active={showEnterpriseView ? 'true' : undefined}
                     className="chip h-7 border-transparent bg-transparent px-2.5 text-xs hover:border-transparent cursor-pointer"
                   >
@@ -930,15 +936,51 @@ export default function ProposalDetailPage() {
         </div>
       </nav>
 
-      {/* ── Two-column editorial body + sticky rail ──────────────── */}
-      <div className="wrap grid gap-x-14 pt-10 lg:grid-cols-[minmax(0,1fr)_14rem] lg:pt-12">
+      {/* ── Body: Desktop tabs + Mobile vertical scroll ─────────── */}
+      <div className="wrap pt-8 lg:pt-10">
+        {/* Desktop Tab Bar */}
+        <div
+          role="tablist"
+          aria-label="Proposal sections"
+          className="mb-8 hidden flex-wrap items-center gap-2 border-b border-[var(--border)] pb-3 lg:flex"
+        >
+          {(
+            [
+              { id: 'overview', label: 'Overview & Spec' },
+              { id: 'enterprise', label: 'Enterprise' },
+              { id: 'lifecycle', label: 'Lifecycle & Governance' },
+              { id: 'resources', label: 'Resources & FAQ' },
+            ] as const
+          ).map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-active={active ? 'true' : undefined}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === 'enterprise') setEnterprise(true);
+                }}
+                className="chip cursor-pointer px-3.5 py-1.5 text-xs font-medium"
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
         <article className="min-w-0 space-y-14">
-          {statusMeaning && (
-            <p className="flex items-start gap-3 border-l-2 border-[var(--brand)] bg-[var(--surface-2)] py-3 pl-4 pr-4 text-sm text-[var(--ink-muted)]">
-              <span className="font-semibold text-[var(--ink)]">{proposal.status}</span>
-              <span>{statusMeaning}</span>
-            </p>
-          )}
+          {/* TAB 1: Overview & Spec (AI Summary + Dependencies + Special Links + Spec) */}
+          <div className={cn(activeTab === 'overview' ? 'block' : 'block lg:hidden', 'space-y-14')}>
+            {statusMeaning && (
+              <p className="flex items-start gap-3 border-l-2 border-[var(--brand)] bg-[var(--surface-2)] py-3 pl-4 pr-4 text-sm text-[var(--ink-muted)]">
+                <span className="font-semibold text-[var(--ink)]">{proposal.status}</span>
+                <span>{statusMeaning}</span>
+              </p>
+            )}
 
           {/* AI Summary & Plain-Language Brief */}
           <section id="ai-summary" className="scroll-mt-24">
@@ -1025,8 +1067,10 @@ export default function ProposalDetailPage() {
               )}
             </div>
           </section>
+          </div>
 
-          {/* Enterprise Assessment */}
+          {/* TAB 2: Enterprise Assessment */}
+          <div className={cn(activeTab === 'enterprise' ? 'block' : 'block lg:hidden', 'space-y-14')}>
           <section id="enterprise-brief" className="scroll-mt-24">
             <SectionHead
               eyebrow="Institutional lens"
@@ -1066,7 +1110,10 @@ export default function ProposalDetailPage() {
               </div>
             )}
           </section>
+          </div>
 
+          {/* TAB 3: Lifecycle & Governance */}
+          <div className={cn(activeTab === 'lifecycle' ? 'block' : 'block lg:hidden', 'space-y-14')}>
           {/* Unified lifecycle, upgrade-stage & PR timeline */}
           <section id="proposal-timeline" className="scroll-mt-24">
             <SectionHead
@@ -1196,7 +1243,10 @@ export default function ProposalDetailPage() {
               </span>
             </Link>
           )}
+          </div>
 
+          {/* TAB 4: Resources & FAQ */}
+          <div className={cn(activeTab === 'resources' ? 'block' : 'block lg:hidden', 'space-y-14')}>
             {/* FAQ (curated Q&A) */}
             {curation?.faq && curation.faq.length > 0 && (
               <section id="faq" className="scroll-mt-24">
@@ -1442,8 +1492,10 @@ export default function ProposalDetailPage() {
                 </div>
               </div>
             </section>
+          </div>
 
-            {/* Full Specification — Abstract shown, rest expandable */}
+            {/* Full Specification — Abstract shown, rest expandable (shown in Overview & Spec tab on desktop) */}
+            <div className={cn(activeTab === 'overview' ? 'block' : 'block lg:hidden', 'space-y-14')}>
             <section id="proposal-text" className="scroll-mt-24">
               <SectionHead
                 eyebrow="Source text"
@@ -1535,8 +1587,10 @@ export default function ProposalDetailPage() {
                 </div>
               ) : null}
             </section>
+            </div>
 
             {/* Email updates */}
+            <div className={cn(activeTab === 'resources' ? 'block' : 'block lg:hidden', 'space-y-14')}>
             <section id="proposal-subscription" className="scroll-mt-24">
               <SectionHead
                 eyebrow="Notifications"
@@ -1554,15 +1608,8 @@ export default function ProposalDetailPage() {
                 />
               </div>
             </section>
-          </article>
-
-          {/* ── Rail: on this page ──────────────────────────────── */}
-          <aside className="hidden lg:block">
-            <div className="sticky top-[calc(var(--header-h,3.75rem)+2rem)]">
-              <p className="eyebrow">On this page</p>
-              <OnThisPage items={railItems} />
             </div>
-          </aside>
+          </article>
         </div>
       </div>
   );

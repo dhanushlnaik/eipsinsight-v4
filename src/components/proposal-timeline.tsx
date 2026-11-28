@@ -213,10 +213,10 @@ export function ProposalTimeline({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.1 }}
-      className="scroll-mt-28 overflow-hidden rounded-xl border border-border bg-card/60"
+      className="scroll-mt-28 overflow-hidden rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)]"
     >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/30 px-5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface-2)] px-5 py-3">
         <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 text-primary" />
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lifecycle &amp; Upgrade Timeline</h3>

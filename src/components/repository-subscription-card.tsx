@@ -121,7 +121,7 @@ export function RepositorySubscriptionCard({ repo }: RepositorySubscriptionCardP
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card/60 p-4 shadow-sm">
+    <div className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">

@@ -159,7 +159,7 @@ export function ProposalSubscriptionCard({
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card/70 p-5 shadow-sm backdrop-blur-sm">
+    <div className="rounded-[var(--l-radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0 space-y-1.5">
           <div className="flex items-center gap-2.5">
