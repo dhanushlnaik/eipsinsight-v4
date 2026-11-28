@@ -623,29 +623,6 @@ export const proposalsProcedures = {
         review_velocity: null as number | null,
       };
 
-      // Find the most recent PR linked to this proposal number
-      const linkedPRs = await prisma.pull_request_eips.findMany({
-        where: { eip_number: input.number },
-        orderBy: { pr_number: 'desc' },
-        take: 1,
-        select: {
-          pr_number: true,
-          repository_id: true,
-        },
-      });
-
-      if (!linkedPRs.length) return emptyState;
-
-      const { pr_number, repository_id } = linkedPRs[0];
-
-      // Fetch the actual PR data
-      const pr = await prisma.pull_requests.findFirst({
-        where: { pr_number, repository_id },
-        select: { state: true, updated_at: true, pr_number: true, repository_id: true },
-      });
-
-      if (!pr) return emptyState;
-
       const repoPathMap: Record<string, string> = {
         eip: 'EIPs',
         erc: 'ERCs',
@@ -655,9 +632,58 @@ export const proposalsProcedures = {
         rips: 'RIPs',
       };
       const repoPath = repoPathMap[input.repo] || 'EIPs';
-      const pr_url = `https://github.com/ethereum/${repoPath}/pull/${pr.pr_number}`;
+      const repoFullName = `ethereum/${repoPath}`;
+      const repoRecord = await prisma.repositories.findFirst({
+        where: { name: { equals: repoFullName, mode: 'insensitive' } },
+        select: { id: true },
+      });
 
-      // Fetch governance state
+      // Find PRs linked to this proposal number (prefer matching repo, prefer open PR)
+      const linkedPRs = await prisma.pull_request_eips.findMany({
+        where: {
+          eip_number: input.number,
+          ...(repoRecord ? { repository_id: repoRecord.id } : {}),
+        },
+        orderBy: { pr_number: 'desc' },
+        take: 15,
+        select: {
+          pr_number: true,
+          repository_id: true,
+        },
+      });
+
+      if (!linkedPRs.length) return emptyState;
+
+      const prs = await prisma.pull_requests.findMany({
+        where: {
+          OR: linkedPRs.map((l) => ({ pr_number: l.pr_number, repository_id: l.repository_id })),
+        },
+        orderBy: { updated_at: 'desc' },
+        select: { state: true, merged_at: true, updated_at: true, pr_number: true, repository_id: true },
+      });
+
+      const pr = prs.find((p) => p.state === 'open') ?? prs[0];
+      if (!pr) return emptyState;
+
+      const pr_url = `https://github.com/ethereum/${repoPath}/pull/${pr.pr_number}`;
+      const isClosedOrMerged = pr.state !== 'open' || pr.merged_at != null;
+      const effectiveState = pr.merged_at ? 'merged' : pr.state || null;
+
+      // If the PR is already merged or closed, it is NOT waiting on anyone
+      if (isClosedOrMerged) {
+        return {
+          pr_number: pr.pr_number,
+          pr_url,
+          current_pr_state: effectiveState,
+          waiting_on: null,
+          days_since_last_action: pr.updated_at
+            ? Math.floor((Date.now() - new Date(pr.updated_at).getTime()) / (1000 * 60 * 60 * 24))
+            : null,
+          review_velocity: null,
+        };
+      }
+
+      // Fetch governance state for open PRs
       const governanceState = pr.repository_id
         ? await prisma.pr_governance_state.findUnique({
             where: {
@@ -673,7 +699,7 @@ export const proposalsProcedures = {
         return {
           pr_number: pr.pr_number,
           pr_url,
-          current_pr_state: pr.state || null,
+          current_pr_state: effectiveState,
           waiting_on: null,
           days_since_last_action: pr.updated_at
             ? Math.floor((Date.now() - new Date(pr.updated_at).getTime()) / (1000 * 60 * 60 * 24))
@@ -685,12 +711,104 @@ export const proposalsProcedures = {
       return {
         pr_number: pr.pr_number,
         pr_url,
-        current_pr_state: pr.state || null,
+        current_pr_state: effectiveState,
         waiting_on: governanceState.current_state || null,
         days_since_last_action: governanceState.waiting_since
           ? Math.floor((Date.now() - new Date(governanceState.waiting_since).getTime()) / (1000 * 60 * 60 * 24))
           : null,
         review_velocity: null,
       };
+    }),
+
+  getProposalExtras: optionalAuthProcedure
+    .input(z.object({
+      number: z.number(),
+    }))
+    .handler(async ({ input }) => {
+      const { number } = input;
+      try {
+        const [requiredByRows, prRows, meetingRows] = await Promise.all([
+          prisma.$queryRawUnsafe<Array<{ number: number; title: string; kind: string }>>(
+            `SELECT DISTINCT ON (e.id) e.eip_number AS number, e.title,
+               CASE lower(split_part(r.name, '/', 2))
+                 WHEN 'ercs' THEN 'erc' WHEN 'rips' THEN 'rip' ELSE 'eip' END AS kind
+             FROM eip_snapshots s
+             JOIN eips e ON e.id = s.eip_id
+             JOIN repositories r ON r.id = s.repository_id
+             WHERE s.requires @> ARRAY[$1]::int[]
+             ORDER BY e.id DESC
+             LIMIT 24`,
+            number,
+          ).catch(() => []),
+          prisma.$queryRawUnsafe<Array<{
+            pr_number: number;
+            title: string;
+            state: string;
+            merged_at: Date | null;
+            author: string | null;
+            updated_at: Date;
+            repo: string;
+          }>>(
+            `SELECT pr.pr_number, pr.title, pr.state, pr.merged_at, pr.author, pr.updated_at, r.name AS repo
+             FROM pull_request_eips pe
+             JOIN pull_requests pr ON pr.pr_number = pe.pr_number AND pr.repository_id = pe.repository_id
+             JOIN repositories r ON r.id = pr.repository_id
+             WHERE pe.eip_number = $1
+             ORDER BY pr.updated_at DESC
+             LIMIT 60`,
+            number,
+          ).catch(() => []),
+          prisma.$queryRawUnsafe<Array<{
+            title: string;
+            occurs_on: Date | null;
+            issue_url: string;
+            source_url: string | null;
+            snippet: string | null;
+            mentioned_by: string | null;
+          }>>(
+            `SELECT DISTINCT ON (pa.issue_number)
+               pa.issue_title AS title, pa.occurs_on, pa.issue_url, pa.source_url, pa.snippet, pa.mentioned_by
+             FROM pm_agenda_eips pa
+             WHERE pa.eip_number = $1 AND pa.issue_url IS NOT NULL
+             ORDER BY pa.issue_number, pa.occurs_on DESC NULLS LAST`,
+            number,
+          ).catch(() => []),
+        ]);
+
+        const editsRe = new RegExp(`\\b(?:eip|erc|rip)[-\\s]?${number}\\b`, 'i');
+        const editorialPRs = prRows.map((r) => ({
+          pr_number: Number(r.pr_number),
+          repo: r.repo,
+          title: r.title,
+          state: r.state,
+          merged: r.merged_at != null,
+          author: r.author,
+          updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : '',
+          edits: editsRe.test(r.title ?? ''),
+        }));
+
+        const meetings = meetingRows
+          .map((r) => ({
+            title: r.title,
+            date: r.occurs_on ? new Date(r.occurs_on).toISOString() : null,
+            url: r.source_url || r.issue_url,
+            snippet: r.snippet,
+            mentionedBy: r.mentioned_by,
+          }))
+          .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+          .slice(0, 6);
+
+        return {
+          requiredBy: requiredByRows.map((r) => ({
+            kind: r.kind,
+            number: Number(r.number),
+            title: r.title,
+          })),
+          editorialPRs,
+          meetings,
+        };
+      } catch {
+        return { requiredBy: [], editorialPRs: [], meetings: [] };
+      }
     }),
 }

@@ -49,6 +49,10 @@ import { InlineBrandLoader } from '@/components/inline-brand-loader';
 import { LucidProposalSection } from '@/components/lucid-proposal-section';
 import { SectionHead } from '@/components/ledger/section-head';
 import { LedgerBadge } from '@/components/ledger/badge';
+import { OnThisPage, type RailItem } from '@/components/proposal/on-this-page';
+import { DependencyGraph, type DepNode } from '@/components/proposal/dependency-graph';
+import { EditorialPRs, type EditorialPRItem } from '@/components/proposal/editorial-prs';
+import { Stakeholders } from '@/components/proposal/stakeholders';
 
 
 interface ProposalData {
@@ -391,11 +395,16 @@ export default function ProposalDetailPage() {
   const [aiSummaryReload, setAiSummaryReload] = useState(0);
   const [showAi, setShowAi] = useState(false);
   const [showFullSpecification, setShowFullSpecification] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'enterprise' | 'lifecycle' | 'resources'>('overview');
+  const [requiredBy, setRequiredBy] = useState<DepNode[]>([]);
+  const [editorialPRs, setEditorialPRs] = useState<EditorialPRItem[]>([]);
+  const [meetings, setMeetings] = useState<Array<{ title: string; date: string | null; url: string; snippet: string | null; mentionedBy: string | null }>>([]);
   // Enterprise view is URL-driven (?enterprise=1) so the exact view is shareable,
   // and remembered in localStorage so a user who prefers it keeps it across EIPs.
   const ENTERPRISE_STORAGE_KEY = 'eip-enterprise-view';
   const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'overview' | 'spec' | 'enterprise'>(() =>
+    searchParams.get('enterprise') === '1' ? 'enterprise' : 'overview'
+  );
   const [showEnterpriseView, setShowEnterpriseView] = useState(() => {
     if (searchParams.get('enterprise') === '1') return true;
     if (typeof window !== 'undefined') {
@@ -449,7 +458,7 @@ export default function ProposalDetailPage() {
         setLoading(true);
         setError(null);
 
-        const [proposalData, statusData, stageData, governanceData, upgradesData, curationData] = await Promise.all([
+        const [proposalData, statusData, stageData, governanceData, upgradesData, curationData, extrasData] = await Promise.all([
           client.proposals.getProposal({ repo: proposalRepo, number }),
           client.proposals.getStatusEvents({ repo: proposalRepo, number }),
           // Historical stage journey (PFI → CFI → SFI, declines, re-proposals).
@@ -459,6 +468,7 @@ export default function ProposalDetailPage() {
           // Curated per-EIP stakeholder impacts (editable in admin) ground the
           // Enterprise view instead of keyword-guessing from the title.
           client.curations.getEipCurations({ eipNumbers: [Number(number)] }).catch(() => []),
+          client.proposals.getProposalExtras({ number }).catch(() => ({ requiredBy: [], editorialPRs: [], meetings: [] })),
         ]);
 
         setProposal(proposalData);
@@ -466,6 +476,9 @@ export default function ProposalDetailPage() {
         setStageEvents(stageData);
         setGovernanceState(governanceData);
         setCuration(curationData?.[0] ?? null);
+        setRequiredBy(extrasData?.requiredBy ?? []);
+        setEditorialPRs(extrasData?.editorialPRs ?? []);
+        setMeetings(extrasData?.meetings ?? []);
         const historical = getHistoricalIncludedUpgrades(number);
         const mergedBySlug = new Map<string, UpgradeInclusion>();
         upgradesData.forEach((entry) => mergedBySlug.set(entry.slug || entry.name.toLowerCase(), entry));
@@ -704,17 +717,46 @@ export default function ProposalDetailPage() {
     curation && (curation.layman_summary || (curation.benefits?.length ?? 0) > 0 || (curation.tradeoffs?.length ?? 0) > 0)
   );
 
-  const railItems = [
+  const hasStakeholders = Boolean(
+    curation?.stakeholder_impacts &&
+      Object.values(curation.stakeholder_impacts).some((v) => Boolean(v?.description?.trim()))
+  );
+  const specHeadings = markdownContent
+    ? extractHeadingsFromMarkdown(markdownContent).filter((h) => h.level === 2)
+    : [];
+
+  const overviewRailItems: RailItem[] = [
     { id: 'ai-summary', label: 'AI Summary' },
-    { id: 'enterprise-brief', label: 'Enterprise' },
     { id: 'proposal-timeline', label: 'Lifecycle & Upgrades' },
-    ...(governanceState ? [{ id: 'governance', label: 'Governance' }] : []),
-    ...(proposalRequires.length > 0 ? [{ id: 'dependencies', label: 'Dependencies' }] : []),
+    ...(governanceState || editorialPRs.length > 0 || meetings.length > 0
+      ? [{ id: 'governance', label: 'Governance & Edits' }]
+      : []),
+    ...(proposalRequires.length > 0 || requiredBy.length > 0
+      ? [{ id: 'dependencies', label: 'Dependencies' }]
+      : []),
+    ...(hasStakeholders ? [{ id: 'impact', label: 'Who it affects' }] : []),
     ...(curation?.faq && curation.faq.length > 0 ? [{ id: 'faq', label: 'FAQ' }] : []),
     { id: 'resources', label: 'Resources' },
-    { id: 'proposal-text', label: 'Specification' },
-    { id: 'proposal-subscription', label: 'Subscriptions' },
+    { id: 'proposal-subscription', label: 'Stay Updated' },
   ];
+
+  const specRailItems: RailItem[] = [
+    { id: 'proposal-text', label: 'Specification' },
+    ...specHeadings.map((h) => ({ id: h.id, label: h.text, sub: true })),
+  ];
+
+  const mobileRailItems: RailItem[] = [
+    ...overviewRailItems,
+    { id: 'proposal-text', label: 'Specification' },
+    { id: 'enterprise-brief', label: 'Enterprise Assessment' },
+  ];
+
+  const activeRailItems: RailItem[] =
+    activeTab === 'spec'
+      ? specRailItems
+      : activeTab === 'enterprise'
+        ? [{ id: 'enterprise-brief', label: 'Enterprise Assessment' }]
+        : overviewRailItems;
 
   return (
     <div data-ledger className="min-h-screen bg-[var(--paper)] text-[var(--ink)] pb-16">
@@ -730,51 +772,13 @@ export default function ProposalDetailPage() {
             </span>
 
             <div className="relative">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <nav className="flex items-center gap-1.5 font-mono text-xs text-[var(--ink-faint)]" aria-label="Breadcrumb">
-                  <Link href="/" className="transition-colors hover:text-[var(--ink)]">Home</Link>
-                  <ChevronRight className="h-3 w-3" />
-                  <Link href="/explore" className="transition-colors hover:text-[var(--ink)]">Proposals</Link>
-                  <ChevronRight className="h-3 w-3" />
-                  <span className="text-[var(--ink-muted)]">{proposalId}</span>
-                </nav>
-
-                {/* Community / Enterprise view toggle */}
-                <div
-                  role="radiogroup"
-                  aria-label="View mode"
-                  className="inline-flex items-center gap-1 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface)] p-0.5 text-xs"
-                >
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={!showEnterpriseView}
-                    onClick={() => {
-                      setEnterprise(false);
-                      if (activeTab === 'enterprise') setActiveTab('overview');
-                    }}
-                    data-active={!showEnterpriseView ? 'true' : undefined}
-                    className="chip h-7 border-transparent bg-transparent px-2.5 text-xs hover:border-transparent cursor-pointer"
-                  >
-                    <Users className="h-3.5 w-3.5" />
-                    <span>Community</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={showEnterpriseView}
-                    onClick={() => {
-                      setEnterprise(true);
-                      setActiveTab('enterprise');
-                    }}
-                    data-active={showEnterpriseView ? 'true' : undefined}
-                    className="chip h-7 border-transparent bg-transparent px-2.5 text-xs hover:border-transparent cursor-pointer"
-                  >
-                    <Building2 className="h-3.5 w-3.5" />
-                    <span>Enterprise</span>
-                  </button>
-                </div>
-              </div>
+              <nav className="flex items-center gap-1.5 font-mono text-xs text-[var(--ink-faint)]" aria-label="Breadcrumb">
+                <Link href="/" className="transition-colors hover:text-[var(--ink)]">Home</Link>
+                <ChevronRight className="h-3 w-3" />
+                <Link href="/explore" className="transition-colors hover:text-[var(--ink)]">Proposals</Link>
+                <ChevronRight className="h-3 w-3" />
+                <span className="text-[var(--ink-muted)]">{proposalId}</span>
+              </nav>
 
               <div className="mt-6 flex flex-wrap items-center gap-2">
                 <LedgerBadge token={proposal.status}>{proposal.status}</LedgerBadge>
@@ -928,7 +932,7 @@ export default function ProposalDetailPage() {
       {/* ── Phone: section jump bar ─────────────────────────────── */}
       <nav className="sticky top-[var(--header-h)] z-30 border-b border-[var(--border)] bg-[var(--paper)] lg:hidden" aria-label="On this page">
         <div className="wrap no-scrollbar flex gap-2 overflow-x-auto py-2.5">
-          {railItems.map((n) => (
+          {mobileRailItems.map((n) => (
             <a key={n.id} href={`#${n.id}`} className="chip shrink-0">
               {n.label}
             </a>
@@ -936,20 +940,19 @@ export default function ProposalDetailPage() {
         </div>
       </nav>
 
-      {/* ── Body: Desktop tabs + Mobile vertical scroll ─────────── */}
+      {/* ── Body: Desktop tabs + OnThisPage rail | Mobile vertical scroll ── */}
       <div className="wrap pt-8 lg:pt-10">
-        {/* Desktop Tab Bar */}
+        {/* Desktop 3-Tab Bar */}
         <div
           role="tablist"
-          aria-label="Proposal sections"
+          aria-label="Proposal views"
           className="mb-8 hidden flex-wrap items-center gap-2 border-b border-[var(--border)] pb-3 lg:flex"
         >
           {(
             [
-              { id: 'overview', label: 'Overview & Spec' },
-              { id: 'enterprise', label: 'Enterprise' },
-              { id: 'lifecycle', label: 'Lifecycle & Governance' },
-              { id: 'resources', label: 'Resources & FAQ' },
+              { id: 'overview', label: 'Overview' },
+              { id: 'spec', label: 'Specification' },
+              { id: 'enterprise', label: 'Enterprise Assessment' },
             ] as const
           ).map((tab) => {
             const active = activeTab === tab.id;
@@ -964,7 +967,7 @@ export default function ProposalDetailPage() {
                   setActiveTab(tab.id);
                   if (tab.id === 'enterprise') setEnterprise(true);
                 }}
-                className="chip cursor-pointer px-3.5 py-1.5 text-xs font-medium"
+                className="chip cursor-pointer px-4 py-1.5 text-xs font-medium"
               >
                 {tab.label}
               </button>
@@ -972,8 +975,9 @@ export default function ProposalDetailPage() {
           })}
         </div>
 
+        <div className="grid gap-x-14 lg:grid-cols-[minmax(0,1fr)_14rem]">
         <article className="min-w-0 space-y-14">
-          {/* TAB 1: Overview & Spec (AI Summary + Dependencies + Special Links + Spec) */}
+          {/* TAB 1: Overview (AI Summary, Lifecycle, Governance & Edits, Dependencies, Stakeholders, FAQ, Resources, Subscriptions) */}
           <div className={cn(activeTab === 'overview' ? 'block' : 'block lg:hidden', 'space-y-14')}>
             {statusMeaning && (
               <p className="flex items-start gap-3 border-l-2 border-[var(--brand)] bg-[var(--surface-2)] py-3 pl-4 pr-4 text-sm text-[var(--ink-muted)]">
@@ -1067,53 +1071,7 @@ export default function ProposalDetailPage() {
               )}
             </div>
           </section>
-          </div>
 
-          {/* TAB 2: Enterprise Assessment */}
-          <div className={cn(activeTab === 'enterprise' ? 'block' : 'block lg:hidden', 'space-y-14')}>
-          <section id="enterprise-brief" className="scroll-mt-24">
-            <SectionHead
-              eyebrow="Institutional lens"
-              title="Enterprise Assessment"
-              description={`Client readiness, technical complexity, and operational risk for ${proposalId}.`}
-            />
-            {showEnterpriseView ? (
-              <EnterpriseEIPBrief
-                proposal={proposal}
-                upgrades={upgrades}
-                statusEvents={statusEvents}
-                governanceState={governanceState}
-                proposalRequires={proposalRequires}
-                curation={curation}
-              />
-            ) : (
-              <div className="card flex flex-wrap items-center justify-between gap-4 p-5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--brand-strong)]">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-[var(--ink)]">Enterprise Brief</h3>
-                    <p className="text-xs text-[var(--ink-muted)]">
-                      Inspect node client readiness, institutional stakeholder impact, and risk metrics.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEnterprise(true)}
-                  className="btn cursor-pointer bg-[var(--brand)] px-4 py-2 text-xs font-semibold text-[var(--brand-ink)] hover:opacity-90"
-                >
-                  <Building2 className="h-3.5 w-3.5" />
-                  <span>View Enterprise Brief</span>
-                </button>
-              </div>
-            )}
-          </section>
-          </div>
-
-          {/* TAB 3: Lifecycle & Governance */}
-          <div className={cn(activeTab === 'lifecycle' ? 'block' : 'block lg:hidden', 'space-y-14')}>
           {/* Unified lifecycle, upgrade-stage & PR timeline */}
           <section id="proposal-timeline" className="scroll-mt-24">
             <SectionHead
@@ -1132,70 +1090,118 @@ export default function ProposalDetailPage() {
             />
           </section>
 
-          {/* Governance state */}
-          {governanceState && (
-            <section id="governance" className="scroll-mt-24">
+          {/* Governance, Calls & Editorial PRs */}
+          {(governanceState || meetings.length > 0 || editorialPRs.length > 0) && (
+            <section id="governance" className="scroll-mt-24 space-y-8">
               <SectionHead
-                eyebrow="Editorial state"
-                title="Governance"
-                description="Current pull request queue state and editorial review velocity."
+                eyebrow="Editorial and governance"
+                title="Discussion and Edits"
+                description="Current pull request queue state, core developer calls, and editorial pull requests."
               />
-              <dl className="grid grid-cols-2 divide-y divide-[var(--border)] border-y border-[var(--border)] bg-[var(--surface)] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
-                <div className="px-4 py-4">
-                  <dt className="eyebrow">Active PR</dt>
-                  <dd className="mt-1.5 font-mono text-sm text-[var(--ink)]">
-                    {governanceState.pr_number ? (
-                      <Link href={`/pr/${normalizedRepo}/${governanceState.pr_number}`} className="text-[var(--brand-strong)] hover:underline">
-                        PR #{governanceState.pr_number}
-                      </Link>
-                    ) : 'None'}
-                  </dd>
+              {governanceState && (
+                <dl className="grid grid-cols-2 divide-y divide-[var(--border)] border-y border-[var(--border)] bg-[var(--surface)] sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+                  <div className="px-4 py-4">
+                    <dt className="eyebrow">Active PR</dt>
+                    <dd className="mt-1.5 font-mono text-sm text-[var(--ink)]">
+                      {governanceState.pr_number ? (
+                        <Link href={`/pr/${normalizedRepo}/${governanceState.pr_number}`} className="text-[var(--brand-strong)] hover:underline">
+                          PR #{governanceState.pr_number}
+                        </Link>
+                      ) : 'None'}
+                    </dd>
+                  </div>
+                  <div className="px-4 py-4">
+                    <dt className="eyebrow">PR State</dt>
+                    <dd className="mt-1.5 text-sm capitalize text-[var(--ink)]">
+                      {governanceState.current_pr_state || '–'}
+                    </dd>
+                  </div>
+                  <div className="px-4 py-4">
+                    <dt className="eyebrow">Waiting On</dt>
+                    <dd className="mt-1.5 text-sm capitalize text-[var(--ink)]">
+                      {governanceState.waiting_on ? governanceState.waiting_on.replace(/_/g, ' ') : 'None'}
+                    </dd>
+                  </div>
+                  <div className="px-4 py-4">
+                    <dt className="eyebrow">Days Since Action</dt>
+                    <dd className="mt-1.5 font-mono text-sm tabular-nums text-[var(--ink)]">
+                      {governanceState.days_since_last_action != null ? `${governanceState.days_since_last_action}d` : '–'}
+                    </dd>
+                  </div>
+                </dl>
+              )}
+
+              {meetings.length > 0 && (
+                <div>
+                  <h3 className="eyebrow mb-3">Discussed in calls</h3>
+                  <ul className="card divide-y divide-[var(--border)] overflow-hidden">
+                    {meetings.map((m, i) => (
+                      <li key={i}>
+                        <a
+                          href={m.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-[var(--surface-2)]"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-[var(--ink)]">{m.title}</span>
+                            {m.snippet && (
+                              <span className="mt-1.5 line-clamp-2 block border-l-2 border-[var(--border-strong)] pl-3 text-xs italic leading-relaxed text-[var(--ink-muted)]">
+                                &ldquo;{m.snippet.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim()}&rdquo;
+                              </span>
+                            )}
+                            <span className="mt-1.5 block font-mono text-[11px] text-[var(--ink-faint)]">
+                              {m.mentionedBy ? `${m.mentionedBy} · ` : ''}{formatShortDate(m.date)}
+                            </span>
+                          </span>
+                          <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0 text-[var(--ink-faint)] transition-colors group-hover:text-[var(--ink)]" />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="px-4 py-4">
-                  <dt className="eyebrow">PR State</dt>
-                  <dd className="mt-1.5 text-sm capitalize text-[var(--ink)]">
-                    {governanceState.current_pr_state || '–'}
-                  </dd>
+              )}
+
+              {editorialPRs.length > 0 && (
+                <div>
+                  <h3 className="eyebrow mb-3">Pull requests</h3>
+                  <EditorialPRs
+                    prs={editorialPRs}
+                    repo={`ethereum/${repoPath}`}
+                    isFinal={proposal.status?.toLowerCase() === 'final'}
+                  />
                 </div>
-                <div className="px-4 py-4">
-                  <dt className="eyebrow">Waiting On</dt>
-                  <dd className="mt-1.5 text-sm capitalize text-[var(--ink)]">
-                    {governanceState.waiting_on ? governanceState.waiting_on.replace(/_/g, ' ') : '–'}
-                  </dd>
-                </div>
-                <div className="px-4 py-4">
-                  <dt className="eyebrow">Days Since Action</dt>
-                  <dd className="mt-1.5 font-mono text-sm tabular-nums text-[var(--ink)]">
-                    {governanceState.days_since_last_action != null ? `${governanceState.days_since_last_action}d` : '–'}
-                  </dd>
-                </div>
-              </dl>
+              )}
             </section>
           )}
 
-          {/* Dependencies */}
-          {proposalRequires.length > 0 && (
+          {/* Dependencies (SVG Fan Graph) */}
+          {(proposalRequires.length > 0 || requiredBy.length > 0) && (
             <section id="dependencies" className="scroll-mt-24">
               <SectionHead
                 eyebrow="Relationships"
                 title="Dependencies"
-                description={`Proposals required by ${proposalId}.`}
+                description={`Builds on ${proposalRequires.length} and is depended on by ${requiredBy.length}. Select any proposal to open it.`}
               />
-              <div className="card p-5">
-                <p className="eyebrow mb-3">Requires</p>
-                <div className="flex flex-wrap gap-2">
-                  {proposalRequires.map((r) => (
-                    <Link
-                      key={r}
-                      href={`/${repo}/${r}`}
-                      className="inline-flex items-center gap-1.5 rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 font-mono text-xs font-medium text-[var(--ink)] transition-colors hover:border-[var(--ink)]"
-                    >
-                      <Link2 className="h-3 w-3 text-[var(--brand-strong)]" />
-                      {repoDisplayName}-{r}
-                    </Link>
-                  ))}
-                </div>
+              <div className="card p-4 sm:p-5">
+                <DependencyGraph
+                  label={proposalId}
+                  requires={proposalRequires.map((r) => ({ kind: normalizedRepo, number: r }))}
+                  requiredBy={requiredBy}
+                />
               </div>
+            </section>
+          )}
+
+          {/* Who it affects (Stakeholders) */}
+          {hasStakeholders && curation?.stakeholder_impacts && (
+            <section id="impact" className="scroll-mt-24">
+              <SectionHead
+                eyebrow="Impact"
+                title="Who It Affects"
+                description="How this proposal lands for the people who build on, run, and rely on Ethereum."
+              />
+              <Stakeholders impacts={curation.stakeholder_impacts} />
             </section>
           )}
 
@@ -1243,10 +1249,7 @@ export default function ProposalDetailPage() {
               </span>
             </Link>
           )}
-          </div>
 
-          {/* TAB 4: Resources & FAQ */}
-          <div className={cn(activeTab === 'resources' ? 'block' : 'block lg:hidden', 'space-y-14')}>
             {/* FAQ (curated Q&A) */}
             {curation?.faq && curation.faq.length > 0 && (
               <section id="faq" className="scroll-mt-24">
@@ -1492,10 +1495,29 @@ export default function ProposalDetailPage() {
                 </div>
               </div>
             </section>
+
+            {/* Email updates */}
+            <section id="proposal-subscription" className="scroll-mt-24">
+              <SectionHead
+                eyebrow="Notifications"
+                title="Stay Updated"
+                description="Subscribe to status changes for this proposal or repository."
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <ProposalSubscriptionCard
+                  repo={normalizedRepo as 'eip' | 'erc' | 'rip'}
+                  number={number}
+                  currentStatus={proposal.status}
+                />
+                <RepositorySubscriptionCard
+                  repo={normalizedRepo as 'eip' | 'erc' | 'rip'}
+                />
+              </div>
+            </section>
           </div>
 
-            {/* Full Specification — Abstract shown, rest expandable (shown in Overview & Spec tab on desktop) */}
-            <div className={cn(activeTab === 'overview' ? 'block' : 'block lg:hidden', 'space-y-14')}>
+          {/* TAB 2: Specification (full markdown on desktop, collapsible after Abstract on mobile) */}
+          <div className={cn(activeTab === 'spec' ? 'block' : 'block lg:hidden', 'space-y-14')}>
             <section id="proposal-text" className="scroll-mt-24">
               <SectionHead
                 eyebrow="Source text"
@@ -1587,29 +1609,36 @@ export default function ProposalDetailPage() {
                 </div>
               ) : null}
             </section>
-            </div>
+          </div>
 
-            {/* Email updates */}
-            <div className={cn(activeTab === 'resources' ? 'block' : 'block lg:hidden', 'space-y-14')}>
-            <section id="proposal-subscription" className="scroll-mt-24">
+          {/* TAB 3: Enterprise Assessment */}
+          <div className={cn(activeTab === 'enterprise' ? 'block' : 'block lg:hidden', 'space-y-14')}>
+            <section id="enterprise-brief" className="scroll-mt-24">
               <SectionHead
-                eyebrow="Notifications"
-                title="Stay Updated"
-                description="Subscribe to status changes for this proposal or repository."
+                eyebrow="Institutional lens"
+                title="Enterprise Assessment"
+                description={`Client readiness, technical complexity, and operational risk for ${proposalId}.`}
               />
-              <div className="grid gap-4 md:grid-cols-2">
-                <ProposalSubscriptionCard
-                  repo={normalizedRepo as 'eip' | 'erc' | 'rip'}
-                  number={number}
-                  currentStatus={proposal.status}
-                />
-                <RepositorySubscriptionCard
-                  repo={normalizedRepo as 'eip' | 'erc' | 'rip'}
-                />
-              </div>
+              <EnterpriseEIPBrief
+                proposal={proposal}
+                upgrades={upgrades}
+                statusEvents={statusEvents}
+                governanceState={governanceState}
+                proposalRequires={proposalRequires}
+                curation={curation}
+              />
             </section>
-            </div>
+          </div>
           </article>
+
+          {/* ── Rail: on this page ──────────────────────────────── */}
+          <aside className="hidden lg:block">
+            <div className="sticky top-[calc(var(--header-h,3.75rem)+2rem)]">
+              <p className="eyebrow">On this page</p>
+              <OnThisPage items={activeRailItems} />
+            </div>
+          </aside>
+        </div>
         </div>
       </div>
   );
