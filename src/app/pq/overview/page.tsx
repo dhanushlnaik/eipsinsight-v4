@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, ShieldAlert, Video, Boxes, CircleDot, GitFork, Link2Off, KeyRound, Layers, Map, BookOpen, Gauge } from 'lucide-react';
-import { PQ_PIPELINE, PQ_PIPELINE_PHASES, pqSummary, PQ_EIPS, PQ_LAYERS, pqReadinessStage } from '@/data/pq-registry';
+import { PQ_PIPELINE, PQ_PIPELINE_PHASES, pqSummary, PQ_EIPS, PQ_LAYERS, pqReadinessStage, PQ_OPEN_DECISIONS } from '@/data/pq-registry';
 import { CopyLinkButton } from '@/components/header';
 
 export const revalidate = 300;
@@ -104,6 +104,37 @@ export default function PqOverviewPage() {
               <Link href="/pq/gaps" className="font-medium text-primary hover:underline">Gaps &amp; Blockers</Link>.
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* Open decisions pointer: the architectural forks the devnets are deciding. */}
+      <section id="pq-open-decisions" className="scroll-mt-20 rounded-xl border border-border bg-card/60 p-5">
+        <div className="flex items-center gap-2">
+          <GitFork className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-bold tracking-tight text-foreground">The open decisions</h2>
+          <CopyLinkButton sectionId="pq-open-decisions" className="h-6 w-6" />
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+          Beyond EIP status, the PQ effort turns on a few architectural forks being actively decided in devnets and
+          breakouts. Full detail, options, and evidence on the <Link href="/pq/roadmap#pq-decisions" className="font-medium text-primary hover:underline">roadmap</Link>.
+        </p>
+        <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+          {PQ_OPEN_DECISIONS.map((d) => (
+            <Link
+              key={d.id}
+              href="/pq/roadmap#pq-decisions"
+              className="group rounded-lg border border-border bg-background/50 p-3 transition-colors hover:border-primary/40 hover:bg-primary/[0.04]"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {d.layer}
+                </span>
+                <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground/40 transition-colors group-hover:text-primary" />
+              </div>
+              <p className="mt-2 text-sm font-semibold leading-snug text-foreground">{d.title}</p>
+              <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">{d.question}</p>
+            </Link>
+          ))}
         </div>
       </section>
 

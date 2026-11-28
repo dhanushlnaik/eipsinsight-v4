@@ -574,6 +574,38 @@ export const PQ_SCHEMES: PqScheme[] = [
   { name: 'Falcon-512', family: 'Lattice-based', use: 'Transaction signatures', paramSet: 'Falcon-512', pubKeyBytes: 897, sigBytes: 666, note: 'The most compact PQ signatures, but tricky constant-time implementation. Precompiles proposed in EIP-7619 / 8052.' },
 ];
 
+// ── Signature throughput: what size and aggregation mean for PQ tx/s ──────────
+// Network-SIMULATION output, not devnet measurement: a netsim of EIP-8141 /
+// EIP-8288 across 100-200 nodes at a 200M gas limit, modelling how PQ signature
+// size and in-mempool aggregation bound transaction throughput. Shared by Nico
+// Consigny on top of Csaba Kiraly's network sim. Mainnet today (~23 tx/s) is
+// shown for scale. Illustrative: parameter sets and per-signature pricing are
+// still in flux, so treat the numbers as order-of-magnitude.
+
+export interface PqThroughputRow {
+  scenario: string;
+  detail: string;
+  /** Modelled PQ transactions per second at the stated gas limit. */
+  tps: number;
+  kind: 'baseline' | 'no-agg' | 'agg';
+}
+
+export const PQ_THROUGHPUT = {
+  gasLimit: '200M gas',
+  source: 'Model output (netsim of EIP-8141 / 8288, 100-200 nodes), not a devnet measurement.',
+  rows: [
+    { scenario: 'Mainnet today', detail: 'secp256k1, shown for scale', tps: 23, kind: 'baseline' },
+    { scenario: 'No aggregation, 7.7 KB set', detail: '515 permutations; ~22.5 under the 2 MiB cap', tps: 27, kind: 'no-agg' },
+    { scenario: 'No aggregation, 4.4 KB set', detail: '~290 permutations; ~39.5 under the 2 MiB cap', tps: 46, kind: 'no-agg' },
+    { scenario: 'With aggregation (EIP-8288)', detail: 'gas-bound at 33K gas/sig; both sizes; ~350 tx/s at 300M gas', tps: 212, kind: 'agg' },
+  ] as PqThroughputRow[],
+  notes: [
+    'Without aggregation, throughput scales roughly 1/size, so the smaller 4.4 KB parameter set about doubles tx/s.',
+    'With aggregation, gas binds first, so neither signature size nor permutation count moves tx/s; proving and bandwidth bind only at far higher gas limits (~460-900 sig/s per prover server, ~1,700-2,300 sig/s across the modelled network).',
+    'Builder-only aggregation reached the same capacity as mempool aggregation for less home bandwidth; both add ~5-6 s median latency.',
+  ],
+};
+
 // ── Roadmap positions ────────────────────────────────────────────────────────
 // Competing views on HOW FAST and VIA WHICH PATH Ethereum reaches PQ security.
 // These are positions and proposals, NOT EIPs and NOT settled consensus. The
@@ -644,6 +676,72 @@ export const PQ_POSITIONS: PqPosition[] = [
     summary:
       'The prior trajectory the pqai27 post reacts to: deliver the PQ steps by 2028 while continuing Hegota as it had been going, including Quick Slots. pqai27 argues the cards have since been reshuffled toward an earlier, all-in PQ delivery.',
     neutralityNote: 'Context for the current debate; the active proposals are the two above.',
+  },
+];
+
+// ── Open decisions: the architectural forks being actively decided ───────────
+// The live choices the PQ devnets and breakouts exist to settle. For a
+// researcher, the open question often matters more than any single EIP's
+// status: each names the options, how and where it is being decided, and what
+// evidence is being gathered. Positions (above) are who wants what; these are
+// the forks in the road still being chosen.
+
+export type PqDecisionLayer = 'Consensus layer' | 'Execution layer';
+
+export interface PqOpenDecision {
+  id: string;
+  title: string;
+  layer: PqDecisionLayer;
+  /** The question in one sentence. */
+  question: string;
+  /** The competing options. */
+  options: string[];
+  /** How and where it gets decided. */
+  decidedBy: string;
+  /** What is being measured or built to decide it. */
+  evidence?: string;
+  /** Current leaning, if any — kept tentative on purpose. */
+  leaning?: string;
+  link?: string;
+  linkLabel?: string;
+}
+
+export const PQ_OPEN_DECISIONS: PqOpenDecision[] = [
+  {
+    id: 'gasper-vs-dc',
+    title: 'PQ-Gasper or PQ decoupled consensus',
+    layer: 'Consensus layer',
+    question:
+      'Can PQ-Gasper handle mainnet-sized committees within the slot time, or must Ethereum move to PQ decoupled consensus (DC)?',
+    options: [
+      'PQ-fy today’s Gasper in place',
+      'Jump to PQ decoupled consensus — fast finality, faster slots',
+    ],
+    decidedBy:
+      'The pq-devnet series is explicitly an experiment to answer this, not a milestone toward a fixed design. Networking simulations plus small realistic devnets (100 / 200 / 300 nodes) that corroborate them.',
+    evidence:
+      'Whether validators can sign, aggregators can collect and prove, proofs can propagate, and proposers can combine them in time, measured on realistic hardware and committee geometry (X_MAX_COMMITTEE_COUNT_PER_SLOT; consensus-specs PR 5879), with a common measurement spec exported to Xatu.',
+    link: PQ_DEVNET_1_URL,
+    linkLabel: 'pq-devnet-1 notes',
+  },
+  {
+    id: 'siglist-vs-proof-frame',
+    title: 'Signature list or PROOF frame',
+    layer: 'Execution layer',
+    question:
+      'How should an EIP-8141 frame transaction carry PQ signatures and proofs: a signature list, or a dedicated PROOF frame type?',
+    options: [
+      'Signature list inside EIP-8141',
+      'Dedicated PROOF frame (EIP-8504 / EIP-8141 PROOF mode)',
+    ],
+    decidedBy:
+      'An ACDT decision following the PQTS and frames breakouts; the design has to work with both leanSPHINCS and leanPCS.',
+    evidence:
+      'ethrex published a four-way experimental comparison across EL and CL. bogota-devnet-3 is slated to add native leanSPHINCS verification, with no aggregation yet.',
+    leaning:
+      'Preliminary breakout lean: signature list over PROOF frame, address over scheme-id, segregation in 8141.',
+    link: 'https://github.com/ethereum/execution-specs/issues/4069',
+    linkLabel: 'bogota-devnet-3 tracker',
   },
 ];
 

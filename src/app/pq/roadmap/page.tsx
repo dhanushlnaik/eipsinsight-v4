@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { ArrowUpRight, CheckCircle2, CircleHelp, GitBranch, Map } from 'lucide-react';
-import { PQ_ROADMAP, PQ_POSITIONS } from '@/data/pq-registry';
+import { ArrowUpRight, CheckCircle2, CircleHelp, GitBranch, GitFork, Map } from 'lucide-react';
+import { PQ_ROADMAP, PQ_POSITIONS, PQ_OPEN_DECISIONS } from '@/data/pq-registry';
 import { CopyLinkButton } from '@/components/header';
 
 export const revalidate = 300;
@@ -71,6 +71,54 @@ export default function PqRoadmapPage() {
                       Write-up <ArrowUpRight className="h-3 w-3" />
                     </a>
                   )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Open decisions: the architectural forks the devnets and breakouts are deciding. */}
+      <section id="pq-decisions" className="scroll-mt-20 space-y-3">
+        <div className="flex items-center gap-2">
+          <GitFork className="h-5 w-5 text-primary" />
+          <h2 className="text-base font-bold tracking-tight text-foreground sm:text-lg">Open decisions</h2>
+          <CopyLinkButton sectionId="pq-decisions" className="h-6 w-6" />
+        </div>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          The architectural forks the PQ devnets and breakouts exist to settle. The positions above are who wants what;
+          these are the choices being actively decided, with the evidence being gathered to decide them.
+        </p>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {PQ_OPEN_DECISIONS.map((d) => (
+            <div key={d.id} className="flex flex-col rounded-xl border border-border bg-card/60 p-4">
+              <span className="w-fit rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {d.layer}
+              </span>
+              <h3 className="mt-2 text-sm font-semibold leading-snug text-foreground">{d.title}</h3>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{d.question}</p>
+              <div className="mt-2.5 grid gap-1.5">
+                {d.options.map((o, i) => (
+                  <div key={i} className="flex items-start gap-2 rounded-md border border-border/70 bg-background/50 px-2.5 py-1.5">
+                    <span className="mt-0.5 font-mono text-[10px] font-bold text-primary">{String.fromCharCode(65 + i)}</span>
+                    <span className="text-[11px] leading-snug text-foreground">{o}</span>
+                  </div>
+                ))}
+              </div>
+              {d.leaning && (
+                <p className="mt-2.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[10px] leading-snug text-amber-700 dark:text-amber-300">
+                  {d.leaning}
+                </p>
+              )}
+              <div className="mt-2.5 space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                <p><span className="font-semibold text-foreground/80">Decided by:</span> {d.decidedBy}</p>
+                {d.evidence && <p><span className="font-semibold text-foreground/80">Evidence:</span> {d.evidence}</p>}
+              </div>
+              {d.link && (
+                <div className="mt-3 border-t border-border/60 pt-2.5">
+                  <a href={d.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+                    {d.linkLabel ?? 'Discussion'} <ArrowUpRight className="h-3 w-3" />
+                  </a>
                 </div>
               )}
             </div>

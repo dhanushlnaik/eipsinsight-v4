@@ -10,6 +10,7 @@ import {
   implFor,
   PQTS_TESTNET,
   PQ_SCHEMES,
+  PQ_THROUGHPUT,
   type ImplState,
 } from '@/data/pq-registry';
 import { DaisugiPanel } from '@/components/pq/daisugi-panel';
@@ -424,6 +425,55 @@ export default async function PqImplementationPage() {
                 classical schemes in use today. Lean-SPHINCS is omitted here because its value is aggregating many
                 signatures into roughly one proof per block.
               </p>
+            </div>
+          );
+        })()}
+
+        {/* Throughput: what size + aggregation mean for PQ tx/s (model output) */}
+        {(() => {
+          const maxTps = Math.max(...PQ_THROUGHPUT.rows.map((r) => r.tps));
+          const barClass: Record<'baseline' | 'no-agg' | 'agg', string> = {
+            baseline: 'bg-muted-foreground/40',
+            'no-agg': 'bg-amber-500/60',
+            agg: 'bg-primary/70',
+          };
+          return (
+            <div className="mt-4 rounded-lg border border-border bg-background/40 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  PQ transaction throughput at {PQ_THROUGHPUT.gasLimit}
+                </p>
+                <span className="rounded-full border border-amber-500/30 bg-amber-500/5 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                  Model output
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {PQ_THROUGHPUT.rows.map((r) => {
+                  const pct = Math.max(2, (r.tps / maxTps) * 100);
+                  return (
+                    <div key={r.scenario} className="flex items-center gap-2 sm:gap-3">
+                      <span className="w-32 shrink-0 text-[10px] leading-tight text-foreground sm:w-44" title={r.detail}>
+                        {r.scenario}
+                      </span>
+                      <div className="h-3.5 flex-1 overflow-hidden rounded bg-muted/50">
+                        <div className={'h-full rounded ' + barClass[r.kind]} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="w-20 shrink-0 text-right font-mono text-[10px] text-muted-foreground sm:w-24">
+                        {r.tps} tx/s
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <ul className="mt-2.5 space-y-1">
+                {PQ_THROUGHPUT.notes.map((n, i) => (
+                  <li key={i} className="flex gap-1.5 text-[10px] leading-snug text-muted-foreground">
+                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary/50" />
+                    <span>{n}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[10px] italic leading-relaxed text-muted-foreground">{PQ_THROUGHPUT.source}</p>
             </div>
           );
         })()}
