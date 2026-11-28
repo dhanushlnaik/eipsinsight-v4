@@ -644,12 +644,17 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
       <div className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="rounded-[var(--l-radius-control)] border border-[var(--border-strong)] bg-[var(--surface-2)] px-2.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-[var(--ink)]">
+            <Scale className="h-4 w-4 shrink-0 text-[var(--brand-strong)]" />
+            <span className={cn('rounded-[var(--l-radius-control)] border px-2.5 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider', impactTier.cls)}>
               {impactTier.label}
             </span>
             <span className="text-xs text-[var(--ink-muted)]">{impactTier.note}</span>
           </div>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--ink-faint)]">
+          <span className={cn(
+            'inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider',
+            groundingCurated ? 'text-[#10b981]' : 'text-[var(--c-review)]'
+          )}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', groundingCurated ? 'bg-[#10b981]' : 'bg-[var(--c-review)]')} />
             {groundingLabel}
           </span>
         </div>
@@ -663,8 +668,14 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
       {/* Affected organizations */}
       <div className="border-t border-[var(--border)] pt-6">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="eyebrow">Affected organizations</p>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--ink-faint)]">
+          <p className="eyebrow inline-flex items-center gap-1.5">
+            <Building2 className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+            Affected organizations
+          </p>
+          <span className={cn(
+            'font-mono text-[10px] uppercase tracking-wider',
+            groundingCurated ? 'text-[#10b981]' : 'text-[var(--ink-faint)]'
+          )}>
             {groundingLabel}
           </span>
         </div>
@@ -679,17 +690,21 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
             <span>What do the ratings mean?</span>
           </summary>
           <ul className="mt-2.5 space-y-1.5 border-l border-[var(--border)] pl-4 text-xs text-[var(--ink-muted)]">
-            <li>
-              <strong className="font-mono text-[11px] uppercase text-[var(--ink)]">High:</strong> Directly changes assets, controls, or operations this group runs. Plan and test before it ships.
+            <li className="flex items-start gap-2">
+              <span className={cn('mt-px shrink-0 rounded border px-1.5 py-px font-mono text-[9px] font-semibold uppercase', REL_META.high.cls)}>High</span>
+              <span>Directly changes assets, controls, or operations this group runs. Plan and test before it ships.</span>
             </li>
-            <li>
-              <strong className="font-mono text-[11px] uppercase text-[var(--ink)]">Medium:</strong> Indirect exposure (routine client or tooling updates). Monitor readiness.
+            <li className="flex items-start gap-2">
+              <span className={cn('mt-px shrink-0 rounded border px-1.5 py-px font-mono text-[9px] font-semibold uppercase', REL_META.medium.cls)}>Medium</span>
+              <span>Indirect exposure (routine client or tooling updates). Monitor readiness.</span>
             </li>
-            <li>
-              <strong className="font-mono text-[11px] uppercase text-[var(--ink)]">Low:</strong> Minimal direct impact. Informational only.
+            <li className="flex items-start gap-2">
+              <span className={cn('mt-px shrink-0 rounded border px-1.5 py-px font-mono text-[9px] font-semibold uppercase', REL_META.low.cls)}>Low</span>
+              <span>Minimal direct impact. Informational only.</span>
             </li>
-            <li>
-              <strong className="font-mono text-[11px] uppercase text-[var(--ink)]">Not affected:</strong> This organization type is not touched by the change.
+            <li className="flex items-start gap-2">
+              <span className={cn('mt-px shrink-0 rounded border px-1.5 py-px font-mono text-[9px] font-semibold uppercase', LEVEL_META.none.cls)}>Not affected</span>
+              <span>This organization type is not touched by the change.</span>
             </li>
           </ul>
         </details>
@@ -698,7 +713,10 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
       {/* Business impact */}
       <div className="border-t border-[var(--border)] pt-6">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="eyebrow">Business impact</p>
+          <p className="eyebrow inline-flex items-center gap-1.5">
+            <TrendingUp className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+            Business impact
+          </p>
           {(hasEnterpriseBusiness || benefits.length > 0 || tradeoffs.length > 0) && (
             <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--brand-strong)]">
               {hasEnterpriseBusiness ? 'Enterprise-curated' : 'Curated'}
@@ -715,11 +733,11 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
           <div className="grid gap-6 sm:grid-cols-2">
             {benefits.length > 0 && (
               <div>
-                <p className="eyebrow mb-2.5 text-[var(--brand-strong)]">What it enables</p>
+                <p className="eyebrow mb-2.5 text-[#10b981]">What it enables</p>
                 <ul className="space-y-2">
                   {benefits.map((b, i) => (
                     <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-[var(--ink-muted)]">
-                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--brand-strong)]" />
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#10b981]" />
                       <span>{b}</span>
                     </li>
                   ))}
@@ -728,11 +746,11 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
             )}
             {tradeoffs.length > 0 && (
               <div>
-                <p className="eyebrow mb-2.5">Trade-offs to weigh</p>
+                <p className="eyebrow mb-2.5 text-[var(--c-review)]">Trade-offs to weigh</p>
                 <ul className="space-y-2">
                   {tradeoffs.map((t, i) => (
                     <li key={i} className="flex items-start gap-2 text-xs leading-relaxed text-[var(--ink-muted)]">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ink-faint)]" />
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--c-review)]" />
                       <span>{t}</span>
                     </li>
                   ))}
@@ -744,7 +762,7 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
           <ul className="space-y-2">
             {businessImpact.map((b) => (
               <li key={b.label} className="flex items-start gap-2.5 text-sm">
-                <b.icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ink-faint)]" />
+                <b.icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand-strong)]" />
                 <span>
                   <span className="font-medium text-[var(--ink)]">{b.label}:</span>{' '}
                   <span className="text-[var(--ink-muted)]">{b.note}</span>
@@ -758,9 +776,12 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
       {/* Risk & readiness + Participation (2-column Ledger strip) */}
       <div className="grid gap-6 border-t border-[var(--border)] pt-6 sm:grid-cols-2">
         <div>
-          <p className="eyebrow mb-2">Risk &amp; readiness</p>
+          <p className="eyebrow mb-2 inline-flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-[var(--c-review)]" />
+            Risk &amp; readiness
+          </p>
           <p className="text-sm leading-relaxed">
-            <span className="font-semibold text-[var(--ink)]">{enterpriseRisk.level} risk:</span>{' '}
+            <span className={cn('font-semibold', enterpriseRisk.color)}>{enterpriseRisk.level} risk:</span>{' '}
             <span className="text-[var(--ink-muted)]">
               {tradeoffs.length > 0 ? tradeoffs[0] : `${enterpriseRisk.note}.`}
             </span>
@@ -776,9 +797,18 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
         </div>
 
         <div>
-          <p className="eyebrow mb-2">Participation</p>
+          <p className="eyebrow mb-2 inline-flex items-center gap-1.5">
+            <MessageSquarePlus className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+            Participation
+          </p>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5 font-mono text-[11px] font-semibold text-[var(--ink)]">
+            <span className={cn(
+              'inline-flex items-center gap-1.5 rounded-[var(--l-radius-control)] border px-2 py-0.5 font-mono text-[11px] font-semibold',
+              participation.open
+                ? 'border-[#10b981]/40 bg-[var(--surface-2)] text-[#10b981]'
+                : 'border-[var(--border)] bg-[var(--surface-2)] text-[var(--ink-muted)]'
+            )}>
+              {participation.open && <span className="h-1.5 w-1.5 rounded-full bg-[#10b981]" />}
               {participation.state}
             </span>
             <span className="text-xs text-[var(--ink-muted)]">{participation.note}</span>
@@ -794,7 +824,10 @@ export function EnterpriseEIPBrief({ proposal, upgrades, proposalRequires, curat
       {/* Related dependencies */}
       {proposalRequires.length > 0 && (
         <div className="border-t border-[var(--border)] pt-6">
-          <p className="eyebrow mb-3">Prerequisites</p>
+          <p className="eyebrow mb-3 inline-flex items-center gap-1.5">
+            <Package className="h-3.5 w-3.5 text-[var(--brand-strong)]" />
+            Prerequisites
+          </p>
           <div className="flex flex-wrap gap-2">
             {proposalRequires.map((r) => (
               <Link
@@ -831,11 +864,16 @@ function OrgImpactCard({ item }: { item: OrgItem }) {
           hasDetail ? 'cursor-pointer transition-colors hover:bg-[var(--surface-2)]' : 'cursor-default'
         )}
       >
-        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ink-faint)]" />
+        <div className={cn(
+          'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--l-radius-control)] border border-[var(--border)] bg-[var(--surface-2)]',
+          item.affected === 'high' ? 'text-[#ef4444]' : item.affected === 'medium' ? 'text-[var(--c-review)]' : 'text-[var(--brand-strong)]'
+        )}>
+          <Icon className="h-3.5 w-3.5" />
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-[var(--ink)]">{item.role}</span>
-            <span className="shrink-0 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase text-[var(--ink-muted)]">
+            <span className={cn('shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase', meta.cls)}>
               {meta.label}
             </span>
           </div>
@@ -846,20 +884,20 @@ function OrgImpactCard({ item }: { item: OrgItem }) {
           : <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--ink-faint)]" />)}
       </button>
       {open && hasDetail && (
-        <div className="space-y-2.5 border-t border-[var(--border)] px-3.5 py-3 pl-10">
+        <div className="space-y-2.5 border-t border-[var(--border)] px-3.5 py-3 pl-13">
           {item.how && (
             <div>
-              <p className="eyebrow text-[10px]">Affected how</p>
+              <p className="eyebrow text-[10px] text-[var(--brand-strong)]">Affected how</p>
               <p className="mt-0.5 text-xs leading-snug text-[var(--ink-muted)]">{item.how}</p>
             </div>
           )}
           <div>
-            <p className="eyebrow text-[10px]">Why it matters</p>
+            <p className="eyebrow text-[10px] text-[var(--brand-strong)]">Why it matters</p>
             <p className="mt-0.5 text-xs leading-snug text-[var(--ink-muted)]">{item.why}</p>
           </div>
           {item.action && (
             <div>
-              <p className="eyebrow text-[10px]">What to do</p>
+              <p className="eyebrow text-[10px] text-[var(--brand-strong)]">What to do</p>
               <p className="mt-0.5 text-xs leading-snug text-[var(--ink-muted)]">{item.action}</p>
             </div>
           )}
